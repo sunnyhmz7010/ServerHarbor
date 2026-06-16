@@ -13,6 +13,7 @@ LANG_CONFIG_FILE="${DATA_ROOT}/config/lang.conf"
 LANGUAGE="${SERVERHARBOR_LANG:-}"
 INTERRUPT_REQUESTED=0
 CRITICAL_SECTION=0
+REFRESH_EXIT_CODE=42
 
 handle_preflight_interrupt() {
   printf '\nCancelled / 已取消\n' >&2
@@ -252,6 +253,7 @@ extract_repo() {
 main() {
   local extracted_root
   local menu_exit_code=0
+  local refresh_requested=0
 
   trap handle_preflight_interrupt INT
   select_language || exit $?
@@ -269,8 +271,16 @@ main() {
   extracted_root="$(extract_repo)"
   chmod +x "${extracted_root}/menu.sh"
   leave_critical_section
-  if ! SERVERHARBOR_HOME="${DATA_ROOT}" SERVERHARBOR_LANG="${LANGUAGE}" bash "${extracted_root}/menu.sh" "$@"; then
+  if ! SERVERHARBOR_HOME="${DATA_ROOT}" SERVERHARBOR_LANG="${LANGUAGE}" SERVERHARBOR_RUNTIME="online" SERVERHARBOR_REFRESH_EXIT_CODE="${REFRESH_EXIT_CODE}" bash "${extracted_root}/menu.sh" "$@"; then
     menu_exit_code=$?
+  fi
+
+  if [[ "${menu_exit_code}" -eq "${REFRESH_EXIT_CODE}" ]]; then
+    refresh_requested=1
+  fi
+
+  if [[ "${refresh_requested}" -eq 1 ]]; then
+    exec bash "$0" "$@"
   fi
 
   if confirm_remove_data; then
