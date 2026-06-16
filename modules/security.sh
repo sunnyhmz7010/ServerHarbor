@@ -4,6 +4,7 @@ set -euo pipefail
 
 ng_scan_auth_failures() {
   local auth_log=""
+  local summary=""
 
   if [[ -f /var/log/auth.log ]]; then
     auth_log="/var/log/auth.log"
@@ -20,51 +21,99 @@ ng_scan_auth_failures() {
     return 0
   fi
 
+  summary="$(
+    grep -Ei 'Failed password|authentication failure' "${auth_log}" 2>/dev/null \
+      | grep -Eo '([0-9]{1,3}\.){3}[0-9]{1,3}' \
+      | sort | uniq -c | sort -nr | head || true
+  )"
+
   if [[ "${NG_LANG}" == "en" ]]; then
-    printf '[Top Failed Login IPs]\n'
+    ng_report_section 'Failed Login Sources'
+    ng_report_kv 'Auth Log' "${auth_log}"
+    ng_report_note 'Top source IPs by failed password events:'
   else
-    printf '[失败登录来源 IP Top]\n'
+    ng_report_section '失败登录来源'
+    ng_report_kv '日志文件' "${auth_log}"
+    ng_report_note '以下为失败密码登录事件最多的来源 IP：'
   fi
 
-  grep -Ei 'Failed password|authentication failure' "${auth_log}" 2>/dev/null \
-    | grep -Eo '([0-9]{1,3}\.){3}[0-9]{1,3}' \
-    | sort | uniq -c | sort -nr | head
+  if [[ -z "${summary}" ]]; then
+    if [[ "${NG_LANG}" == "en" ]]; then
+      ng_report_note 'No failed login entries found.'
+    else
+      ng_report_note '未发现失败登录记录。'
+    fi
+    return 0
+  fi
+
+  printf '%s\n' "${summary}"
 }
 
 ng_scan_web_attacks() {
   local access_log="/var/log/nginx/access.log"
+  local summary=""
 
   [[ -f "${access_log}" ]] || {
     if [[ "${NG_LANG}" == "en" ]]; then
-      printf 'No nginx access log found.\n'
+      ng_report_section 'Suspicious Web Requests'
+      ng_report_note 'No nginx access log found.'
     else
-      printf '未找到 nginx 访问日志。\n'
+      ng_report_section '可疑 Web 请求'
+      ng_report_note '未找到 nginx 访问日志。'
     fi
     return 0
   }
 
+  summary="$(
+    grep -Ei 'wp-admin|phpmyadmin|\.env|/admin|/login|select.+from|union.+select' "${access_log}" \
+      | awk '{print $1}' | sort | uniq -c | sort -nr | head || true
+  )"
+
   if [[ "${NG_LANG}" == "en" ]]; then
-    printf '[Suspicious Web Requests]\n'
+    ng_report_section 'Suspicious Web Requests'
+    ng_report_kv 'Access Log' "${access_log}"
+    ng_report_note 'Top source IPs matching common suspicious request patterns:'
   else
-    printf '[可疑 Web 请求]\n'
+    ng_report_section '可疑 Web 请求'
+    ng_report_kv '访问日志' "${access_log}"
+    ng_report_note '以下为命中常见可疑请求特征最多的来源 IP：'
   fi
 
-  grep -Ei 'wp-admin|phpmyadmin|\.env|/admin|/login|select.+from|union.+select' "${access_log}" \
-    | awk '{print $1}' | sort | uniq -c | sort -nr | head
+  if [[ -z "${summary}" ]]; then
+    if [[ "${NG_LANG}" == "en" ]]; then
+      ng_report_note 'No suspicious request patterns found.'
+    else
+      ng_report_note '未发现可疑请求特征。'
+    fi
+    return 0
+  fi
+
+  printf '%s\n' "${summary}"
 }
 
 ng_firewall_summary() {
+  if [[ "${NG_LANG}" == "en" ]]; then
+    ng_report_section 'Firewall Summary'
+    ng_report_note 'Detected firewall backend and current active rules:'
+  else
+    ng_report_section '防火墙状态'
+    ng_report_note '以下为检测到的防火墙后端及当前生效规则：'
+  fi
+
   if command -v ufw >/dev/null 2>&1; then
+    ng_report_kv 'Backend' 'ufw'
     ufw status verbose || true
   elif command -v firewall-cmd >/dev/null 2>&1; then
+    ng_report_kv 'Backend' 'firewalld'
     firewall-cmd --list-all || true
   elif command -v iptables >/dev/null 2>&1; then
+    ng_report_kv 'Backend' 'iptables'
     iptables -L -n --line-numbers || true
   else
     if [[ "${NG_LANG}" == "en" ]]; then
-      printf 'No firewall tool found.\n'
+      ng_report_note 'No firewall tool found.'
     else
-      printf '未找到防火墙工具。\n'
+      ng_report_note '未找到防火墙工具。'
     fi
   fi
 }

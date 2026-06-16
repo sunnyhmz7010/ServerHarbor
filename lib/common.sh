@@ -167,6 +167,10 @@ ng_report_kv() {
   printf '%-14s %s\n' "${key}" "${value}"
 }
 
+ng_report_note() {
+  printf '  %s\n' "$1"
+}
+
 ng_t() {
   local key="$1"
   case "${NG_LANG}" in
