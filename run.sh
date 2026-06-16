@@ -39,7 +39,7 @@ select_language() {
   printf 'Choose language / 选择语言:\n'
   printf '  1. 中文\n'
   printf '  2. English\n'
-  printf 'Select / 请选择 [1/2, default: 1]: '
+  printf 'Select [1/2, default/默认: 1] / 请选择：'
   if ! IFS= read -r choice; then
     printf '\n'
     printf 'Cancelled / 已取消\n' >&2
