@@ -60,63 +60,65 @@ run_cli_mode() {
 
 show_banner() {
   clear || true
+
   if [[ "${NG_LANG}" == "en" ]]; then
-    cat <<'EOF'
-==============================================================
- ServerHarbor
- Decentralized Multi-Server Bootstrap, Probe and Guard Toolkit
-==============================================================
-EOF
+    ng_print_title_box "🚢 ServerHarbor" "Decentralized multi-server bootstrap, probe, backup and security toolkit"
+    ng_print_stat "Host" "${NG_HOSTNAME}" "🖥"
+    ng_print_stat "Data Root" "${NG_DATA_ROOT}" "📦"
+    ng_print_stat "Reports" "$(find "${NG_REPORT_DIR}" -maxdepth 1 -type f | wc -l | tr -d ' ')" "📄"
+    ng_print_stat "Peers" "$(ng_read_peers | wc -l | tr -d ' ')" "🛰"
   else
-    cat <<'EOF'
-==============================================================
- ServerHarbor
- 多服务器自治开荒、探测、备份与安全管理工具
-==============================================================
-EOF
+    ng_print_title_box "🚢 ServerHarbor" "去中心化多服务器开荒、探测、备份与安全工具箱"
+    ng_print_stat "主机" "${NG_HOSTNAME}" "🖥"
+    ng_print_stat "数据目录" "${NG_DATA_ROOT}" "📦"
+    ng_print_stat "报告数" "$(find "${NG_REPORT_DIR}" -maxdepth 1 -type f | wc -l | tr -d ' ')" "📄"
+    ng_print_stat "节点数" "$(ng_read_peers | wc -l | tr -d ' ')" "🛰"
   fi
+
+  printf '\n'
 }
 
 show_menu() {
   if [[ "${NG_LANG}" == "en" ]]; then
-    cat <<'EOF'
-1. Server bootstrap
-2. Peer probe and health report
-3. Security audit and hardening
-4. Backup and retention cleanup
-5. File integrity baseline and verify
-6. Git sync to remote
-7. Install scheduled tasks
-8. View latest reports
-9. Project status summary
-0. Exit
-EOF
+    ng_print_option "1" "🚀" "Server bootstrap" "DNS / swap / BBR / base packages / SSH hardening"
+    ng_print_option "2" "🛰" "Peer probe and health report" "Local snapshot and peer reachability checks"
+    ng_print_option "3" "🛡" "Security audit and hardening" "Auth logs, suspicious traffic and firewall"
+    ng_print_option "4" "💾" "Backup and retention cleanup" "Create, prune and sync backup archives"
+    ng_print_option "5" "🧬" "Integrity baseline and verify" "Create and verify watched file hashes"
+    ng_print_option "6" "🌿" "Git sync to remote" "Commit current state and push to GitHub"
+    ng_print_option "7" "⏱" "Install scheduled tasks" "Recommended cron tasks for routine jobs"
+    ng_print_option "8" "📚" "View latest reports" "Preview recent bootstrap, probe, security and backup reports"
+    ng_print_option "9" "📊" "Project status summary" "Paths, branch, remote, reports and backup counts"
+    ng_print_option "0" "↩" "Exit"
   else
-    cat <<'EOF'
-1. 新服务器开荒
-2. 节点探测与健康报告
-3. 安全巡检与基础加固
-4. 备份与保留清理
-5. 文件完整性基线与校验
-6. Git 远端同步
-7. 安装定时任务
-8. 查看最新报告
-9. 查看项目状态摘要
-0. 退出
-EOF
+    ng_print_option "1" "🚀" "新服务器开荒" "DNS / swap / BBR / 基础软件 / SSH 加固"
+    ng_print_option "2" "🛰" "节点探测与健康报告" "本机快照与节点连通性检查"
+    ng_print_option "3" "🛡" "安全巡检与基础加固" "认证日志、可疑流量与防火墙"
+    ng_print_option "4" "💾" "备份与保留清理" "创建、清理并同步备份压缩包"
+    ng_print_option "5" "🧬" "完整性基线与校验" "生成并校验受监控文件哈希"
+    ng_print_option "6" "🌿" "Git 远端同步" "提交当前状态并推送到 GitHub"
+    ng_print_option "7" "⏱" "安装定时任务" "为常规巡检安装推荐 cron 任务"
+    ng_print_option "8" "📚" "查看最新报告" "预览开荒、探测、安全和备份报告"
+    ng_print_option "9" "📊" "项目状态摘要" "查看路径、分支、远端与报告统计"
+    ng_print_option "0" "↩" "退出"
   fi
+
+  printf '\n'
+  ng_print_menu_hint
 }
 
 view_reports() {
   local latest_probe latest_security latest_backup latest_bootstrap
+  local found=0
 
   latest_probe="$(find "${NG_REPORT_DIR}" -maxdepth 1 -type f -name 'probe-*.txt' | sort | tail -n 1 || true)"
   latest_security="$(find "${NG_REPORT_DIR}" -maxdepth 1 -type f -name 'security-*.txt' | sort | tail -n 1 || true)"
   latest_backup="$(find "${NG_REPORT_DIR}" -maxdepth 1 -type f -name 'backup-*.txt' | sort | tail -n 1 || true)"
   latest_bootstrap="$(find "${NG_REPORT_DIR}" -maxdepth 1 -type f -name 'bootstrap-*.txt' | sort | tail -n 1 || true)"
 
-  for report_file in "$latest_bootstrap" "$latest_probe" "$latest_security" "$latest_backup"; do
+  for report_file in "${latest_bootstrap}" "${latest_probe}" "${latest_security}" "${latest_backup}"; do
     if [[ -n "${report_file}" && -f "${report_file}" ]]; then
+      found=1
       if [[ "${NG_LANG}" == "en" ]]; then
         ng_print_header "Report: $(basename "${report_file}")"
       else
@@ -126,31 +128,45 @@ view_reports() {
       printf '\n'
     fi
   done
+
+  if [[ "${found}" -eq 0 ]]; then
+    if [[ "${NG_LANG}" == "en" ]]; then
+      ng_log "WARN" "No reports found yet."
+    else
+      ng_log "WARN" "暂未找到任何报告。"
+    fi
+  fi
 }
 
 status_summary() {
+  local state_count report_count backup_count
+
+  state_count="$(find "${NG_STATE_DIR}" -maxdepth 1 -type f | wc -l | tr -d ' ')"
+  report_count="$(find "${NG_REPORT_DIR}" -maxdepth 1 -type f | wc -l | tr -d ' ')"
+  backup_count="$(find "${NG_BACKUP_DIR}" -maxdepth 1 -type f | wc -l | tr -d ' ')"
+
   if [[ "${NG_LANG}" == "en" ]]; then
-    ng_print_header "Project Status"
-    printf 'Project root: %s\n' "${PROJECT_ROOT}"
-    printf 'Config file : %s\n' "${NG_CONFIG_FILE}"
-    printf 'Peers file  : %s\n' "${NG_PEERS_FILE}"
-    printf 'Watch file  : %s\n' "${NG_WATCH_FILE}"
-    printf 'Git branch  : %s\n' "$(ng_git_current_branch)"
-    printf 'Git remote  : %s\n' "$(ng_git_remote_url)"
-    printf 'State files : %s\n' "$(find "${NG_STATE_DIR}" -maxdepth 1 -type f | wc -l | tr -d ' ')"
-    printf 'Reports     : %s\n' "$(find "${NG_REPORT_DIR}" -maxdepth 1 -type f | wc -l | tr -d ' ')"
-    printf 'Backups     : %s\n' "$(find "${NG_BACKUP_DIR}" -maxdepth 1 -type f | wc -l | tr -d ' ')"
+    ng_print_title_box "📊 Project Status" "Runtime paths and repository summary"
+    ng_print_stat "Project Root" "${PROJECT_ROOT}" "📁"
+    ng_print_stat "Config File" "${NG_CONFIG_FILE}" "⚙"
+    ng_print_stat "Peers File" "${NG_PEERS_FILE}" "🛰"
+    ng_print_stat "Watch File" "${NG_WATCH_FILE}" "👁"
+    ng_print_stat "Git Branch" "$(ng_git_current_branch)" "🌿"
+    ng_print_stat "Git Remote" "$(ng_git_remote_url)" "🔗"
+    ng_print_stat "State Files" "${state_count}" "🧾"
+    ng_print_stat "Reports" "${report_count}" "📄"
+    ng_print_stat "Backups" "${backup_count}" "💾"
   else
-    ng_print_header "项目状态"
-    printf '项目根目录：%s\n' "${PROJECT_ROOT}"
-    printf '配置文件  ：%s\n' "${NG_CONFIG_FILE}"
-    printf '节点列表  ：%s\n' "${NG_PEERS_FILE}"
-    printf '监控路径  ：%s\n' "${NG_WATCH_FILE}"
-    printf 'Git 分支  ：%s\n' "$(ng_git_current_branch)"
-    printf 'Git 远端  ：%s\n' "$(ng_git_remote_url)"
-    printf '状态文件数：%s\n' "$(find "${NG_STATE_DIR}" -maxdepth 1 -type f | wc -l | tr -d ' ')"
-    printf '报告数量  ：%s\n' "$(find "${NG_REPORT_DIR}" -maxdepth 1 -type f | wc -l | tr -d ' ')"
-    printf '备份数量  ：%s\n' "$(find "${NG_BACKUP_DIR}" -maxdepth 1 -type f | wc -l | tr -d ' ')"
+    ng_print_title_box "📊 项目状态" "运行路径与仓库状态摘要"
+    ng_print_stat "项目根目录" "${PROJECT_ROOT}" "📁"
+    ng_print_stat "配置文件" "${NG_CONFIG_FILE}" "⚙"
+    ng_print_stat "节点列表" "${NG_PEERS_FILE}" "🛰"
+    ng_print_stat "监控路径" "${NG_WATCH_FILE}" "👁"
+    ng_print_stat "Git 分支" "$(ng_git_current_branch)" "🌿"
+    ng_print_stat "Git 远端" "$(ng_git_remote_url)" "🔗"
+    ng_print_stat "状态文件" "${state_count}" "🧾"
+    ng_print_stat "报告数量" "${report_count}" "📄"
+    ng_print_stat "备份数量" "${backup_count}" "💾"
   fi
 }
 
@@ -160,11 +176,8 @@ main() {
   while true; do
     show_banner
     show_menu
-    if [[ "${NG_LANG}" == "en" ]]; then
-      printf '\nSelect an option: '
-    else
-      printf '\n请选择功能编号：'
-    fi
+    printf '\n'
+    ng_t select
     ng_read_line choice || exit 130
 
     case "${choice}" in

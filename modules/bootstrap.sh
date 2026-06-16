@@ -87,19 +87,35 @@ ng_harden_ssh() {
 ng_bootstrap_report() {
   local content
 
-  content="$(
-    printf 'ServerHarbor Bootstrap Report\n'
-    printf 'Generated at: %s\n' "$(ng_timestamp)"
-    printf 'Host        : %s\n' "${NG_HOSTNAME}"
-    printf 'Timezone    : %s\n' "${NG_TIMEZONE}"
-    printf 'DNS         : %s, %s\n' "${NG_DNS_PRIMARY}" "${NG_DNS_SECONDARY}"
-    printf 'Swap size   : %sMB\n' "${NG_SWAP_SIZE_MB}"
-    printf 'Kernel BBR  : %s\n' "$(sysctl -n net.ipv4.tcp_congestion_control 2>/dev/null || echo unknown)"
-    printf '\n[Memory]\n'
-    ng_memory_summary
-    printf '\n[Disk]\n'
-    ng_disk_summary
-  )"
+  if [[ "${NG_LANG}" == "en" ]]; then
+    content="$(
+      printf 'ServerHarbor Bootstrap Report\n'
+      printf 'Generated at: %s\n' "$(ng_timestamp)"
+      printf 'Host        : %s\n' "${NG_HOSTNAME}"
+      printf 'Timezone    : %s\n' "${NG_TIMEZONE}"
+      printf 'DNS         : %s, %s\n' "${NG_DNS_PRIMARY}" "${NG_DNS_SECONDARY}"
+      printf 'Swap size   : %sMB\n' "${NG_SWAP_SIZE_MB}"
+      printf 'Kernel BBR  : %s\n' "$(sysctl -n net.ipv4.tcp_congestion_control 2>/dev/null || echo unknown)"
+      printf '\n[Memory]\n'
+      ng_memory_summary
+      printf '\n[Disk]\n'
+      ng_disk_summary
+    )"
+  else
+    content="$(
+      printf 'ServerHarbor 开荒报告\n'
+      printf '生成时间：%s\n' "$(ng_timestamp)"
+      printf '主机        : %s\n' "${NG_HOSTNAME}"
+      printf '时区        : %s\n' "${NG_TIMEZONE}"
+      printf 'DNS         : %s, %s\n' "${NG_DNS_PRIMARY}" "${NG_DNS_SECONDARY}"
+      printf 'Swap 大小   : %sMB\n' "${NG_SWAP_SIZE_MB}"
+      printf '当前拥塞控制: %s\n' "$(sysctl -n net.ipv4.tcp_congestion_control 2>/dev/null || echo unknown)"
+      printf '\n[内存]\n'
+      ng_memory_summary
+      printf '\n[磁盘]\n'
+      ng_disk_summary
+    )"
+  fi
 
   ng_write_report "bootstrap" "${content}" >/dev/null
   printf '%s\n' "${content}"
@@ -121,30 +137,30 @@ ng_bootstrap_menu() {
 
   while true; do
     if [[ "${NG_LANG}" == "en" ]]; then
-      ng_print_header "Server Bootstrap"
-      cat <<'EOF'
-1. Run full bootstrap
-2. Install base packages
-3. Enable BBR
-4. Configure DNS
-5. Configure swap
-6. Harden SSH
-7. Generate bootstrap report
-0. Back
-EOF
+      ng_print_title_box "🚀 Server Bootstrap" "First-run provisioning for a fresh server"
+      ng_print_option "1" "⚡" "Run full bootstrap" "Base packages, timezone, BBR, DNS, swap and SSH hardening"
+      ng_print_option "2" "📦" "Install base packages" "curl, wget, git, rsync, cron and common network tools"
+      ng_print_option "3" "🌐" "Enable BBR" "Write sysctl tuning and reload kernel parameters"
+      ng_print_option "4" "🧭" "Configure DNS" "Rewrite /etc/resolv.conf with configured resolvers"
+      ng_print_option "5" "🧠" "Configure swap" "Create /swapfile when no swap exists"
+      ng_print_option "6" "🔐" "Harden SSH" "Disable password login and tighten SSH defaults"
+      ng_print_option "7" "📄" "Generate bootstrap report" "Show timezone, DNS, memory and disk summary"
+      ng_print_option "0" "↩" "Back"
     else
-      ng_print_header "新服务器开荒"
-      cat <<'EOF'
-1. 执行完整开荒
-2. 安装基础软件
-3. 启用 BBR
-4. 配置 DNS
-5. 配置 swap
-6. SSH 基础加固
-7. 生成开荒报告
-0. 返回
-EOF
+      ng_print_title_box "🚀 新服务器开荒" "面向新机器的一键初始化与基础加固"
+      ng_print_option "1" "⚡" "执行完整开荒" "基础软件、时区、BBR、DNS、swap 与 SSH 加固"
+      ng_print_option "2" "📦" "安装基础软件" "curl、wget、git、rsync、cron 与常用网络工具"
+      ng_print_option "3" "🌐" "启用 BBR" "写入 sysctl 调优并重新加载内核参数"
+      ng_print_option "4" "🧭" "配置 DNS" "按配置重写 /etc/resolv.conf"
+      ng_print_option "5" "🧠" "配置 swap" "在无 swap 时创建 /swapfile"
+      ng_print_option "6" "🔐" "加固 SSH" "禁用密码登录并收紧 SSH 默认项"
+      ng_print_option "7" "📄" "生成开荒报告" "输出时区、DNS、内存和磁盘摘要"
+      ng_print_option "0" "↩" "返回"
     fi
+
+    printf '\n'
+    ng_print_menu_hint
+    printf '\n'
     ng_t select
     ng_read_line choice || return 130
 
@@ -156,9 +172,13 @@ EOF
       5) ng_configure_swap ;;
       6)
         if [[ "${NG_LANG}" == "en" ]]; then
-          if ng_prompt_yes_no "This may disable password login. Continue?"; then ng_harden_ssh; fi
+          if ng_prompt_yes_no "This may disable password login. Continue?"; then
+            ng_harden_ssh
+          fi
         else
-          if ng_prompt_yes_no "该操作可能禁用密码登录，是否继续？"; then ng_harden_ssh; fi
+          if ng_prompt_yes_no "该操作可能禁用密码登录，是否继续？"; then
+            ng_harden_ssh
+          fi
         fi
         ;;
       7) ng_bootstrap_report ;;

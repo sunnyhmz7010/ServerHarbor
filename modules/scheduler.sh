@@ -28,11 +28,21 @@ ng_install_cron_jobs() {
   )"
 
   printf '%s\n' "${new_cron}" | awk '!seen[$0]++' | crontab -
-  if [[ "${NG_LANG}" == "en" ]]; then printf 'Cron jobs installed.\n'; else printf '定时任务已安装。\n'; fi
+  if [[ "${NG_LANG}" == "en" ]]; then
+    printf 'Cron jobs installed.\n'
+  else
+    printf '定时任务已安装。\n'
+  fi
 }
 
 ng_show_cron_jobs() {
-  crontab -l 2>/dev/null || { if [[ "${NG_LANG}" == "en" ]]; then printf 'No crontab entries found.\n'; else printf '未找到 crontab 条目。\n'; fi; }
+  crontab -l 2>/dev/null || {
+    if [[ "${NG_LANG}" == "en" ]]; then
+      printf 'No crontab entries found.\n'
+    else
+      printf '未找到 crontab 条目。\n'
+    fi
+  }
 }
 
 ng_scheduler_menu() {
@@ -40,20 +50,20 @@ ng_scheduler_menu() {
 
   while true; do
     if [[ "${NG_LANG}" == "en" ]]; then
-      ng_print_header "Scheduler"
-      cat <<'EOF'
-1. Install recommended cron jobs
-2. Show current crontab
-0. Back
-EOF
+      ng_print_title_box "⏱ Scheduler" "Install and inspect recommended recurring jobs"
+      ng_print_option "1" "📌" "Install recommended cron jobs" "Probe, security, backup and git sync routines"
+      ng_print_option "2" "📜" "Show current crontab" "Inspect all existing scheduled tasks"
+      ng_print_option "0" "↩" "Back"
     else
-      ng_print_header "定时任务"
-      cat <<'EOF'
-1. 安装推荐的 cron 任务
-2. 查看当前 crontab
-0. 返回
-EOF
+      ng_print_title_box "⏱ 定时任务" "安装并查看推荐的周期性任务"
+      ng_print_option "1" "📌" "安装推荐 cron 任务" "包含探测、安全、备份与 Git 同步例程"
+      ng_print_option "2" "📜" "查看当前 crontab" "检查现有全部计划任务"
+      ng_print_option "0" "↩" "返回"
     fi
+
+    printf '\n'
+    ng_print_menu_hint
+    printf '\n'
     ng_t select
     ng_read_line choice || return 130
 

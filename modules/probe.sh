@@ -53,14 +53,25 @@ ng_probe_all_peers() {
     done < <(ng_read_peers)
   } | tee "${output_file}"
 
-  report="$(
-    printf 'ServerHarbor Probe Report\n'
-    ng_t generated_at "$(ng_timestamp)"
-    printf 'Host        : %s\n\n' "${NG_HOSTNAME}"
-    cat "${output_file}"
-    printf '\n[Local Snapshot]\n'
-    cat "$(ng_collect_local_probe)"
-  )"
+  if [[ "${NG_LANG}" == "en" ]]; then
+    report="$(
+      printf 'ServerHarbor Probe Report\n'
+      ng_t generated_at "$(ng_timestamp)"
+      printf 'Host        : %s\n\n' "${NG_HOSTNAME}"
+      cat "${output_file}"
+      printf '\n[Local Snapshot]\n'
+      cat "$(ng_collect_local_probe)"
+    )"
+  else
+    report="$(
+      printf 'ServerHarbor 节点探测报告\n'
+      ng_t generated_at "$(ng_timestamp)"
+      printf '主机        : %s\n\n' "${NG_HOSTNAME}"
+      cat "${output_file}"
+      printf '\n[本机快照]\n'
+      cat "$(ng_collect_local_probe)"
+    )"
+  fi
 
   ng_write_report "probe" "${report}" >/dev/null
   printf '%s\n' "${report}"
@@ -69,17 +80,26 @@ ng_probe_all_peers() {
 ng_show_local_status() {
   if [[ "${NG_LANG}" == "en" ]]; then
     ng_print_header "Local Health Snapshot"
+    printf 'Host     : %s\n' "${NG_HOSTNAME}"
+    printf 'Uptime   : %s\n' "$(uptime -p 2>/dev/null || uptime)"
+    printf 'Load     : %s\n' "$(ng_system_load)"
+    printf 'Memory   :\n'
+    ng_memory_summary
+    printf '\nDisk     :\n'
+    ng_disk_summary
+    printf '\nPorts    :\n'
   else
-    ng_print_header "本机健康状态"
+    ng_print_header "本机健康快照"
+    printf '主机     : %s\n' "${NG_HOSTNAME}"
+    printf '运行时长 : %s\n' "$(uptime -p 2>/dev/null || uptime)"
+    printf '负载     : %s\n' "$(ng_system_load)"
+    printf '内存     :\n'
+    ng_memory_summary
+    printf '\n磁盘     :\n'
+    ng_disk_summary
+    printf '\n端口     :\n'
   fi
-  printf 'Host     : %s\n' "${NG_HOSTNAME}"
-  printf 'Uptime   : %s\n' "$(uptime -p 2>/dev/null || uptime)"
-  printf 'Load     : %s\n' "$(ng_system_load)"
-  printf 'Memory   :\n'
-  ng_memory_summary
-  printf '\nDisk     :\n'
-  ng_disk_summary
-  printf '\nPorts    :\n'
+
   ss -lntp 2>/dev/null | sed -n '1,20p' || true
 }
 
@@ -88,22 +108,22 @@ ng_probe_menu() {
 
   while true; do
     if [[ "${NG_LANG}" == "en" ]]; then
-      ng_print_header "Peer Probe"
-      cat <<'EOF'
-1. Probe all peers
-2. Collect local status snapshot
-3. Show local health
-0. Back
-EOF
+      ng_print_title_box "🛰 Peer Probe" "Peer reachability and local health inspection"
+      ng_print_option "1" "📡" "Probe all peers" "Check ICMP, SSH port and latency for configured peers"
+      ng_print_option "2" "🧾" "Collect local status snapshot" "Write the current local state into the state directory"
+      ng_print_option "3" "🩺" "Show local health" "Inspect uptime, load, memory, disk and listening ports"
+      ng_print_option "0" "↩" "Back"
     else
-      ng_print_header "节点探测"
-      cat <<'EOF'
-1. 探测所有节点
-2. 采集本机状态快照
-3. 查看本机健康状态
-0. 返回
-EOF
+      ng_print_title_box "🛰 节点探测" "检查节点连通性，并采集本机健康状态"
+      ng_print_option "1" "📡" "探测所有节点" "检查已配置节点的 ICMP、SSH 端口和延迟"
+      ng_print_option "2" "🧾" "采集本机状态快照" "将当前本机状态写入 state 目录"
+      ng_print_option "3" "🩺" "查看本机健康状态" "检查运行时长、负载、内存、磁盘与监听端口"
+      ng_print_option "0" "↩" "返回"
     fi
+
+    printf '\n'
+    ng_print_menu_hint
+    printf '\n'
     ng_t select
     ng_read_line choice || return 130
 
