@@ -113,9 +113,9 @@ This repository is `ServerHarbor`, a Bash-based Linux multi-server operations to
 - Syntax check:
   - `bash -n menu.sh lib/common.sh modules/*.sh install.sh run.sh uninstall.sh`
 - One-command online run:
-  - `bash <(curl -fsSL https://raw.githubusercontent.com/sunnyhmz7010/ServerHarbor/main/run.sh)`
+  - `bash <(curl -q -fsSL "https://raw.githubusercontent.com/sunnyhmz7010/ServerHarbor/main/run.sh?$(date +%s)")`
 - Install globally:
-  - `curl -fsSL https://raw.githubusercontent.com/sunnyhmz7010/ServerHarbor/main/install.sh | sudo bash`
+  - `curl -q -fsSL "https://raw.githubusercontent.com/sunnyhmz7010/ServerHarbor/main/install.sh?$(date +%s)" | sudo bash`
 - Installed shortcut command:
   - `shr`
 - Search:

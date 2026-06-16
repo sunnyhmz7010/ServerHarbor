@@ -93,7 +93,7 @@ chmod +x menu.sh
 ### 一条命令直接运行
 
 ```bash
-bash <(curl -fsSL https://raw.githubusercontent.com/sunnyhmz7010/ServerHarbor/main/run.sh)
+bash <(curl -q -fsSL "https://raw.githubusercontent.com/sunnyhmz7010/ServerHarbor/main/run.sh?$(date +%s)")
 ```
 
 在线运行入口会先展示将执行的动作，再请求确认；确认前不会创建临时目录、下载源码包或尝试安装依赖。
@@ -101,7 +101,7 @@ bash <(curl -fsSL https://raw.githubusercontent.com/sunnyhmz7010/ServerHarbor/ma
 ### 一条命令安装
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/sunnyhmz7010/ServerHarbor/main/install.sh | sudo bash
+curl -q -fsSL "https://raw.githubusercontent.com/sunnyhmz7010/ServerHarbor/main/install.sh?$(date +%s)" | sudo bash
 ```
 
 安装器会在执行任何包安装、目录创建或文件写入之前，先展示计划动作并请求确认。
@@ -279,7 +279,7 @@ bash -n menu.sh lib/common.sh modules/*.sh install.sh run.sh uninstall.sh
 ### 卸载
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/sunnyhmz7010/ServerHarbor/main/uninstall.sh | sudo bash
+curl -q -fsSL "https://raw.githubusercontent.com/sunnyhmz7010/ServerHarbor/main/uninstall.sh?$(date +%s)" | sudo bash
 ```
 
 卸载脚本会先检查安装清单，仅删除 ServerHarbor 自己创建和管理的内容，不会无条件清理其他同名文件。
