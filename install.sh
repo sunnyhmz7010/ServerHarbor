@@ -26,7 +26,11 @@ select_language() {
   printf '  1. 中文\n'
   printf '  2. English\n'
   printf 'Select / 请选择 [1/2, default: 1]: '
-  read -r choice
+  if ! IFS= read -r choice; then
+    LANGUAGE="zh"
+    printf '\n'
+    return 0
+  fi
 
   case "${choice}" in
     2) LANGUAGE="en" ;;
@@ -134,7 +138,10 @@ require_cmd() {
 confirm() {
   local answer
   t continue
-  read -r answer
+  if ! IFS= read -r answer; then
+    t cancelled
+    return 130
+  fi
   [[ "${answer}" =~ ^[Yy]([Ee][Ss])?$ ]]
 }
 
@@ -323,8 +330,7 @@ main() {
 
   print_install_plan
   if ! confirm; then
-    t cancelled
-    exit 0
+    exit 130
   fi
 
   ensure_fetch_tools_installed

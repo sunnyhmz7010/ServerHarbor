@@ -51,6 +51,7 @@ ng_t() {
         invalid_option) printf 'Invalid option.\n' ;;
         requires_root) printf 'This function requires root privileges.\n' ;;
         missing_cmd) printf 'Missing required command: %s\n' "$2" ;;
+        interrupted) printf '\nInterrupted.\n' ;;
       esac
       ;;
     *)
@@ -59,9 +60,22 @@ ng_t() {
         invalid_option) printf '无效选项。\n' ;;
         requires_root) printf '此功能需要 root 权限。\n' ;;
         missing_cmd) printf '缺少必要命令：%s\n' "$2" ;;
+        interrupted) printf '\n已中断。\n' ;;
       esac
       ;;
   esac
+}
+
+ng_read_line() {
+  local __var_name="$1"
+  local __value=""
+
+  if ! IFS= read -r __value; then
+    ng_t interrupted >&2
+    return 130
+  fi
+
+  printf -v "${__var_name}" '%s' "${__value}"
 }
 
 ng_seed_default_configs() {
@@ -80,7 +94,7 @@ ng_print_header() {
 
 ng_press_enter() {
   ng_t press_enter
-  read -r _
+  ng_read_line _ || return 130
 }
 
 ng_log() {
@@ -94,7 +108,7 @@ ng_prompt_yes_no() {
   local prompt="$1"
   local answer
   printf '%s [y/N]: ' "${prompt}"
-  read -r answer
+  ng_read_line answer || return 130
   [[ "${answer}" =~ ^[Yy]([Ee][Ss])?$ ]]
 }
 

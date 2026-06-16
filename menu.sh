@@ -21,6 +21,13 @@ source "${PROJECT_ROOT}/modules/scheduler.sh"
 
 ng_init_environment
 
+handle_menu_interrupt() {
+  ng_t interrupted >&2
+  exit 130
+}
+
+trap handle_menu_interrupt INT
+
 run_cli_mode() {
   case "${1:-}" in
     --cron-probe)
@@ -141,7 +148,7 @@ main() {
     else
       printf '\n请选择功能编号：'
     fi
-    read -r choice
+    ng_read_line choice || exit 130
 
     case "${choice}" in
       1) ng_bootstrap_menu ;;
@@ -157,7 +164,7 @@ main() {
       *) ng_t invalid_option ;;
     esac
 
-    ng_press_enter
+    ng_press_enter || exit 130
   done
 }
 
