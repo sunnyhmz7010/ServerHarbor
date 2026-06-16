@@ -3,23 +3,27 @@
 set -euo pipefail
 
 NG_PROJECT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-NG_CONFIG_DIR="${NG_PROJECT_ROOT}/config"
-NG_LOG_DIR="${NG_PROJECT_ROOT}/logs"
-NG_REPORT_DIR="${NG_PROJECT_ROOT}/reports"
-NG_STATE_DIR="${NG_PROJECT_ROOT}/state"
-NG_BACKUP_DIR="${NG_PROJECT_ROOT}/backups"
-NG_TMP_DIR="${NG_PROJECT_ROOT}/tmp"
 NG_MODULE_DIR="${NG_PROJECT_ROOT}/modules"
+NG_GIT_IGNORE_FILE="${NG_PROJECT_ROOT}/.gitignore"
+NG_HOSTNAME="$(hostname 2>/dev/null || echo unknown-host)"
+NG_PROJECT_NAME="ServerHarbor"
+NG_DATA_ROOT="${SERVERHARBOR_HOME:-${XDG_CONFIG_HOME:-${HOME}/.config}/serverharbor}"
+NG_CONFIG_DIR="${NG_DATA_ROOT}/config"
+NG_LOG_DIR="${NG_DATA_ROOT}/logs"
+NG_REPORT_DIR="${NG_DATA_ROOT}/reports"
+NG_STATE_DIR="${NG_DATA_ROOT}/state"
+NG_BACKUP_DIR="${NG_DATA_ROOT}/backups"
+NG_TMP_DIR="${NG_DATA_ROOT}/tmp"
 NG_CONFIG_FILE="${NG_CONFIG_DIR}/app.conf"
 NG_PEERS_FILE="${NG_CONFIG_DIR}/peers.conf"
 NG_WATCH_FILE="${NG_CONFIG_DIR}/watch.conf"
 NG_INTEGRITY_DB="${NG_STATE_DIR}/integrity.sha256"
-NG_GIT_IGNORE_FILE="${NG_PROJECT_ROOT}/.gitignore"
-NG_HOSTNAME="$(hostname 2>/dev/null || echo unknown-host)"
-NG_PROJECT_NAME="ServerHarbor"
+NG_DEFAULT_CONFIG_DIR="${NG_PROJECT_ROOT}/config"
 
 ng_init_environment() {
   mkdir -p "${NG_CONFIG_DIR}" "${NG_LOG_DIR}" "${NG_REPORT_DIR}" "${NG_STATE_DIR}" "${NG_BACKUP_DIR}" "${NG_TMP_DIR}"
+
+  ng_seed_default_configs
 
   if [[ -f "${NG_CONFIG_FILE}" ]]; then
     # shellcheck disable=SC1090
@@ -35,6 +39,15 @@ ng_init_environment() {
   : "${NG_GIT_REMOTE:=origin}"
   : "${NG_STATE_PUSH_PATH:=state}"
   : "${NG_PROBE_TIMEOUT:=2}"
+}
+
+ng_seed_default_configs() {
+  local config_name
+  for config_name in app.conf peers.conf watch.conf; do
+    if [[ ! -f "${NG_CONFIG_DIR}/${config_name}" && -f "${NG_DEFAULT_CONFIG_DIR}/${config_name}" ]]; then
+      cp "${NG_DEFAULT_CONFIG_DIR}/${config_name}" "${NG_CONFIG_DIR}/${config_name}"
+    fi
+  done
 }
 
 ng_print_header() {

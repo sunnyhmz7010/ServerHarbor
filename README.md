@@ -107,9 +107,49 @@ chmod +x menu.sh
 
 3. 首次使用前，建议先修改：
 
-- `config/app.conf`
-- `config/peers.conf`
-- `config/watch.conf`
+- `/etc/serverharbor/config/app.conf`
+- `/etc/serverharbor/config/peers.conf`
+- `/etc/serverharbor/config/watch.conf`
+
+### ⚡ 一条命令直接运行
+
+像 `bbrv3-lite` 一样，ServerHarbor 也支持直接在线运行：
+
+```bash
+bash <(curl -fsSL https://raw.githubusercontent.com/sunnyhmz7010/ServerHarbor/main/run.sh)
+```
+
+### 📥 一条命令安装
+
+安装到本机后，可直接使用 `shr` 命令启动：
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/sunnyhmz7010/ServerHarbor/main/install.sh | sudo bash
+```
+
+安装完成后：
+
+```bash
+shr
+```
+
+安装脚本会把项目放到：
+
+```text
+/opt/serverharbor
+```
+
+运行数据和用户配置放到：
+
+```text
+/etc/serverharbor
+```
+
+并仅创建一个受管快捷命令：
+
+```text
+/usr/local/bin/shr
+```
 
 ## 📖 使用方式
 
@@ -215,6 +255,12 @@ https://github.com/sunnyhmz7010/ServerHarbor
 - 提交当前项目状态
 - 推送到 GitHub
 
+再次执行安装命令时：
+
+- 如果未安装，会执行首次安装
+- 如果已经安装，会提示当前已安装并拉取远端最新代码完成更新
+- 本地用户配置和运行数据保留在 `/etc/serverharbor`，不会因为更新代码被覆盖
+
 ### 7. ⏱️ 定时执行
 
 项目支持通过 `cron` 自动执行探测、安全报告、备份和 Git 推送。
@@ -308,6 +354,14 @@ bash -n menu.sh
 ```bash
 ./menu.sh
 ```
+
+### 📦 卸载
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/sunnyhmz7010/ServerHarbor/main/uninstall.sh | sudo bash
+```
+
+卸载脚本会先检查安装清单，仅删除 ServerHarbor 自己创建和管理的内容，不会无条件清理其他同名文件。
 
 ### ✅ 仓库检查
 

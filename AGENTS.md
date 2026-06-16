@@ -73,6 +73,8 @@ This repository is `ServerHarbor`, a Bash-based Linux multi-server operations to
 ## Important Paths
 
 - Interactive entry point: `menu.sh`
+- One-command runner: `run.sh`
+- Installer and remover: `install.sh`, `uninstall.sh`
 - Shared helpers: `lib/common.sh`
 - Functional modules: `modules/`
 - Runtime config: `config/`
@@ -80,6 +82,8 @@ This repository is `ServerHarbor`, a Bash-based Linux multi-server operations to
 - Generated reports: `reports/`
 - Local backups: `backups/`
 - Runtime logs: `logs/`
+- Installed code root: `/opt/serverharbor`
+- Installed mutable data root: `/etc/serverharbor`
 
 ## README Rules
 
@@ -102,12 +106,19 @@ This repository is `ServerHarbor`, a Bash-based Linux multi-server operations to
 - Bootstrap and hardening functions may require root privileges.
 - Peer monitoring is file-driven through `config/peers.conf`.
 - Backup and integrity scanning are path-driven through `config/watch.conf`.
+- Managed code and mutable user data must stay decoupled. Installer updates may replace `/opt/serverharbor`, but must preserve user config and runtime data under `/etc/serverharbor`.
 - Generated reports and state files are allowed to be versioned for GitHub synchronization, but archives and logs should stay ignored unless requested otherwise.
 
 ## Development Commands
 
 - Syntax check:
   - `bash -n menu.sh`
+- One-command online run:
+  - `bash <(curl -fsSL https://raw.githubusercontent.com/sunnyhmz7010/ServerHarbor/main/run.sh)`
+- Install globally:
+  - `curl -fsSL https://raw.githubusercontent.com/sunnyhmz7010/ServerHarbor/main/install.sh | sudo bash`
+- Installed shortcut command:
+  - `shr`
 - Search:
   - `rg "pattern" .`
 - Interactive run:
