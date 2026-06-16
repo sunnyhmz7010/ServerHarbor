@@ -22,6 +22,22 @@ handle_menu_interrupt() {
 
 trap handle_menu_interrupt INT
 
+ng_self_update() {
+  local installer="${PROJECT_ROOT}/install.sh"
+
+  if [[ ! -f "${installer}" ]]; then
+    if [[ "${NG_LANG}" == "en" ]]; then
+      ng_log "ERROR" "install.sh not found. Unable to run managed update."
+    else
+      ng_log "ERROR" "未找到 install.sh，无法执行受管更新。"
+    fi
+    return 1
+  fi
+
+  chmod +x "${installer}" 2>/dev/null || true
+  bash "${installer}"
+}
+
 run_cli_mode() {
   case "${1:-}" in
     --cron-probe)
@@ -67,11 +83,13 @@ show_menu() {
     ng_print_option "1" "🚀" "Server bootstrap" "DNS / swap / BBR / base packages / SSH hardening"
     ng_print_option "2" "🛰" "Peer probe and health report" "Local snapshot and peer reachability checks"
     ng_print_option "3" "🛡" "Security audit and hardening" "Auth logs, suspicious traffic, firewall and integrity checks"
+    ng_print_option "4" "♻️" "Update ServerHarbor" "Run managed installer update without replacing your data root"
     ng_print_option "0" "↩" "Exit"
   else
     ng_print_option "1" "🚀" "新服务器开荒" "DNS / swap / BBR / 基础软件 / SSH 加固"
     ng_print_option "2" "🛰" "节点探测与健康报告" "本机快照与节点连通性检查"
     ng_print_option "3" "🛡" "安全巡检与基础加固" "认证日志、可疑流量、防火墙与完整性校验"
+    ng_print_option "4" "♻️" "更新 ServerHarbor" "调用受管安装器更新代码，不覆盖数据目录"
     ng_print_option "0" "↩" "退出"
   fi
 
@@ -93,6 +111,7 @@ main() {
       1) ng_bootstrap_menu ;;
       2) ng_probe_menu ;;
       3) ng_security_menu ;;
+      4) ng_self_update ;;
       0) exit 0 ;;
       *) ng_t invalid_option ;;
     esac
