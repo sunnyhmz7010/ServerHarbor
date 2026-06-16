@@ -197,6 +197,22 @@ ng_seed_default_configs() {
       cp "${NG_DEFAULT_CONFIG_DIR}/${config_name}" "${NG_CONFIG_DIR}/${config_name}"
     fi
   done
+
+  ng_cleanup_legacy_sample_peers
+}
+
+ng_cleanup_legacy_sample_peers() {
+  [[ -f "${NG_PEERS_FILE}" ]] || return 0
+
+  if grep -qx 'alpha,192.168.1.10' "${NG_PEERS_FILE}" \
+    && grep -qx 'beta,192.168.1.11' "${NG_PEERS_FILE}" \
+    && [[ "$(grep -Evc '^\s*#|^\s*$' "${NG_PEERS_FILE}")" -eq 2 ]]; then
+    cat > "${NG_PEERS_FILE}" <<'EOF'
+# alias,host
+# hk-01,203.0.113.10
+# sg-01,198.51.100.20
+EOF
+  fi
 }
 
 ng_press_enter() {
@@ -305,6 +321,16 @@ ng_write_report() {
 ng_read_peers() {
   [[ -f "${NG_PEERS_FILE}" ]] || return 0
   grep -Ev '^\s*#|^\s*$' "${NG_PEERS_FILE}"
+}
+
+ng_peer_count() {
+  ng_read_peers | wc -l | tr -d ' '
+}
+
+ng_total_node_count() {
+  local peer_count
+  peer_count="$(ng_peer_count)"
+  printf '%s\n' "$((peer_count + 1))"
 }
 
 ng_timestamp() {
