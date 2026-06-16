@@ -12,7 +12,7 @@ Security fixes are provided for the latest stable release line only.
 
 ## Reporting a Vulnerability
 
-If you discover a security vulnerability in ServerMesh, do not open a public issue before contacting us privately.
+If you discover a security vulnerability in ServerHarbor, do not open a public issue before contacting us privately.
 
 Please report sensitive issues through one of the following channels:
 

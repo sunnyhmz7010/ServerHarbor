@@ -95,7 +95,7 @@ ng_security_report() {
   local content
 
   content="$(
-    printf 'ServerMesh Security Report\n'
+    printf 'ServerHarbor Security Report\n'
     printf 'Generated at: %s\n' "$(ng_timestamp)"
     printf 'Host        : %s\n\n' "${NG_HOSTNAME}"
     ng_scan_auth_failures

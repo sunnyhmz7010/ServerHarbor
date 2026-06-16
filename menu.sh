@@ -55,7 +55,7 @@ show_banner() {
   clear || true
  cat <<'EOF'
 ==============================================================
- ServerMesh
+ ServerHarbor
  Decentralized Multi-Server Bootstrap, Probe and Guard Toolkit
 ==============================================================
 EOF

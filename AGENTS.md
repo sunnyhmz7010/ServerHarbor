@@ -54,7 +54,7 @@ These rules are written as the shared baseline for this project family.
 
 ## Repository-Specific Rules
 
-This repository is `ServerMesh`, a Bash-based Linux multi-server operations toolkit.
+This repository is `ServerHarbor`, a Bash-based Linux multi-server operations toolkit.
 
 ## Project Summary
 
@@ -113,7 +113,7 @@ This repository is `ServerMesh`, a Bash-based Linux multi-server operations tool
 - Interactive run:
   - `./menu.sh`
 - GitHub remote:
-  - `https://github.com/sunnyhmz7010/ServerMesh`
+  - `https://github.com/sunnyhmz7010/ServerHarbor`
 
 ## Codebase Notes
 
