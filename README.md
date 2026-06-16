@@ -119,6 +119,8 @@ chmod +x menu.sh
 bash <(curl -fsSL https://raw.githubusercontent.com/sunnyhmz7010/ServerHarbor/main/run.sh)
 ```
 
+在线运行入口会先展示将执行的动作，再请求确认，确认前不会创建临时目录、下载源码包或尝试安装依赖。
+
 ### 📥 一条命令安装
 
 安装到本机后，可直接使用 `shr` 命令启动：
@@ -126,6 +128,9 @@ bash <(curl -fsSL https://raw.githubusercontent.com/sunnyhmz7010/ServerHarbor/ma
 ```bash
 curl -fsSL https://raw.githubusercontent.com/sunnyhmz7010/ServerHarbor/main/install.sh | sudo bash
 ```
+
+安装器会在执行任何包安装、目录创建或文件写入之前，先展示计划动作并请求确认。
+安装与更新默认只依赖 `bash`、`curl` 和 `tar`，不再要求 `git`。
 
 安装完成后：
 

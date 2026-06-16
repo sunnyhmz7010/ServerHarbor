@@ -68,7 +68,7 @@ This repository is `ServerHarbor`, a Bash-based Linux multi-server operations to
 - Target platform: `Linux`
 - VCS host: `GitHub`
 - Scheduling: `cron`
-- Transport: `ssh`, `rsync`, `git`
+- Transport: `ssh`, `rsync`, `curl`, `tar`
 
 ## Important Paths
 
@@ -107,6 +107,7 @@ This repository is `ServerHarbor`, a Bash-based Linux multi-server operations to
 - Peer monitoring is file-driven through `config/peers.conf`.
 - Backup and integrity scanning are path-driven through `config/watch.conf`.
 - Managed code and mutable user data must stay decoupled. Installer updates may replace `/opt/serverharbor/app`, but must preserve user config and runtime data under `/opt/serverharbor/data`.
+- Before any installer package operation or filesystem write, the script must print the intended actions and require explicit user confirmation.
 - Generated reports and state files are allowed to be versioned for GitHub synchronization, but archives and logs should stay ignored unless requested otherwise.
 
 ## Development Commands
