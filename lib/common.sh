@@ -4,7 +4,6 @@ set -euo pipefail
 
 NG_PROJECT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 NG_MODULE_DIR="${NG_PROJECT_ROOT}/modules"
-NG_GIT_IGNORE_FILE="${NG_PROJECT_ROOT}/.gitignore"
 NG_HOSTNAME="$(hostname 2>/dev/null || echo unknown-host)"
 NG_PROJECT_NAME="ServerHarbor"
 NG_DATA_ROOT="${SERVERHARBOR_HOME:-${XDG_CONFIG_HOME:-${HOME}/.config}/serverharbor}"
@@ -13,7 +12,6 @@ NG_CONFIG_DIR="${NG_DATA_ROOT}/config"
 NG_LOG_DIR="${NG_DATA_ROOT}/logs"
 NG_REPORT_DIR="${NG_DATA_ROOT}/reports"
 NG_STATE_DIR="${NG_DATA_ROOT}/state"
-NG_BACKUP_DIR="${NG_DATA_ROOT}/backups"
 NG_TMP_DIR="${NG_DATA_ROOT}/tmp"
 NG_CONFIG_FILE="${NG_CONFIG_DIR}/app.conf"
 NG_PEERS_FILE="${NG_CONFIG_DIR}/peers.conf"
@@ -33,7 +31,7 @@ NG_C_PANEL=""
 NG_C_PANEL_2=""
 
 ng_init_environment() {
-  mkdir -p "${NG_CONFIG_DIR}" "${NG_LOG_DIR}" "${NG_REPORT_DIR}" "${NG_STATE_DIR}" "${NG_BACKUP_DIR}" "${NG_TMP_DIR}"
+  mkdir -p "${NG_CONFIG_DIR}" "${NG_LOG_DIR}" "${NG_REPORT_DIR}" "${NG_STATE_DIR}" "${NG_TMP_DIR}"
 
   ng_init_theme
   ng_seed_default_configs
@@ -47,10 +45,6 @@ ng_init_environment() {
   : "${NG_DNS_PRIMARY:=1.1.1.1}"
   : "${NG_DNS_SECONDARY:=8.8.8.8}"
   : "${NG_SWAP_SIZE_MB:=1024}"
-  : "${NG_BACKUP_RETENTION_DAYS:=7}"
-  : "${NG_GIT_BRANCH:=main}"
-  : "${NG_GIT_REMOTE:=origin}"
-  : "${NG_STATE_PUSH_PATH:=state}"
   : "${NG_PROBE_TIMEOUT:=2}"
 }
 
@@ -285,13 +279,13 @@ ng_install_base_packages() {
   case "${manager}" in
     apt)
       apt-get update
-      apt-get install -y curl wget git rsync cron procps iproute2 net-tools openssh-client
+      apt-get install -y curl wget procps iproute2 net-tools openssh-client
       ;;
     dnf)
-      dnf install -y curl wget git rsync cronie procps-ng iproute net-tools openssh-clients
+      dnf install -y curl wget procps-ng iproute net-tools openssh-clients
       ;;
     yum)
-      yum install -y curl wget git rsync cronie procps-ng iproute net-tools openssh-clients
+      yum install -y curl wget procps-ng iproute net-tools openssh-clients
       ;;
     *)
       ng_log "WARN" "$(ng_t unsupported_pkg)"
@@ -306,22 +300,6 @@ ng_write_report() {
 
   printf '%s\n' "${content}" > "${report_file}"
   printf '%s\n' "${report_file}"
-}
-
-ng_git_current_branch() {
-  if git -C "${NG_PROJECT_ROOT}" rev-parse --is-inside-work-tree >/dev/null 2>&1; then
-    git -C "${NG_PROJECT_ROOT}" branch --show-current 2>/dev/null || echo "-"
-  else
-    echo "-"
-  fi
-}
-
-ng_git_remote_url() {
-  if git -C "${NG_PROJECT_ROOT}" rev-parse --is-inside-work-tree >/dev/null 2>&1; then
-    git -C "${NG_PROJECT_ROOT}" remote get-url "${NG_GIT_REMOTE}" 2>/dev/null || echo "-"
-  else
-    echo "-"
-  fi
 }
 
 ng_read_peers() {

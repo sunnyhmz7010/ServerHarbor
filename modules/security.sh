@@ -170,7 +170,9 @@ ng_security_menu() {
       ng_print_option "2" "🔍" "Show failed login statistics" "Count recent failed login source IPs"
       ng_print_option "3" "🌐" "Show suspicious web requests" "Inspect nginx access log for common attack patterns"
       ng_print_option "4" "🔥" "Show firewall summary" "Display ufw, firewalld or iptables state"
-      ng_print_option "5" "🔒" "Apply simple firewall hardening" "Allow SSH and enable default deny for incoming traffic"
+      ng_print_option "5" "🧬" "Create integrity baseline" "Hash all files under configured watch paths"
+      ng_print_option "6" "✅" "Verify integrity baseline" "Check current files against stored hashes"
+      ng_print_option "7" "🔒" "Apply simple firewall hardening" "Allow SSH and enable default deny for incoming traffic"
       ng_print_option "0" "↩" "Back"
     else
       ng_print_title_box "🛡 安全巡检" "轻量检查系统暴露面，并做基础加固"
@@ -178,7 +180,9 @@ ng_security_menu() {
       ng_print_option "2" "🔍" "查看失败登录统计" "统计近期失败登录来源 IP"
       ng_print_option "3" "🌐" "查看可疑 Web 请求" "检查 nginx 访问日志中的常见攻击特征"
       ng_print_option "4" "🔥" "查看防火墙状态" "显示 ufw、firewalld 或 iptables 状态"
-      ng_print_option "5" "🔒" "应用简单防火墙加固" "放行 SSH，并默认拒绝新入站连接"
+      ng_print_option "5" "🧬" "生成完整性基线" "对监控路径下文件生成哈希清单"
+      ng_print_option "6" "✅" "校验完整性基线" "按已有哈希清单检查当前文件"
+      ng_print_option "7" "🔒" "应用简单防火墙加固" "放行 SSH，并默认拒绝新入站连接"
       ng_print_option "0" "↩" "返回"
     fi
 
@@ -193,7 +197,9 @@ ng_security_menu() {
       2) ng_scan_auth_failures ;;
       3) ng_scan_web_attacks ;;
       4) ng_firewall_summary ;;
-      5)
+      5) ng_integrity_create_baseline ;;
+      6) ng_integrity_verify ;;
+      7)
         if [[ "${NG_LANG}" == "en" ]]; then
           if ng_prompt_yes_no "Apply simple firewall hardening now?"; then
             ng_simple_firewall_hardening
@@ -204,37 +210,6 @@ ng_security_menu() {
           fi
         fi
         ;;
-      0) break ;;
-      *) ng_t invalid_option ;;
-    esac
-  done
-}
-
-ng_integrity_menu() {
-  local choice
-
-  while true; do
-    if [[ "${NG_LANG}" == "en" ]]; then
-      ng_print_title_box "🧬 Integrity Monitor" "Hash baseline for watched paths"
-      ng_print_option "1" "🧱" "Create integrity baseline" "Hash all files under configured watch paths"
-      ng_print_option "2" "✅" "Verify integrity baseline" "Check current files against stored hashes"
-      ng_print_option "0" "↩" "Back"
-    else
-      ng_print_title_box "🧬 完整性监控" "为监控路径建立并校验哈希基线"
-      ng_print_option "1" "🧱" "生成完整性基线" "对监控路径下文件生成哈希清单"
-      ng_print_option "2" "✅" "校验完整性基线" "按已有哈希清单检查当前文件"
-      ng_print_option "0" "↩" "返回"
-    fi
-
-    printf '\n'
-    ng_print_menu_hint
-    printf '\n'
-    ng_t select
-    ng_read_line choice || return 130
-
-    case "${choice}" in
-      1) ng_integrity_create_baseline ;;
-      2) ng_integrity_verify ;;
       0) break ;;
       *) ng_t invalid_option ;;
     esac

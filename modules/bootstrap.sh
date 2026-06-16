@@ -6,7 +6,7 @@ ng_configure_dns() {
   ng_require_root || return 1
 
   local resolv_conf="/etc/resolv.conf"
-  local backup_file="${NG_BACKUP_DIR}/resolv.conf.$(date '+%Y%m%d-%H%M%S').bak"
+  local backup_file="${NG_STATE_DIR}/resolv.conf.$(date '+%Y%m%d-%H%M%S').bak"
 
   cp "${resolv_conf}" "${backup_file}" 2>/dev/null || true
   {
@@ -63,7 +63,7 @@ ng_harden_ssh() {
   ng_require_root || return 1
 
   local sshd_config="/etc/ssh/sshd_config"
-  local backup_file="${NG_BACKUP_DIR}/sshd_config.$(date '+%Y%m%d-%H%M%S').bak"
+  local backup_file="${NG_STATE_DIR}/sshd_config.$(date '+%Y%m%d-%H%M%S').bak"
 
   [[ -f "${sshd_config}" ]] || {
     ng_log "WARN" "sshd_config not found. Skip SSH hardening."
@@ -139,7 +139,7 @@ ng_bootstrap_menu() {
     if [[ "${NG_LANG}" == "en" ]]; then
       ng_print_title_box "🚀 Server Bootstrap" "First-run provisioning for a fresh server"
       ng_print_option "1" "⚡" "Run full bootstrap" "Base packages, timezone, BBR, DNS, swap and SSH hardening"
-      ng_print_option "2" "📦" "Install base packages" "curl, wget, git, rsync, cron and common network tools"
+      ng_print_option "2" "📦" "Install base packages" "curl, wget and common system/network tools"
       ng_print_option "3" "🌐" "Enable BBR" "Write sysctl tuning and reload kernel parameters"
       ng_print_option "4" "🧭" "Configure DNS" "Rewrite /etc/resolv.conf with configured resolvers"
       ng_print_option "5" "🧠" "Configure swap" "Create /swapfile when no swap exists"
@@ -149,7 +149,7 @@ ng_bootstrap_menu() {
     else
       ng_print_title_box "🚀 新服务器开荒" "面向新机器的一键初始化与基础加固"
       ng_print_option "1" "⚡" "执行完整开荒" "基础软件、时区、BBR、DNS、swap 与 SSH 加固"
-      ng_print_option "2" "📦" "安装基础软件" "curl、wget、git、rsync、cron 与常用网络工具"
+      ng_print_option "2" "📦" "安装基础软件" "curl、wget 与常用系统/网络工具"
       ng_print_option "3" "🌐" "启用 BBR" "写入 sysctl 调优并重新加载内核参数"
       ng_print_option "4" "🧭" "配置 DNS" "按配置重写 /etc/resolv.conf"
       ng_print_option "5" "🧠" "配置 swap" "在无 swap 时创建 /swapfile"

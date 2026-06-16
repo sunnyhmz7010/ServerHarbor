@@ -58,17 +58,16 @@ This repository is `ServerHarbor`, a Bash-based Linux multi-server operations to
 
 ## Project Summary
 
-- Product goal: provide a lightweight Shell toolkit for new-server bootstrap, decentralized peer health checks, backup coordination, integrity verification, and scheduled GitHub state sync.
+- Product goal: provide a lightweight Shell toolkit for new-server bootstrap, decentralized peer health checks, and security inspection with integrity verification.
 - Main audience: Linux operations learners and administrators who want a practical Shell automation project.
-- Runtime target: Linux servers with Bash, cron, common networking tools, and optional systemd.
+- Runtime target: Linux servers with Bash, common networking tools, and optional systemd.
 
 ## Tech Stack
 
 - Language: `Bash`
 - Target platform: `Linux`
 - VCS host: `GitHub`
-- Scheduling: `cron`
-- Transport: `ssh`, `rsync`, `curl`, `tar`
+- Transport: `ssh`, `curl`, `tar`
 
 ## Important Paths
 
@@ -80,7 +79,6 @@ This repository is `ServerHarbor`, a Bash-based Linux multi-server operations to
 - Runtime config: `config/`
 - Generated state: `state/`
 - Generated reports: `reports/`
-- Local backups: `backups/`
 - Runtime logs: `logs/`
 - Installed code root: `/opt/serverharbor/app`
 - Installed mutable data root: `/opt/serverharbor/data`
@@ -90,7 +88,7 @@ This repository is `ServerHarbor`, a Bash-based Linux multi-server operations to
 - Keep the README concise and user-facing.
 - Document the Linux target clearly; do not imply Windows-native execution support beyond editing or Git management.
 - Keep examples copyable and based on plain `bash` commands.
-- If bootstrap, scheduling, Git sync, or peer config behavior changes, update the README in the same task.
+- If bootstrap, security, probe, or peer config behavior changes, update the README in the same task.
 
 ## Product Constraints
 
@@ -102,18 +100,18 @@ This repository is `ServerHarbor`, a Bash-based Linux multi-server operations to
 ## Runtime Model
 
 - `menu.sh` is the interactive user entry point.
-- Cron entry points are implemented as `menu.sh --cron-*` flags.
+- Supported CLI entry points are `menu.sh --cron-probe` and `menu.sh --cron-security`.
 - Bootstrap and hardening functions may require root privileges.
 - Peer monitoring is file-driven through `config/peers.conf`.
-- Backup and integrity scanning are path-driven through `config/watch.conf`.
+- Integrity scanning is path-driven through `config/watch.conf`.
 - Managed code and mutable user data must stay decoupled. Installer updates may replace `/opt/serverharbor/app`, but must preserve user config and runtime data under `/opt/serverharbor/data`.
 - Before any installer package operation or filesystem write, the script must print the intended actions and require explicit user confirmation.
-- Generated reports and state files are allowed to be versioned for GitHub synchronization, but archives and logs should stay ignored unless requested otherwise.
+- Generated reports and state files may be retained locally for inspection, but logs should stay ignored unless requested otherwise.
 
 ## Development Commands
 
 - Syntax check:
-  - `bash -n menu.sh`
+  - `bash -n menu.sh lib/common.sh modules/*.sh install.sh run.sh uninstall.sh`
 - One-command online run:
   - `bash <(curl -fsSL https://raw.githubusercontent.com/sunnyhmz7010/ServerHarbor/main/run.sh)`
 - Install globally:
