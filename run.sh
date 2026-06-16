@@ -61,6 +61,8 @@ t() {
       case "${key}" in
         missing_cmd) printf 'Missing required command: %s\n' "$2" ;;
         continue) printf 'Continue? [Y/n]: ' ;;
+        remove_data) printf 'Remove persistent data directory %s? [y/N]: ' "${DATA_ROOT}" ;;
+        removing_data) printf 'Removing persistent data directory: %s\n' "${DATA_ROOT}" ;;
         plan_title) printf '%s online run will perform these actions:\n' "${PROJECT_NAME}" ;;
         plan_tmp) printf '  1. Use a temporary directory under %s\n' "${TMP_ROOT%/}" ;;
         plan_download) printf '  2. Download source archive from %s\n' "${ARCHIVE_URL}" ;;
@@ -84,6 +86,8 @@ t() {
       case "${key}" in
         missing_cmd) printf '缺少必要命令：%s\n' "$2" ;;
         continue) printf '是否继续？[Y/n]: ' ;;
+        remove_data) printf '是否删除持久化数据目录 %s？[y/N]: ' "${DATA_ROOT}" ;;
+        removing_data) printf '正在删除持久化数据目录：%s\n' "${DATA_ROOT}" ;;
         plan_title) printf '%s 在线运行将执行以下操作：\n' "${PROJECT_NAME}" ;;
         plan_tmp) printf '  1. 使用临时目录根 %s\n' "${TMP_ROOT%/}" ;;
         plan_download) printf '  2. 从 %s 下载源码压缩包\n' "${ARCHIVE_URL}" ;;
@@ -152,6 +156,15 @@ confirm() {
     return 130
   fi
   [[ -z "${answer}" || "${answer}" =~ ^[Yy]([Ee][Ss])?$ ]]
+}
+
+confirm_remove_data() {
+  local answer
+  t remove_data
+  if ! IFS= read -r answer; then
+    return 1
+  fi
+  [[ "${answer}" =~ ^[Yy]([Ee][Ss])?$ ]]
 }
 
 detect_pkg_manager() {
@@ -238,6 +251,7 @@ extract_repo() {
 
 main() {
   local extracted_root
+  local menu_exit_code=0
 
   trap handle_preflight_interrupt INT
   select_language || exit $?
@@ -255,7 +269,16 @@ main() {
   extracted_root="$(extract_repo)"
   chmod +x "${extracted_root}/menu.sh"
   leave_critical_section
-  SERVERHARBOR_HOME="${DATA_ROOT}" SERVERHARBOR_LANG="${LANGUAGE}" bash "${extracted_root}/menu.sh" "$@"
+  if ! SERVERHARBOR_HOME="${DATA_ROOT}" SERVERHARBOR_LANG="${LANGUAGE}" bash "${extracted_root}/menu.sh" "$@"; then
+    menu_exit_code=$?
+  fi
+
+  if confirm_remove_data; then
+    t removing_data
+    rm -rf "${DATA_ROOT}"
+  fi
+
+  exit "${menu_exit_code}"
 }
 
 main "$@"
