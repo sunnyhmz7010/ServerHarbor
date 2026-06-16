@@ -8,6 +8,7 @@ NG_GIT_IGNORE_FILE="${NG_PROJECT_ROOT}/.gitignore"
 NG_HOSTNAME="$(hostname 2>/dev/null || echo unknown-host)"
 NG_PROJECT_NAME="ServerHarbor"
 NG_DATA_ROOT="${SERVERHARBOR_HOME:-${XDG_CONFIG_HOME:-${HOME}/.config}/serverharbor}"
+NG_LANG="${SERVERHARBOR_LANG:-zh}"
 NG_CONFIG_DIR="${NG_DATA_ROOT}/config"
 NG_LOG_DIR="${NG_DATA_ROOT}/logs"
 NG_REPORT_DIR="${NG_DATA_ROOT}/reports"
@@ -41,6 +42,28 @@ ng_init_environment() {
   : "${NG_PROBE_TIMEOUT:=2}"
 }
 
+ng_t() {
+  local key="$1"
+  case "${NG_LANG}" in
+    en)
+      case "${key}" in
+        press_enter) printf '\nPress Enter to continue...' ;;
+        invalid_option) printf 'Invalid option.\n' ;;
+        requires_root) printf 'This function requires root privileges.\n' ;;
+        missing_cmd) printf 'Missing required command: %s\n' "$2" ;;
+      esac
+      ;;
+    *)
+      case "${key}" in
+        press_enter) printf '\n按回车继续...' ;;
+        invalid_option) printf '无效选项。\n' ;;
+        requires_root) printf '此功能需要 root 权限。\n' ;;
+        missing_cmd) printf '缺少必要命令：%s\n' "$2" ;;
+      esac
+      ;;
+  esac
+}
+
 ng_seed_default_configs() {
   local config_name
   for config_name in app.conf peers.conf watch.conf; do
@@ -56,7 +79,7 @@ ng_print_header() {
 }
 
 ng_press_enter() {
-  printf '\nPress Enter to continue...'
+  ng_t press_enter
   read -r _
 }
 
@@ -80,7 +103,7 @@ ng_require_cmd() {
   local cmd
   for cmd in "$@"; do
     if ! command -v "${cmd}" >/dev/null 2>&1; then
-      printf 'Missing required command: %s\n' "${cmd}"
+      ng_t missing_cmd "${cmd}"
       missing=1
     fi
   done
@@ -89,7 +112,7 @@ ng_require_cmd() {
 
 ng_require_root() {
   if [[ "${EUID}" -ne 0 ]]; then
-    printf 'This function requires root privileges.\n'
+    ng_t requires_root
     return 1
   fi
 }

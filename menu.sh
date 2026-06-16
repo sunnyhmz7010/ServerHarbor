@@ -53,16 +53,26 @@ run_cli_mode() {
 
 show_banner() {
   clear || true
- cat <<'EOF'
+  if [[ "${NG_LANG}" == "en" ]]; then
+    cat <<'EOF'
 ==============================================================
  ServerHarbor
  Decentralized Multi-Server Bootstrap, Probe and Guard Toolkit
 ==============================================================
 EOF
+  else
+    cat <<'EOF'
+==============================================================
+ ServerHarbor
+ 多服务器自治开荒、探测、备份与安全管理工具
+==============================================================
+EOF
+  fi
 }
 
 show_menu() {
-  cat <<'EOF'
+  if [[ "${NG_LANG}" == "en" ]]; then
+    cat <<'EOF'
 1. Server bootstrap
 2. Peer probe and health report
 3. Security audit and hardening
@@ -74,6 +84,20 @@ show_menu() {
 9. Project status summary
 0. Exit
 EOF
+  else
+    cat <<'EOF'
+1. 新服务器开荒
+2. 节点探测与健康报告
+3. 安全巡检与基础加固
+4. 备份与保留清理
+5. 文件完整性基线与校验
+6. Git 远端同步
+7. 安装定时任务
+8. 查看最新报告
+9. 查看项目状态摘要
+0. 退出
+EOF
+  fi
 }
 
 view_reports() {
@@ -112,7 +136,11 @@ main() {
   while true; do
     show_banner
     show_menu
-    printf '\nSelect an option: '
+    if [[ "${NG_LANG}" == "en" ]]; then
+      printf '\nSelect an option: '
+    else
+      printf '\n请选择功能编号：'
+    fi
     read -r choice
 
     case "${choice}" in
@@ -126,7 +154,7 @@ main() {
       8) view_reports ;;
       9) status_summary ;;
       0) exit 0 ;;
-      *) printf 'Invalid option.\n' ;;
+      *) ng_t invalid_option ;;
     esac
 
     ng_press_enter

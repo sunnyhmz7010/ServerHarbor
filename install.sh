@@ -13,10 +13,110 @@ INSTALL_OWNER="serverharbor"
 TMP_ROOT="${TMPDIR:-/tmp}"
 ARCHIVE_PATH="${TMP_ROOT%/}/serverharbor-install.tar.gz"
 EXTRACT_DIR="${TMP_ROOT%/}/serverharbor-install-extract"
+LANGUAGE="${SERVERHARBOR_LANG:-}"
+
+select_language() {
+  local choice
+
+  if [[ -n "${LANGUAGE}" ]]; then
+    return 0
+  fi
+
+  printf 'Choose language / 选择语言:\n'
+  printf '  1. 中文\n'
+  printf '  2. English\n'
+  printf 'Select / 请选择 [1/2, default: 1]: '
+  read -r choice
+
+  case "${choice}" in
+    2) LANGUAGE="en" ;;
+    *) LANGUAGE="zh" ;;
+  esac
+}
+
+t() {
+  local key="$1"
+  case "${LANGUAGE}" in
+    en)
+      case "${key}" in
+        need_root) printf 'Please run install.sh as root.\n' ;;
+        missing_cmd) printf 'Missing required command: %s\n' "$2" ;;
+        continue) printf 'Continue? [y/N]: ' ;;
+        plan_title) printf '%s will perform these actions:\n' "${PROJECT_NAME}" ;;
+        plan_dep) printf '  1. Ensure curl and tar are available (%s)\n' "$2" ;;
+        plan_download) printf '  2. Download source archive from %s\n' "${ARCHIVE_URL}" ;;
+        plan_data) printf '  3. Create or preserve data under %s\n' "${DATA_ROOT}" ;;
+        plan_launcher) printf '  4. Write managed launcher %s\n' "${BIN_PATH}" ;;
+        plan_manifest) printf '  5. Write install manifest %s\n' "${MANIFEST_PATH}" ;;
+        dep_ok) printf 'curl and tar already installed' ;;
+        dep_missing) printf 'missing curl/tar, will attempt install via %s' "$2" ;;
+        dep_installing) printf 'curl or tar not found. Attempting to install required tools via %s...\n' "$2" ;;
+        dep_unsupported) printf 'Unable to auto-install curl/tar: unsupported package manager.\n' ;;
+        dep_manual) printf 'Please install curl and tar manually and re-run the installer.\n' ;;
+        dep_failed) printf 'Required tools were not installed successfully. Please install curl and tar manually.\n' ;;
+        already) printf '%s is already installed.\n' "${PROJECT_NAME}" ;;
+        install_root) printf 'Install root: %s\n' "${INSTALL_ROOT}" ;;
+        app_root) printf 'App root    : %s\n' "${APP_ROOT}" ;;
+        data_root) printf 'Data root   : %s\n' "${DATA_ROOT}" ;;
+        shortcut) printf 'Shortcut    : %s\n' "${BIN_PATH}" ;;
+        rerun_update) printf 'To update the local copy, re-run this installer.\n' ;;
+        refuse_not_dir) printf 'Refusing to install because %s exists and is not a directory.\n' "${INSTALL_ROOT}" ;;
+        refuse_reuse) printf 'Refusing to reuse existing directory: %s\n' "${INSTALL_ROOT}" ;;
+        refuse_reuse_reason) printf 'The directory is not recognized as a managed %s install.\n' "${PROJECT_NAME}" ;;
+        refuse_symlink) printf 'Refusing to overwrite symbolic link command: %s\n' "${BIN_PATH}" ;;
+        refuse_symlink_reason) printf 'Please remove it manually if you want %s to manage this shortcut.\n' "${PROJECT_NAME}" ;;
+        refuse_cmd) printf 'Refusing to overwrite existing command: %s\n' "${BIN_PATH}" ;;
+        refuse_cmd_reason) printf 'The file does not appear to belong to %s.\n' "${PROJECT_NAME}" ;;
+        bad_archive) printf 'Downloaded archive does not look like a valid %s source tree.\n' "${PROJECT_NAME}" ;;
+        cancelled) printf 'Install cancelled.\n' ;;
+        updated) printf '%s updated successfully.\n' "${PROJECT_NAME}" ;;
+        installed) printf '%s installed successfully.\n' "${PROJECT_NAME}" ;;
+        run_cmd) printf 'Run: %s\n' "shr" ;;
+      esac
+      ;;
+    *)
+      case "${key}" in
+        need_root) printf '请使用 root 身份运行 install.sh。\n' ;;
+        missing_cmd) printf '缺少必要命令：%s\n' "$2" ;;
+        continue) printf '是否继续？[y/N]: ' ;;
+        plan_title) printf '%s 即将执行以下操作：\n' "${PROJECT_NAME}" ;;
+        plan_dep) printf '  1. 确保 curl 和 tar 可用（%s）\n' "$2" ;;
+        plan_download) printf '  2. 从 %s 下载源码压缩包\n' "${ARCHIVE_URL}" ;;
+        plan_data) printf '  3. 创建或保留数据目录 %s\n' "${DATA_ROOT}" ;;
+        plan_launcher) printf '  4. 写入受管快捷命令 %s\n' "${BIN_PATH}" ;;
+        plan_manifest) printf '  5. 写入安装清单 %s\n' "${MANIFEST_PATH}" ;;
+        dep_ok) printf 'curl 和 tar 已安装' ;;
+        dep_missing) printf '缺少 curl/tar，将尝试通过 %s 安装' "$2" ;;
+        dep_installing) printf '未找到 curl 或 tar，正在尝试通过 %s 安装所需工具...\n' "$2" ;;
+        dep_unsupported) printf '无法自动安装 curl/tar：不支持的包管理器。\n' ;;
+        dep_manual) printf '请手动安装 curl 和 tar 后重新运行安装脚本。\n' ;;
+        dep_failed) printf '依赖安装未成功，请手动安装 curl 和 tar。\n' ;;
+        already) printf '%s 已安装。\n' "${PROJECT_NAME}" ;;
+        install_root) printf '安装根目录：%s\n' "${INSTALL_ROOT}" ;;
+        app_root) printf '代码目录   ：%s\n' "${APP_ROOT}" ;;
+        data_root) printf '数据目录   ：%s\n' "${DATA_ROOT}" ;;
+        shortcut) printf '快捷命令   ：%s\n' "${BIN_PATH}" ;;
+        rerun_update) printf '如需更新本地代码，请重新运行此安装脚本。\n' ;;
+        refuse_not_dir) printf '拒绝安装：%s 已存在且不是目录。\n' "${INSTALL_ROOT}" ;;
+        refuse_reuse) printf '拒绝复用现有目录：%s\n' "${INSTALL_ROOT}" ;;
+        refuse_reuse_reason) printf '该目录不是受 %s 管理的安装目录。\n' "${PROJECT_NAME}" ;;
+        refuse_symlink) printf '拒绝覆盖符号链接命令：%s\n' "${BIN_PATH}" ;;
+        refuse_symlink_reason) printf '如果确实要让 %s 管理该快捷命令，请先手动删除它。\n' "${PROJECT_NAME}" ;;
+        refuse_cmd) printf '拒绝覆盖现有命令：%s\n' "${BIN_PATH}" ;;
+        refuse_cmd_reason) printf '该文件看起来不属于 %s。\n' "${PROJECT_NAME}" ;;
+        bad_archive) printf '下载得到的压缩包不是有效的 %s 源码结构。\n' "${PROJECT_NAME}" ;;
+        cancelled) printf '已取消安装。\n' ;;
+        updated) printf '%s 更新成功。\n' "${PROJECT_NAME}" ;;
+        installed) printf '%s 安装成功。\n' "${PROJECT_NAME}" ;;
+        run_cmd) printf '启动命令：%s\n' "shr" ;;
+      esac
+      ;;
+  esac
+}
 
 require_root() {
   if [[ "${EUID}" -ne 0 ]]; then
-    printf 'Please run install.sh as root.\n' >&2
+    t need_root >&2
     exit 1
   fi
 }
@@ -25,7 +125,7 @@ require_cmd() {
   local cmd
   for cmd in "$@"; do
     if ! command -v "${cmd}" >/dev/null 2>&1; then
-      printf 'Missing required command: %s\n' "${cmd}" >&2
+      t missing_cmd "${cmd}" >&2
       exit 1
     fi
   done
@@ -33,7 +133,7 @@ require_cmd() {
 
 confirm() {
   local answer
-  printf 'Continue? [y/N]: '
+  t continue
   read -r answer
   [[ "${answer}" =~ ^[Yy]([Ee][Ss])?$ ]]
 }
@@ -55,17 +155,17 @@ print_install_plan() {
 
   pkg_manager="$(detect_pkg_manager)"
   if command -v curl >/dev/null 2>&1 && command -v tar >/dev/null 2>&1; then
-    dep_note="curl and tar already installed"
+    dep_note="$(t dep_ok)"
   else
-    dep_note="missing curl/tar, will attempt install via ${pkg_manager}"
+    dep_note="$(t dep_missing "${pkg_manager}")"
   fi
 
-  printf '%s will perform these actions:\n' "${PROJECT_NAME}"
-  printf '  1. Ensure curl and tar are available (%s)\n' "${dep_note}"
-  printf '  2. Download source archive from %s\n' "${ARCHIVE_URL}"
-  printf '  3. Create or preserve data under %s\n' "${DATA_ROOT}"
-  printf '  4. Write managed launcher %s\n' "${BIN_PATH}"
-  printf '  5. Write install manifest %s\n' "${MANIFEST_PATH}"
+  t plan_title
+  t plan_dep "${dep_note}"
+  t plan_download
+  t plan_data
+  t plan_launcher
+  t plan_manifest
 }
 
 ensure_fetch_tools_installed() {
@@ -76,7 +176,7 @@ ensure_fetch_tools_installed() {
   fi
 
   manager="$(detect_pkg_manager)"
-  printf 'curl or tar not found. Attempting to install required tools via %s...\n' "${manager}"
+  t dep_installing "${manager}"
 
   case "${manager}" in
     apt)
@@ -90,14 +190,14 @@ ensure_fetch_tools_installed() {
       yum install -y curl tar
       ;;
     *)
-      printf 'Unable to auto-install curl/tar: unsupported package manager.\n' >&2
-      printf 'Please install curl and tar manually and re-run the installer.\n' >&2
+      t dep_unsupported >&2
+      t dep_manual >&2
       exit 1
       ;;
   esac
 
   if ! command -v curl >/dev/null 2>&1 || ! command -v tar >/dev/null 2>&1; then
-    printf 'Required tools were not installed successfully. Please install curl and tar manually.\n' >&2
+    t dep_failed >&2
     exit 1
   fi
 }
@@ -107,23 +207,23 @@ is_managed_install() {
 }
 
 show_existing_install_summary() {
-  printf '%s is already installed.\n' "${PROJECT_NAME}"
-  printf 'Install root: %s\n' "${INSTALL_ROOT}"
-  printf 'App root    : %s\n' "${APP_ROOT}"
-  printf 'Data root   : %s\n' "${DATA_ROOT}"
-  printf 'Shortcut    : %s\n' "${BIN_PATH}"
-  printf 'To update the local copy, re-run this installer.\n'
+  t already
+  t install_root
+  t app_root
+  t data_root
+  t shortcut
+  t rerun_update
 }
 
 validate_existing_install_root() {
   if [[ -e "${INSTALL_ROOT}" && ! -d "${INSTALL_ROOT}" ]]; then
-    printf 'Refusing to install because %s exists and is not a directory.\n' "${INSTALL_ROOT}" >&2
+    t refuse_not_dir >&2
     exit 1
   fi
 
   if [[ -d "${INSTALL_ROOT}" && ! -f "${MANIFEST_PATH}" && ! -f "${APP_ROOT}/menu.sh" ]]; then
-    printf 'Refusing to reuse existing directory: %s\n' "${INSTALL_ROOT}" >&2
-    printf 'The directory is not recognized as a managed %s install.\n' "${PROJECT_NAME}" >&2
+    t refuse_reuse >&2
+    t refuse_reuse_reason >&2
     exit 1
   fi
 }
@@ -131,14 +231,14 @@ validate_existing_install_root() {
 validate_existing_launcher() {
   if [[ -e "${BIN_PATH}" ]]; then
     if [[ -L "${BIN_PATH}" ]]; then
-      printf 'Refusing to overwrite symbolic link command: %s\n' "${BIN_PATH}" >&2
-      printf 'Please remove it manually if you want %s to manage this shortcut.\n' "${PROJECT_NAME}" >&2
+      t refuse_symlink >&2
+      t refuse_symlink_reason >&2
       exit 1
     fi
 
     if ! grep -q "${APP_ROOT}/menu.sh" "${BIN_PATH}" 2>/dev/null; then
-      printf 'Refusing to overwrite existing command: %s\n' "${BIN_PATH}" >&2
-      printf 'The file does not appear to belong to %s.\n' "${PROJECT_NAME}" >&2
+      t refuse_cmd >&2
+      t refuse_cmd_reason >&2
       exit 1
     fi
   fi
@@ -170,7 +270,7 @@ download_and_extract() {
 
   extracted_root="$(find "${EXTRACT_DIR}" -mindepth 1 -maxdepth 1 -type d | head -n 1)"
   if [[ -z "${extracted_root}" || ! -f "${extracted_root}/menu.sh" ]]; then
-    printf 'Downloaded archive does not look like a valid %s source tree.\n' "${PROJECT_NAME}" >&2
+    t bad_archive >&2
     exit 1
   fi
 
@@ -209,6 +309,7 @@ seed_data_root() {
 main() {
   local already_installed=0
 
+  select_language
   require_root
   require_cmd bash
 
@@ -222,7 +323,7 @@ main() {
 
   print_install_plan
   if ! confirm; then
-    printf 'Install cancelled.\n'
+    t cancelled
     exit 0
   fi
 
@@ -236,11 +337,11 @@ main() {
   install_launcher
 
   if [[ "${already_installed}" -eq 1 ]]; then
-    printf '%s updated successfully.\n' "${PROJECT_NAME}"
+    t updated
   else
-    printf '%s installed successfully.\n' "${PROJECT_NAME}"
+    t installed
   fi
-  printf 'Run: %s\n' "shr"
+  t run_cmd
 }
 
 main "$@"
