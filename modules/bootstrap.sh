@@ -89,30 +89,32 @@ ng_bootstrap_report() {
 
   if [[ "${NG_LANG}" == "en" ]]; then
     content="$(
-      printf 'ServerHarbor Bootstrap Report\n'
-      printf 'Generated at: %s\n' "$(ng_timestamp)"
-      printf 'Host        : %s\n' "${NG_HOSTNAME}"
-      printf 'Timezone    : %s\n' "${NG_TIMEZONE}"
-      printf 'DNS         : %s, %s\n' "${NG_DNS_PRIMARY}" "${NG_DNS_SECONDARY}"
-      printf 'Swap size   : %sMB\n' "${NG_SWAP_SIZE_MB}"
-      printf 'Kernel BBR  : %s\n' "$(sysctl -n net.ipv4.tcp_congestion_control 2>/dev/null || echo unknown)"
-      printf '\n[Memory]\n'
+      ng_report_title 'ServerHarbor Bootstrap Report'
+      ng_report_section 'Summary'
+      ng_report_kv 'Generated At' "$(ng_timestamp)"
+      ng_report_kv 'Host' "${NG_HOSTNAME}"
+      ng_report_kv 'Timezone' "${NG_TIMEZONE}"
+      ng_report_kv 'DNS' "${NG_DNS_PRIMARY}, ${NG_DNS_SECONDARY}"
+      ng_report_kv 'Swap Size' "${NG_SWAP_SIZE_MB}MB"
+      ng_report_kv 'Kernel BBR' "$(sysctl -n net.ipv4.tcp_congestion_control 2>/dev/null || echo unknown)"
+      ng_report_section 'Memory'
       ng_memory_summary
-      printf '\n[Disk]\n'
+      ng_report_section 'Disk'
       ng_disk_summary
     )"
   else
     content="$(
-      printf 'ServerHarbor 开荒报告\n'
-      printf '生成时间：%s\n' "$(ng_timestamp)"
-      printf '主机        : %s\n' "${NG_HOSTNAME}"
-      printf '时区        : %s\n' "${NG_TIMEZONE}"
-      printf 'DNS         : %s, %s\n' "${NG_DNS_PRIMARY}" "${NG_DNS_SECONDARY}"
-      printf 'Swap 大小   : %sMB\n' "${NG_SWAP_SIZE_MB}"
-      printf '当前拥塞控制: %s\n' "$(sysctl -n net.ipv4.tcp_congestion_control 2>/dev/null || echo unknown)"
-      printf '\n[内存]\n'
+      ng_report_title 'ServerHarbor 开荒报告'
+      ng_report_section '摘要'
+      ng_report_kv '生成时间' "$(ng_timestamp)"
+      ng_report_kv '主机' "${NG_HOSTNAME}"
+      ng_report_kv '时区' "${NG_TIMEZONE}"
+      ng_report_kv 'DNS' "${NG_DNS_PRIMARY}, ${NG_DNS_SECONDARY}"
+      ng_report_kv 'Swap 大小' "${NG_SWAP_SIZE_MB}MB"
+      ng_report_kv '当前拥塞控制' "$(sysctl -n net.ipv4.tcp_congestion_control 2>/dev/null || echo unknown)"
+      ng_report_section '内存'
       ng_memory_summary
-      printf '\n[磁盘]\n'
+      ng_report_section '磁盘'
       ng_disk_summary
     )"
   fi

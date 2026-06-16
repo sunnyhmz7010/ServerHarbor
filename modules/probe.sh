@@ -46,7 +46,7 @@ ng_probe_all_peers() {
 
   {
     printf 'Peer Alias       Peer Host                ICMP     SSH Port   Latency\n'
-    printf '---------------------------------------------------------------------\n'
+    printf '%s\n' '---------------------------------------------------------------------'
     while IFS=',' read -r peer_alias peer_host; do
       [[ -n "${peer_alias}" && -n "${peer_host}" ]] || continue
       ng_probe_single_peer "${peer_host}" "${peer_alias}"
@@ -55,20 +55,24 @@ ng_probe_all_peers() {
 
   if [[ "${NG_LANG}" == "en" ]]; then
     report="$(
-      printf 'ServerHarbor Probe Report\n'
-      ng_t generated_at "$(ng_timestamp)"
-      printf 'Host        : %s\n\n' "${NG_HOSTNAME}"
+      ng_report_title 'ServerHarbor Probe Report'
+      ng_report_section 'Summary'
+      ng_report_kv 'Generated At' "$(ng_timestamp)"
+      ng_report_kv 'Host' "${NG_HOSTNAME}"
+      ng_report_section 'Peer Matrix'
       cat "${output_file}"
-      printf '\n[Local Snapshot]\n'
+      ng_report_section 'Local Snapshot'
       cat "$(ng_collect_local_probe)"
     )"
   else
     report="$(
-      printf 'ServerHarbor 节点探测报告\n'
-      ng_t generated_at "$(ng_timestamp)"
-      printf '主机        : %s\n\n' "${NG_HOSTNAME}"
+      ng_report_title 'ServerHarbor 节点探测报告'
+      ng_report_section '摘要'
+      ng_report_kv '生成时间' "$(ng_timestamp)"
+      ng_report_kv '主机' "${NG_HOSTNAME}"
+      ng_report_section '节点矩阵'
       cat "${output_file}"
-      printf '\n[本机快照]\n'
+      ng_report_section '本机快照'
       cat "$(ng_collect_local_probe)"
     )"
   fi

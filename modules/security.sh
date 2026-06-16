@@ -130,28 +130,32 @@ ng_security_report() {
 
   if [[ "${NG_LANG}" == "en" ]]; then
     content="$(
-      printf 'ServerHarbor Security Report\n'
-      ng_t generated_at "$(ng_timestamp)"
-      printf 'Host        : %s\n\n' "${NG_HOSTNAME}"
+      ng_report_title 'ServerHarbor Security Report'
+      ng_report_section 'Summary'
+      ng_report_kv 'Generated At' "$(ng_timestamp)"
+      ng_report_kv 'Host' "${NG_HOSTNAME}"
+      ng_report_section 'Failed Login Sources'
       ng_scan_auth_failures
-      printf '\n'
+      ng_report_section 'Suspicious Web Requests'
       ng_scan_web_attacks
-      printf '\n[Listening Ports]\n'
+      ng_report_section 'Listening Ports'
       ss -lntp 2>/dev/null | sed -n '1,25p' || true
-      printf '\n[Firewall]\n'
+      ng_report_section 'Firewall'
       ng_firewall_summary
     )"
   else
     content="$(
-      printf 'ServerHarbor 安全巡检报告\n'
-      ng_t generated_at "$(ng_timestamp)"
-      printf '主机        : %s\n\n' "${NG_HOSTNAME}"
+      ng_report_title 'ServerHarbor 安全巡检报告'
+      ng_report_section '摘要'
+      ng_report_kv '生成时间' "$(ng_timestamp)"
+      ng_report_kv '主机' "${NG_HOSTNAME}"
+      ng_report_section '失败登录来源'
       ng_scan_auth_failures
-      printf '\n'
+      ng_report_section '可疑 Web 请求'
       ng_scan_web_attacks
-      printf '\n[监听端口]\n'
+      ng_report_section '监听端口'
       ss -lntp 2>/dev/null | sed -n '1,25p' || true
-      printf '\n[防火墙]\n'
+      ng_report_section '防火墙'
       ng_firewall_summary
     )"
   fi

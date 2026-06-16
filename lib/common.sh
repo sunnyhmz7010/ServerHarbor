@@ -144,6 +144,29 @@ ng_print_menu_hint() {
   printf '%s\n' "$(ng_color "${NG_C_DIM}" "$(ng_t menu_hint)")"
 }
 
+ng_report_rule() {
+  printf '%s\n' '======================================================================'
+}
+
+ng_report_title() {
+  local title="$1"
+  ng_report_rule
+  printf '%s\n' "${title}"
+  ng_report_rule
+}
+
+ng_report_section() {
+  local title="$1"
+  printf '\n[%s]\n' "${title}"
+  printf '%s\n' '----------------------------------------------------------------------'
+}
+
+ng_report_kv() {
+  local key="$1"
+  local value="$2"
+  printf '%-14s %s\n' "${key}" "${value}"
+}
+
 ng_t() {
   local key="$1"
   case "${NG_LANG}" in
