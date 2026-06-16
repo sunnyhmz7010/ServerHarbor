@@ -60,7 +60,7 @@ t() {
     en)
       case "${key}" in
         missing_cmd) printf 'Missing required command: %s\n' "$2" ;;
-        continue) printf 'Continue? [y/N]: ' ;;
+        continue) printf 'Continue? [Y/n]: ' ;;
         plan_title) printf '%s online run will perform these actions:\n' "${PROJECT_NAME}" ;;
         plan_tmp) printf '  1. Use a temporary directory under %s\n' "${TMP_ROOT%/}" ;;
         plan_download) printf '  2. Download source archive from %s\n' "${ARCHIVE_URL}" ;;
@@ -83,7 +83,7 @@ t() {
     *)
       case "${key}" in
         missing_cmd) printf '缺少必要命令：%s\n' "$2" ;;
-        continue) printf '是否继续？[y/N]: ' ;;
+        continue) printf '是否继续？[Y/n]: ' ;;
         plan_title) printf '%s 在线运行将执行以下操作：\n' "${PROJECT_NAME}" ;;
         plan_tmp) printf '  1. 使用临时目录根 %s\n' "${TMP_ROOT%/}" ;;
         plan_download) printf '  2. 从 %s 下载源码压缩包\n' "${ARCHIVE_URL}" ;;
@@ -151,7 +151,7 @@ confirm() {
     t cancelled
     return 130
   fi
-  [[ "${answer}" =~ ^[Yy]([Ee][Ss])?$ ]]
+  [[ -z "${answer}" || "${answer}" =~ ^[Yy]([Ee][Ss])?$ ]]
 }
 
 detect_pkg_manager() {
