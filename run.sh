@@ -19,6 +19,11 @@ handle_preflight_interrupt() {
   exit 130
 }
 
+persist_language() {
+  mkdir -p "$(dirname "${LANG_CONFIG_FILE}")"
+  printf 'LANGUAGE="%s"\n' "${LANGUAGE}" > "${LANG_CONFIG_FILE}"
+}
+
 select_language() {
   local choice
 
@@ -46,8 +51,7 @@ select_language() {
     *) LANGUAGE="zh" ;;
   esac
 
-  mkdir -p "$(dirname "${LANG_CONFIG_FILE}")"
-  printf 'LANGUAGE="%s"\n' "${LANGUAGE}" > "${LANG_CONFIG_FILE}"
+  persist_language
 }
 
 t() {
@@ -237,6 +241,7 @@ main() {
 
   trap handle_preflight_interrupt INT
   select_language || exit $?
+  persist_language
   trap handle_interrupt INT
   require_cmd bash
   print_run_plan
