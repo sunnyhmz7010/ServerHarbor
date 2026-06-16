@@ -25,9 +25,9 @@ select_language() {
   printf '  2. English\n'
   printf 'Select / 请选择 [1/2, default: 1]: '
   if ! IFS= read -r choice; then
-    LANGUAGE="zh"
     printf '\n'
-    return 0
+    printf 'Cancelled / 已取消\n' >&2
+    return 130
   fi
 
   case "${choice}" in
@@ -221,7 +221,7 @@ extract_repo() {
 main() {
   local extracted_root
 
-  select_language
+  select_language || exit $?
   trap handle_interrupt INT
   require_cmd bash
   print_run_plan

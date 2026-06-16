@@ -29,9 +29,9 @@ select_language() {
   printf '  2. English\n'
   printf 'Select / 请选择 [1/2, default: 1]: '
   if ! IFS= read -r choice; then
-    LANGUAGE="zh"
     printf '\n'
-    return 0
+    printf 'Cancelled / 已取消\n' >&2
+    return 130
   fi
 
   case "${choice}" in
@@ -342,7 +342,7 @@ seed_data_root() {
 main() {
   local already_installed=0
 
-  select_language
+  select_language || exit $?
   trap handle_interrupt INT
   require_root
   require_cmd bash
