@@ -10,6 +10,8 @@ ARCHIVE_PATH="${WORK_DIR}/serverharbor-run.tar.gz"
 EXTRACT_DIR="${WORK_DIR}/extract"
 DATA_ROOT="${SERVERHARBOR_HOME:-${XDG_CONFIG_HOME:-${HOME}/.config}/serverharbor}"
 LANGUAGE="${SERVERHARBOR_LANG:-}"
+INTERRUPT_REQUESTED=0
+CRITICAL_SECTION=0
 
 select_language() {
   local choice
@@ -57,6 +59,7 @@ t() {
         bad_archive) printf 'Downloaded archive does not look like a valid %s source tree.\n' "${PROJECT_NAME}" ;;
         cancelled) printf 'Run cancelled.\n' ;;
         fetching) printf 'Fetching %s from %s\n' "${PROJECT_NAME}" "${ARCHIVE_URL}" ;;
+        interrupt_deferred) printf '\nInterrupt received. Waiting for the current critical step to finish.\n' ;;
       esac
       ;;
     *)
@@ -79,9 +82,32 @@ t() {
         bad_archive) printf '下载得到的压缩包不是有效的 %s 源码结构。\n' "${PROJECT_NAME}" ;;
         cancelled) printf '已取消运行。\n' ;;
         fetching) printf '正在从 %s 获取 %s\n' "${ARCHIVE_URL}" "${PROJECT_NAME}" ;;
+        interrupt_deferred) printf '\n已收到中断请求，当前关键步骤完成后再退出。\n' ;;
       esac
       ;;
   esac
+}
+
+handle_interrupt() {
+  if [[ "${CRITICAL_SECTION}" -eq 1 ]]; then
+    INTERRUPT_REQUESTED=1
+    t interrupt_deferred >&2
+    return 0
+  fi
+  t cancelled >&2
+  exit 130
+}
+
+enter_critical_section() {
+  CRITICAL_SECTION=1
+}
+
+leave_critical_section() {
+  CRITICAL_SECTION=0
+  if [[ "${INTERRUPT_REQUESTED}" -eq 1 ]]; then
+    t cancelled >&2
+    exit 130
+  fi
 }
 
 cleanup() {
@@ -196,6 +222,7 @@ main() {
   local extracted_root
 
   select_language
+  trap handle_interrupt INT
   require_cmd bash
   print_run_plan
   if ! confirm; then
@@ -203,9 +230,11 @@ main() {
   fi
   ensure_fetch_tools_installed
 
+  enter_critical_section
   t fetching
   extracted_root="$(extract_repo)"
   chmod +x "${extracted_root}/menu.sh"
+  leave_critical_section
   SERVERHARBOR_HOME="${DATA_ROOT}" SERVERHARBOR_LANG="${LANGUAGE}" bash "${extracted_root}/menu.sh" "$@"
 }
 

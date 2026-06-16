@@ -14,6 +14,8 @@ TMP_ROOT="${TMPDIR:-/tmp}"
 ARCHIVE_PATH="${TMP_ROOT%/}/serverharbor-install.tar.gz"
 EXTRACT_DIR="${TMP_ROOT%/}/serverharbor-install-extract"
 LANGUAGE="${SERVERHARBOR_LANG:-}"
+INTERRUPT_REQUESTED=0
+CRITICAL_SECTION=0
 
 select_language() {
   local choice
@@ -76,6 +78,7 @@ t() {
         updated) printf '%s updated successfully.\n' "${PROJECT_NAME}" ;;
         installed) printf '%s installed successfully.\n' "${PROJECT_NAME}" ;;
         run_cmd) printf 'Run: %s\n' "shr" ;;
+        interrupt_deferred) printf '\nInterrupt received. Waiting for the current critical step to finish.\n' ;;
       esac
       ;;
     *)
@@ -113,9 +116,32 @@ t() {
         updated) printf '%s 更新成功。\n' "${PROJECT_NAME}" ;;
         installed) printf '%s 安装成功。\n' "${PROJECT_NAME}" ;;
         run_cmd) printf '启动命令：%s\n' "shr" ;;
+        interrupt_deferred) printf '\n已收到中断请求，当前关键步骤完成后再退出。\n' ;;
       esac
       ;;
   esac
+}
+
+handle_interrupt() {
+  if [[ "${CRITICAL_SECTION}" -eq 1 ]]; then
+    INTERRUPT_REQUESTED=1
+    t interrupt_deferred >&2
+    return 0
+  fi
+  t cancelled >&2
+  exit 130
+}
+
+enter_critical_section() {
+  CRITICAL_SECTION=1
+}
+
+leave_critical_section() {
+  CRITICAL_SECTION=0
+  if [[ "${INTERRUPT_REQUESTED}" -eq 1 ]]; then
+    t cancelled >&2
+    exit 130
+  fi
 }
 
 require_root() {
@@ -317,6 +343,7 @@ main() {
   local already_installed=0
 
   select_language
+  trap handle_interrupt INT
   require_root
   require_cmd bash
 
@@ -335,12 +362,14 @@ main() {
 
   ensure_fetch_tools_installed
 
+  enter_critical_section
   mkdir -p "$(dirname "${BIN_PATH}")"
   install_repo
   chmod +x "${APP_ROOT}/menu.sh" "${APP_ROOT}/run.sh" "${APP_ROOT}/install.sh" "${APP_ROOT}/uninstall.sh"
   seed_data_root
   write_manifest
   install_launcher
+  leave_critical_section
 
   if [[ "${already_installed}" -eq 1 ]]; then
     t updated
