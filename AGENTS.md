@@ -82,8 +82,8 @@ This repository is `ServerHarbor`, a Bash-based Linux multi-server operations to
 - Generated reports: `reports/`
 - Local backups: `backups/`
 - Runtime logs: `logs/`
-- Installed code root: `/opt/serverharbor`
-- Installed mutable data root: `/etc/serverharbor`
+- Installed code root: `/opt/serverharbor/app`
+- Installed mutable data root: `/opt/serverharbor/data`
 
 ## README Rules
 
@@ -106,7 +106,7 @@ This repository is `ServerHarbor`, a Bash-based Linux multi-server operations to
 - Bootstrap and hardening functions may require root privileges.
 - Peer monitoring is file-driven through `config/peers.conf`.
 - Backup and integrity scanning are path-driven through `config/watch.conf`.
-- Managed code and mutable user data must stay decoupled. Installer updates may replace `/opt/serverharbor`, but must preserve user config and runtime data under `/etc/serverharbor`.
+- Managed code and mutable user data must stay decoupled. Installer updates may replace `/opt/serverharbor/app`, but must preserve user config and runtime data under `/opt/serverharbor/data`.
 - Generated reports and state files are allowed to be versioned for GitHub synchronization, but archives and logs should stay ignored unless requested otherwise.
 
 ## Development Commands

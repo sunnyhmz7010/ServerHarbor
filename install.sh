@@ -4,7 +4,8 @@ set -euo pipefail
 
 PROJECT_NAME="ServerHarbor"
 INSTALL_ROOT="/opt/serverharbor"
-DATA_ROOT="/etc/serverharbor"
+APP_ROOT="${INSTALL_ROOT}/app"
+DATA_ROOT="${INSTALL_ROOT}/data"
 BIN_PATH="/usr/local/bin/shr"
 REPO_URL="https://github.com/sunnyhmz7010/ServerHarbor.git"
 MANIFEST_PATH="${INSTALL_ROOT}/.serverharbor-install"
@@ -34,6 +35,7 @@ is_managed_install() {
 show_existing_install_summary() {
   printf '%s is already installed.\n' "${PROJECT_NAME}"
   printf 'Install root: %s\n' "${INSTALL_ROOT}"
+  printf 'App root    : %s\n' "${APP_ROOT}"
   printf 'Data root   : %s\n' "${DATA_ROOT}"
   printf 'Shortcut    : %s\n' "${BIN_PATH}"
   printf 'To update the local copy, re-run this installer.\n'
@@ -45,7 +47,7 @@ validate_existing_install_root() {
     exit 1
   fi
 
-  if [[ -d "${INSTALL_ROOT}" && ! -f "${MANIFEST_PATH}" && ! -d "${INSTALL_ROOT}/.git" ]]; then
+  if [[ -d "${INSTALL_ROOT}" && ! -f "${MANIFEST_PATH}" && ! -d "${APP_ROOT}/.git" ]]; then
     printf 'Refusing to reuse existing directory: %s\n' "${INSTALL_ROOT}" >&2
     printf 'The directory is not recognized as a managed %s install.\n' "${PROJECT_NAME}" >&2
     exit 1
@@ -60,7 +62,7 @@ validate_existing_launcher() {
       exit 1
     fi
 
-    if ! grep -q "${INSTALL_ROOT}/menu.sh" "${BIN_PATH}" 2>/dev/null; then
+    if ! grep -q "${APP_ROOT}/menu.sh" "${BIN_PATH}" 2>/dev/null; then
       printf 'Refusing to overwrite existing command: %s\n' "${BIN_PATH}" >&2
       printf 'The file does not appear to belong to %s.\n' "${PROJECT_NAME}" >&2
       exit 1
@@ -70,11 +72,12 @@ validate_existing_launcher() {
 
 write_manifest() {
   local current_commit
-  current_commit="$(git -C "${INSTALL_ROOT}" rev-parse HEAD 2>/dev/null || echo unknown)"
+  current_commit="$(git -C "${APP_ROOT}" rev-parse HEAD 2>/dev/null || echo unknown)"
   cat > "${MANIFEST_PATH}" <<EOF
 PROJECT_NAME=${PROJECT_NAME}
 INSTALL_OWNER=${INSTALL_OWNER}
 INSTALL_ROOT=${INSTALL_ROOT}
+APP_ROOT=${APP_ROOT}
 DATA_ROOT=${DATA_ROOT}
 BIN_PATH=${BIN_PATH}
 REPO_URL=${REPO_URL}
@@ -85,12 +88,13 @@ EOF
 }
 
 install_repo() {
-  if [[ -d "${INSTALL_ROOT}/.git" ]]; then
-    git -C "${INSTALL_ROOT}" fetch --all --tags
-    git -C "${INSTALL_ROOT}" reset --hard origin/main
+  if [[ -d "${APP_ROOT}/.git" ]]; then
+    git -C "${APP_ROOT}" fetch --all --tags
+    git -C "${APP_ROOT}" reset --hard origin/main
   else
-    rm -rf "${INSTALL_ROOT}"
-    git clone "${REPO_URL}" "${INSTALL_ROOT}"
+    rm -rf "${APP_ROOT}"
+    mkdir -p "${INSTALL_ROOT}"
+    git clone "${REPO_URL}" "${APP_ROOT}"
   fi
 }
 
@@ -99,7 +103,7 @@ install_launcher() {
 #!/usr/bin/env bash
 set -euo pipefail
 export SERVERHARBOR_HOME="${DATA_ROOT}"
-exec bash "${INSTALL_ROOT}/menu.sh" "\$@"
+exec bash "${APP_ROOT}/menu.sh" "\$@"
 EOF
   chmod 755 "${BIN_PATH}"
 }
@@ -109,7 +113,7 @@ seed_data_root() {
   mkdir -p "${DATA_ROOT}/config" "${DATA_ROOT}/logs" "${DATA_ROOT}/reports" "${DATA_ROOT}/state" "${DATA_ROOT}/backups" "${DATA_ROOT}/tmp"
   for config_name in app.conf peers.conf watch.conf; do
     if [[ ! -f "${DATA_ROOT}/config/${config_name}" ]]; then
-      cp "${INSTALL_ROOT}/config/${config_name}" "${DATA_ROOT}/config/${config_name}"
+      cp "${APP_ROOT}/config/${config_name}" "${DATA_ROOT}/config/${config_name}"
     fi
   done
 }
@@ -130,7 +134,7 @@ main() {
 
   mkdir -p "$(dirname "${BIN_PATH}")"
   install_repo
-  chmod +x "${INSTALL_ROOT}/menu.sh" "${INSTALL_ROOT}/run.sh" "${INSTALL_ROOT}/install.sh" "${INSTALL_ROOT}/uninstall.sh"
+  chmod +x "${APP_ROOT}/menu.sh" "${APP_ROOT}/run.sh" "${APP_ROOT}/install.sh" "${APP_ROOT}/uninstall.sh"
   seed_data_root
   write_manifest
   install_launcher

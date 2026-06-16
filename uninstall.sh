@@ -3,7 +3,8 @@
 set -euo pipefail
 
 INSTALL_ROOT="/opt/serverharbor"
-DATA_ROOT="/etc/serverharbor"
+APP_ROOT="${INSTALL_ROOT}/app"
+DATA_ROOT="${INSTALL_ROOT}/data"
 BIN_PATH="/usr/local/bin/shr"
 MANIFEST_PATH="${INSTALL_ROOT}/.serverharbor-install"
 
@@ -11,8 +12,9 @@ confirm() {
   local answer
   printf 'This will remove:\n'
   printf '  - %s\n' "${BIN_PATH}"
-  printf '  - %s\n' "${INSTALL_ROOT}"
+  printf '  - %s\n' "${APP_ROOT}"
   printf '  - %s\n' "${DATA_ROOT}"
+  printf '  - %s\n' "${MANIFEST_PATH}"
   printf 'Continue? [y/N]: '
   read -r answer
   [[ "${answer}" =~ ^[Yy]([Ee][Ss])?$ ]]
@@ -35,7 +37,7 @@ if ! confirm; then
 fi
 
 if [[ -e "${BIN_PATH}" ]]; then
-  if grep -q "${INSTALL_ROOT}/menu.sh" "${BIN_PATH}" 2>/dev/null; then
+  if grep -q "${APP_ROOT}/menu.sh" "${BIN_PATH}" 2>/dev/null; then
     rm -f "${BIN_PATH}"
   else
     printf 'Refusing to remove %s because it is not managed by ServerHarbor.\n' "${BIN_PATH}" >&2
@@ -44,6 +46,5 @@ if [[ -e "${BIN_PATH}" ]]; then
 fi
 
 rm -rf "${INSTALL_ROOT}"
-rm -rf "${DATA_ROOT}"
 
 printf 'ServerHarbor removed.\n'

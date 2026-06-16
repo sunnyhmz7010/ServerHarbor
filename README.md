@@ -107,9 +107,9 @@ chmod +x menu.sh
 
 3. 首次使用前，建议先修改：
 
-- `/etc/serverharbor/config/app.conf`
-- `/etc/serverharbor/config/peers.conf`
-- `/etc/serverharbor/config/watch.conf`
+- `/opt/serverharbor/data/config/app.conf`
+- `/opt/serverharbor/data/config/peers.conf`
+- `/opt/serverharbor/data/config/watch.conf`
 
 ### ⚡ 一条命令直接运行
 
@@ -136,13 +136,13 @@ shr
 安装脚本会把项目放到：
 
 ```text
-/opt/serverharbor
+/opt/serverharbor/app
 ```
 
 运行数据和用户配置放到：
 
 ```text
-/etc/serverharbor
+/opt/serverharbor/data
 ```
 
 并仅创建一个受管快捷命令：
@@ -259,7 +259,7 @@ https://github.com/sunnyhmz7010/ServerHarbor
 
 - 如果未安装，会执行首次安装
 - 如果已经安装，会提示当前已安装并拉取远端最新代码完成更新
-- 本地用户配置和运行数据保留在 `/etc/serverharbor`，不会因为更新代码被覆盖
+- 本地用户配置和运行数据保留在 `/opt/serverharbor/data`，不会因为更新代码被覆盖
 
 ### 7. ⏱️ 定时执行
 
