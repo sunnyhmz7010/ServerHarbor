@@ -14,11 +14,8 @@ TMP_ROOT="${TMPDIR:-/tmp}"
 ARCHIVE_PATH="${TMP_ROOT%/}/serverharbor-install.tar.gz"
 EXTRACT_DIR="${TMP_ROOT%/}/serverharbor-install-extract"
 LANGUAGE="${SERVERHARBOR_LANG:-}"
-INTERRUPT_REQUESTED=0
-CRITICAL_SECTION=0
 
 handle_preflight_interrupt() {
-  printf '\nCancelled / 已取消\n' >&2
   exit 130
 }
 
@@ -84,7 +81,6 @@ t() {
         updated) printf '%s updated successfully.\n' "${PROJECT_NAME}" ;;
         installed) printf '%s installed successfully.\n' "${PROJECT_NAME}" ;;
         run_cmd) printf 'Run: %s\n' "shr" ;;
-        interrupt_deferred) printf '\nInterrupt received. Waiting for the current critical step to finish.\n' ;;
       esac
       ;;
     *)
@@ -123,32 +119,13 @@ t() {
         updated) printf '%s 更新成功。\n' "${PROJECT_NAME}" ;;
         installed) printf '%s 安装成功。\n' "${PROJECT_NAME}" ;;
         run_cmd) printf '启动命令：%s\n' "shr" ;;
-        interrupt_deferred) printf '\n已收到中断请求，当前关键步骤完成后再退出。\n' ;;
       esac
       ;;
   esac
 }
 
 handle_interrupt() {
-  if [[ "${CRITICAL_SECTION}" -eq 1 ]]; then
-    INTERRUPT_REQUESTED=1
-    t interrupt_deferred >&2
-    return 0
-  fi
-  t cancelled >&2
   exit 130
-}
-
-enter_critical_section() {
-  CRITICAL_SECTION=1
-}
-
-leave_critical_section() {
-  CRITICAL_SECTION=0
-  if [[ "${INTERRUPT_REQUESTED}" -eq 1 ]]; then
-    t cancelled >&2
-    exit 130
-  fi
 }
 
 require_root() {
@@ -401,7 +378,6 @@ main() {
     exit 0
   fi
 
-  enter_critical_section
   mkdir -p "$(dirname "${BIN_PATH}")"
   rm -rf "${APP_ROOT}"
   mkdir -p "${INSTALL_ROOT}"
@@ -412,7 +388,6 @@ main() {
   install_launcher
   rm -f "${ARCHIVE_PATH}"
   rm -rf "${EXTRACT_DIR}"
-  leave_critical_section
 
   if [[ "${already_installed}" -eq 1 ]]; then
     t updated

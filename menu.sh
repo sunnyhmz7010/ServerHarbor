@@ -16,7 +16,6 @@ source "${PROJECT_ROOT}/modules/security.sh"
 ng_init_environment
 
 handle_menu_interrupt() {
-  ng_t interrupted >&2
   exit 130
 }
 
