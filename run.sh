@@ -13,6 +13,11 @@ LANGUAGE="${SERVERHARBOR_LANG:-}"
 INTERRUPT_REQUESTED=0
 CRITICAL_SECTION=0
 
+handle_preflight_interrupt() {
+  printf '\nCancelled / 已取消\n' >&2
+  exit 130
+}
+
 select_language() {
   local choice
 
@@ -221,6 +226,7 @@ extract_repo() {
 main() {
   local extracted_root
 
+  trap handle_preflight_interrupt INT
   select_language || exit $?
   trap handle_interrupt INT
   require_cmd bash

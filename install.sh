@@ -17,6 +17,11 @@ LANGUAGE="${SERVERHARBOR_LANG:-}"
 INTERRUPT_REQUESTED=0
 CRITICAL_SECTION=0
 
+handle_preflight_interrupt() {
+  printf '\nCancelled / 已取消\n' >&2
+  exit 130
+}
+
 select_language() {
   local choice
 
@@ -342,6 +347,7 @@ seed_data_root() {
 main() {
   local already_installed=0
 
+  trap handle_preflight_interrupt INT
   select_language || exit $?
   trap handle_interrupt INT
   require_root
