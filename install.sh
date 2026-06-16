@@ -66,6 +66,7 @@ t() {
         dep_manual) printf 'Please install curl and tar manually and re-run the installer.\n' ;;
         dep_failed) printf 'Required tools were not installed successfully. Please install curl and tar manually.\n' ;;
         already) printf '%s is already installed.\n' "${PROJECT_NAME}" ;;
+        already_latest) printf '%s is already up to date. No files were replaced.\n' "${PROJECT_NAME}" ;;
         install_root) printf 'Install root: %s\n' "${INSTALL_ROOT}" ;;
         app_root) printf 'App root    : %s\n' "${APP_ROOT}" ;;
         data_root) printf 'Data root   : %s\n' "${DATA_ROOT}" ;;
@@ -104,6 +105,7 @@ t() {
         dep_manual) printf '请手动安装 curl 和 tar 后重新运行安装脚本。\n' ;;
         dep_failed) printf '依赖安装未成功，请手动安装 curl 和 tar。\n' ;;
         already) printf '%s 已安装。\n' "${PROJECT_NAME}" ;;
+        already_latest) printf '%s 已是最新版本，未替换任何文件。\n' "${PROJECT_NAME}" ;;
         install_root) printf '安装根目录：%s\n' "${INSTALL_ROOT}" ;;
         app_root) printf '代码目录   ：%s\n' "${APP_ROOT}" ;;
         data_root) printf '数据目录   ：%s\n' "${DATA_ROOT}" ;;
@@ -324,6 +326,28 @@ install_repo() {
   cp -R "${extracted_root}" "${APP_ROOT}"
 }
 
+calc_tree_hash() {
+  local target_dir="$1"
+
+  find "${target_dir}" -type f ! -path '*/.git/*' -print0 \
+    | sort -z \
+    | xargs -0 sha256sum \
+    | sha256sum \
+    | awk '{print $1}'
+}
+
+is_same_source_tree() {
+  local extracted_root="$1"
+  local current_hash
+  local extracted_hash
+
+  [[ -d "${APP_ROOT}" ]] || return 1
+
+  current_hash="$(calc_tree_hash "${APP_ROOT}")"
+  extracted_hash="$(calc_tree_hash "${extracted_root}")"
+  [[ -n "${current_hash}" && "${current_hash}" == "${extracted_hash}" ]]
+}
+
 install_launcher() {
   cat > "${BIN_PATH}" <<EOF
 #!/usr/bin/env bash
@@ -346,6 +370,7 @@ seed_data_root() {
 
 main() {
   local already_installed=0
+  local extracted_root=""
 
   trap handle_preflight_interrupt INT
   select_language || exit $?
@@ -368,13 +393,25 @@ main() {
 
   ensure_fetch_tools_installed
 
+  extracted_root="$(download_and_extract)"
+  if [[ "${already_installed}" -eq 1 ]] && is_same_source_tree "${extracted_root}"; then
+    rm -f "${ARCHIVE_PATH}"
+    rm -rf "${EXTRACT_DIR}"
+    t already_latest
+    exit 0
+  fi
+
   enter_critical_section
   mkdir -p "$(dirname "${BIN_PATH}")"
-  install_repo
+  rm -rf "${APP_ROOT}"
+  mkdir -p "${INSTALL_ROOT}"
+  cp -R "${extracted_root}" "${APP_ROOT}"
   chmod +x "${APP_ROOT}/menu.sh" "${APP_ROOT}/run.sh" "${APP_ROOT}/install.sh" "${APP_ROOT}/uninstall.sh"
   seed_data_root
   write_manifest
   install_launcher
+  rm -f "${ARCHIVE_PATH}"
+  rm -rf "${EXTRACT_DIR}"
   leave_critical_section
 
   if [[ "${already_installed}" -eq 1 ]]; then

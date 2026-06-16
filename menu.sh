@@ -22,8 +22,27 @@ handle_menu_interrupt() {
 
 trap handle_menu_interrupt INT
 
+ng_self_update_confirm() {
+  if [[ "${NG_LANG}" == "en" ]]; then
+    printf 'Update ServerHarbor will perform these actions:\n'
+    printf '  1. Run the managed installer from the current local source tree\n'
+    printf '  2. Download the latest source archive from GitHub for comparison/update\n'
+    printf '  3. Preserve the existing data directory and configuration files\n'
+    printf '  4. Skip replacement if the local code is already up to date\n'
+    printf 'Continue with update? [y/N]: '
+  else
+    printf '更新 ServerHarbor 将执行以下操作：\n'
+    printf '  1. 调用当前本地源码中的受管安装器\n'
+    printf '  2. 从 GitHub 下载最新源码压缩包进行比对与更新\n'
+    printf '  3. 保留现有数据目录与配置文件\n'
+    printf '  4. 如果本地代码已是最新，则跳过替换\n'
+    printf '是否继续更新？[y/N]: '
+  fi
+}
+
 ng_self_update() {
   local installer="${PROJECT_ROOT}/install.sh"
+  local answer=""
 
   if [[ ! -f "${installer}" ]]; then
     if [[ "${NG_LANG}" == "en" ]]; then
@@ -32,6 +51,19 @@ ng_self_update() {
       ng_log "ERROR" "未找到 install.sh，无法执行受管更新。"
     fi
     return 1
+  fi
+
+  ng_self_update_confirm
+  if ! ng_read_line answer; then
+    return 130
+  fi
+  if [[ ! "${answer}" =~ ^[Yy]([Ee][Ss])?$ ]]; then
+    if [[ "${NG_LANG}" == "en" ]]; then
+      ng_log "WARN" "Update cancelled."
+    else
+      ng_log "WARN" "已取消更新。"
+    fi
+    return 0
   fi
 
   chmod +x "${installer}" 2>/dev/null || true
