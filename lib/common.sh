@@ -52,6 +52,10 @@ ng_t() {
         requires_root) printf 'This function requires root privileges.\n' ;;
         missing_cmd) printf 'Missing required command: %s\n' "$2" ;;
         interrupted) printf '\nInterrupted.\n' ;;
+        select) printf 'Select: ' ;;
+        back) printf '0. Back\n' ;;
+        generated_at) printf 'Generated at: %s\n' "$2" ;;
+        unsupported_pkg) printf 'Unsupported package manager. Skip base package installation.\n' ;;
       esac
       ;;
     *)
@@ -61,6 +65,10 @@ ng_t() {
         requires_root) printf '此功能需要 root 权限。\n' ;;
         missing_cmd) printf '缺少必要命令：%s\n' "$2" ;;
         interrupted) printf '\n已中断。\n' ;;
+        select) printf '请选择：' ;;
+        back) printf '0. 返回\n' ;;
+        generated_at) printf '生成时间：%s\n' "$2" ;;
+        unsupported_pkg) printf '不支持当前包管理器，跳过基础软件安装。\n' ;;
       esac
       ;;
   esac
@@ -159,7 +167,7 @@ ng_install_base_packages() {
       yum install -y curl wget git rsync cronie procps-ng iproute net-tools openssh-clients
       ;;
     *)
-      ng_log "WARN" "Unsupported package manager. Skip base package installation."
+      ng_log "WARN" "$(ng_t unsupported_pkg)"
       ;;
   esac
 }

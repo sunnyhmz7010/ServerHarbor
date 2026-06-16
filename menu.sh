@@ -117,7 +117,11 @@ view_reports() {
 
   for report_file in "$latest_bootstrap" "$latest_probe" "$latest_security" "$latest_backup"; do
     if [[ -n "${report_file}" && -f "${report_file}" ]]; then
-      ng_print_header "Report: $(basename "${report_file}")"
+      if [[ "${NG_LANG}" == "en" ]]; then
+        ng_print_header "Report: $(basename "${report_file}")"
+      else
+        ng_print_header "报告：$(basename "${report_file}")"
+      fi
       sed -n '1,120p' "${report_file}"
       printf '\n'
     fi
@@ -125,16 +129,29 @@ view_reports() {
 }
 
 status_summary() {
-  ng_print_header "Project Status"
-  printf 'Project root: %s\n' "${PROJECT_ROOT}"
-  printf 'Config file : %s\n' "${NG_CONFIG_FILE}"
-  printf 'Peers file  : %s\n' "${NG_PEERS_FILE}"
-  printf 'Watch file  : %s\n' "${NG_WATCH_FILE}"
-  printf 'Git branch  : %s\n' "$(ng_git_current_branch)"
-  printf 'Git remote  : %s\n' "$(ng_git_remote_url)"
-  printf 'State files : %s\n' "$(find "${NG_STATE_DIR}" -maxdepth 1 -type f | wc -l | tr -d ' ')"
-  printf 'Reports     : %s\n' "$(find "${NG_REPORT_DIR}" -maxdepth 1 -type f | wc -l | tr -d ' ')"
-  printf 'Backups     : %s\n' "$(find "${NG_BACKUP_DIR}" -maxdepth 1 -type f | wc -l | tr -d ' ')"
+  if [[ "${NG_LANG}" == "en" ]]; then
+    ng_print_header "Project Status"
+    printf 'Project root: %s\n' "${PROJECT_ROOT}"
+    printf 'Config file : %s\n' "${NG_CONFIG_FILE}"
+    printf 'Peers file  : %s\n' "${NG_PEERS_FILE}"
+    printf 'Watch file  : %s\n' "${NG_WATCH_FILE}"
+    printf 'Git branch  : %s\n' "$(ng_git_current_branch)"
+    printf 'Git remote  : %s\n' "$(ng_git_remote_url)"
+    printf 'State files : %s\n' "$(find "${NG_STATE_DIR}" -maxdepth 1 -type f | wc -l | tr -d ' ')"
+    printf 'Reports     : %s\n' "$(find "${NG_REPORT_DIR}" -maxdepth 1 -type f | wc -l | tr -d ' ')"
+    printf 'Backups     : %s\n' "$(find "${NG_BACKUP_DIR}" -maxdepth 1 -type f | wc -l | tr -d ' ')"
+  else
+    ng_print_header "项目状态"
+    printf '项目根目录：%s\n' "${PROJECT_ROOT}"
+    printf '配置文件  ：%s\n' "${NG_CONFIG_FILE}"
+    printf '节点列表  ：%s\n' "${NG_PEERS_FILE}"
+    printf '监控路径  ：%s\n' "${NG_WATCH_FILE}"
+    printf 'Git 分支  ：%s\n' "$(ng_git_current_branch)"
+    printf 'Git 远端  ：%s\n' "$(ng_git_remote_url)"
+    printf '状态文件数：%s\n' "$(find "${NG_STATE_DIR}" -maxdepth 1 -type f | wc -l | tr -d ' ')"
+    printf '报告数量  ：%s\n' "$(find "${NG_REPORT_DIR}" -maxdepth 1 -type f | wc -l | tr -d ' ')"
+    printf '备份数量  ：%s\n' "$(find "${NG_BACKUP_DIR}" -maxdepth 1 -type f | wc -l | tr -d ' ')"
+  fi
 }
 
 main() {

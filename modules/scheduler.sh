@@ -28,31 +28,40 @@ ng_install_cron_jobs() {
   )"
 
   printf '%s\n' "${new_cron}" | awk '!seen[$0]++' | crontab -
-  printf 'Cron jobs installed.\n'
+  if [[ "${NG_LANG}" == "en" ]]; then printf 'Cron jobs installed.\n'; else printf '定时任务已安装。\n'; fi
 }
 
 ng_show_cron_jobs() {
-  crontab -l 2>/dev/null || printf 'No crontab entries found.\n'
+  crontab -l 2>/dev/null || { if [[ "${NG_LANG}" == "en" ]]; then printf 'No crontab entries found.\n'; else printf '未找到 crontab 条目。\n'; fi; }
 }
 
 ng_scheduler_menu() {
   local choice
 
   while true; do
-    ng_print_header "Scheduler"
-    cat <<'EOF'
+    if [[ "${NG_LANG}" == "en" ]]; then
+      ng_print_header "Scheduler"
+      cat <<'EOF'
 1. Install recommended cron jobs
 2. Show current crontab
 0. Back
 EOF
-    printf 'Select: '
-    read -r choice
+    else
+      ng_print_header "定时任务"
+      cat <<'EOF'
+1. 安装推荐的 cron 任务
+2. 查看当前 crontab
+0. 返回
+EOF
+    fi
+    ng_t select
+    ng_read_line choice || return 130
 
     case "${choice}" in
       1) ng_install_cron_jobs ;;
       2) ng_show_cron_jobs ;;
       0) break ;;
-      *) printf 'Invalid option.\n' ;;
+      *) ng_t invalid_option ;;
     esac
   done
 }

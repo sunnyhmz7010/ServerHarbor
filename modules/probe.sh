@@ -55,7 +55,7 @@ ng_probe_all_peers() {
 
   report="$(
     printf 'ServerHarbor Probe Report\n'
-    printf 'Generated at: %s\n' "$(ng_timestamp)"
+    ng_t generated_at "$(ng_timestamp)"
     printf 'Host        : %s\n\n' "${NG_HOSTNAME}"
     cat "${output_file}"
     printf '\n[Local Snapshot]\n'
@@ -67,7 +67,11 @@ ng_probe_all_peers() {
 }
 
 ng_show_local_status() {
-  ng_print_header "Local Health Snapshot"
+  if [[ "${NG_LANG}" == "en" ]]; then
+    ng_print_header "Local Health Snapshot"
+  else
+    ng_print_header "本机健康状态"
+  fi
   printf 'Host     : %s\n' "${NG_HOSTNAME}"
   printf 'Uptime   : %s\n' "$(uptime -p 2>/dev/null || uptime)"
   printf 'Load     : %s\n' "$(ng_system_load)"
@@ -83,22 +87,32 @@ ng_probe_menu() {
   local choice
 
   while true; do
-    ng_print_header "Peer Probe"
-    cat <<'EOF'
+    if [[ "${NG_LANG}" == "en" ]]; then
+      ng_print_header "Peer Probe"
+      cat <<'EOF'
 1. Probe all peers
 2. Collect local status snapshot
 3. Show local health
 0. Back
 EOF
-    printf 'Select: '
-    read -r choice
+    else
+      ng_print_header "节点探测"
+      cat <<'EOF'
+1. 探测所有节点
+2. 采集本机状态快照
+3. 查看本机健康状态
+0. 返回
+EOF
+    fi
+    ng_t select
+    ng_read_line choice || return 130
 
     case "${choice}" in
       1) ng_probe_all_peers ;;
       2) cat "$(ng_collect_local_probe)" ;;
       3) ng_show_local_status ;;
       0) break ;;
-      *) printf 'Invalid option.\n' ;;
+      *) ng_t invalid_option ;;
     esac
   done
 }

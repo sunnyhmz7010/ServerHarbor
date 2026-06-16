@@ -120,8 +120,9 @@ ng_bootstrap_menu() {
   local choice
 
   while true; do
-    ng_print_header "Server Bootstrap"
-    cat <<'EOF'
+    if [[ "${NG_LANG}" == "en" ]]; then
+      ng_print_header "Server Bootstrap"
+      cat <<'EOF'
 1. Run full bootstrap
 2. Install base packages
 3. Enable BBR
@@ -131,8 +132,21 @@ ng_bootstrap_menu() {
 7. Generate bootstrap report
 0. Back
 EOF
-    printf 'Select: '
-    read -r choice
+    else
+      ng_print_header "新服务器开荒"
+      cat <<'EOF'
+1. 执行完整开荒
+2. 安装基础软件
+3. 启用 BBR
+4. 配置 DNS
+5. 配置 swap
+6. SSH 基础加固
+7. 生成开荒报告
+0. 返回
+EOF
+    fi
+    ng_t select
+    ng_read_line choice || return 130
 
     case "${choice}" in
       1) ng_bootstrap_full ;;
@@ -140,10 +154,16 @@ EOF
       3) ng_enable_bbr ;;
       4) ng_configure_dns ;;
       5) ng_configure_swap ;;
-      6) if ng_prompt_yes_no "This may disable password login. Continue?"; then ng_harden_ssh; fi ;;
+      6)
+        if [[ "${NG_LANG}" == "en" ]]; then
+          if ng_prompt_yes_no "This may disable password login. Continue?"; then ng_harden_ssh; fi
+        else
+          if ng_prompt_yes_no "该操作可能禁用密码登录，是否继续？"; then ng_harden_ssh; fi
+        fi
+        ;;
       7) ng_bootstrap_report ;;
       0) break ;;
-      *) printf 'Invalid option.\n' ;;
+      *) ng_t invalid_option ;;
     esac
   done
 }
