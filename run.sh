@@ -9,6 +9,7 @@ WORK_DIR="$(mktemp -d "${TMP_ROOT%/}/serverharbor-run-XXXXXX")"
 ARCHIVE_PATH="${WORK_DIR}/serverharbor-run.tar.gz"
 EXTRACT_DIR="${WORK_DIR}/extract"
 DATA_ROOT="${SERVERHARBOR_HOME:-${XDG_CONFIG_HOME:-${HOME}/.config}/serverharbor}"
+LANG_CONFIG_FILE="${DATA_ROOT}/config/lang.conf"
 LANGUAGE="${SERVERHARBOR_LANG:-}"
 INTERRUPT_REQUESTED=0
 CRITICAL_SECTION=0
@@ -20,6 +21,11 @@ handle_preflight_interrupt() {
 
 select_language() {
   local choice
+
+  if [[ -z "${LANGUAGE}" && -f "${LANG_CONFIG_FILE}" ]]; then
+    # shellcheck disable=SC1090
+    source "${LANG_CONFIG_FILE}"
+  fi
 
   if [[ -n "${LANGUAGE}" ]]; then
     return 0
@@ -39,6 +45,9 @@ select_language() {
     2) LANGUAGE="en" ;;
     *) LANGUAGE="zh" ;;
   esac
+
+  mkdir -p "$(dirname "${LANG_CONFIG_FILE}")"
+  printf 'LANGUAGE="%s"\n' "${LANGUAGE}" > "${LANG_CONFIG_FILE}"
 }
 
 t() {
