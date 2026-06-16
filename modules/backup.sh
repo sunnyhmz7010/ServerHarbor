@@ -50,7 +50,7 @@ ng_backup_report() {
   local content
 
   content="$(
-    printf 'NebulaGuard Backup Report\n'
+    printf 'ServerMesh Backup Report\n'
     printf 'Generated at: %s\n' "$(ng_timestamp)"
     printf 'Host        : %s\n' "${NG_HOSTNAME}"
     printf 'Retention   : %s days\n\n' "${NG_BACKUP_RETENTION_DAYS}"

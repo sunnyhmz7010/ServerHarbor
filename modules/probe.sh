@@ -54,7 +54,7 @@ ng_probe_all_peers() {
   } | tee "${output_file}"
 
   report="$(
-    printf 'NebulaGuard Probe Report\n'
+    printf 'ServerMesh Probe Report\n'
     printf 'Generated at: %s\n' "$(ng_timestamp)"
     printf 'Host        : %s\n\n' "${NG_HOSTNAME}"
     cat "${output_file}"

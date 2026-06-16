@@ -53,9 +53,9 @@ run_cli_mode() {
 
 show_banner() {
   clear || true
-  cat <<'EOF'
+ cat <<'EOF'
 ==============================================================
- NebulaGuard xhj001
+ ServerMesh
  Decentralized Multi-Server Bootstrap, Probe and Guard Toolkit
 ==============================================================
 EOF

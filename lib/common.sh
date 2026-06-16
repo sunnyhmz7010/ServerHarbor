@@ -16,6 +16,7 @@ NG_WATCH_FILE="${NG_CONFIG_DIR}/watch.conf"
 NG_INTEGRITY_DB="${NG_STATE_DIR}/integrity.sha256"
 NG_GIT_IGNORE_FILE="${NG_PROJECT_ROOT}/.gitignore"
 NG_HOSTNAME="$(hostname 2>/dev/null || echo unknown-host)"
+NG_PROJECT_NAME="ServerMesh"
 
 ng_init_environment() {
   mkdir -p "${NG_CONFIG_DIR}" "${NG_LOG_DIR}" "${NG_REPORT_DIR}" "${NG_STATE_DIR}" "${NG_BACKUP_DIR}" "${NG_TMP_DIR}"

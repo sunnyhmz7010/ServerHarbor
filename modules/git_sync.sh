@@ -54,13 +54,13 @@ ng_git_push_remote() {
 
 ng_git_sync_all() {
   ng_git_init_repo
-  ng_git_commit_state "NebulaGuard sync $(date '+%F %T')"
+  ng_git_commit_state "ServerMesh sync $(date '+%F %T')"
   ng_git_push_remote
 }
 
 ng_git_auto_sync() {
   ng_git_init_repo
-  ng_git_commit_state "NebulaGuard auto sync $(date '+%F %T')" || true
+  ng_git_commit_state "ServerMesh auto sync $(date '+%F %T')" || true
   ng_git_push_remote || true
 }
 

@@ -88,7 +88,7 @@ ng_bootstrap_report() {
   local content
 
   content="$(
-    printf 'NebulaGuard Bootstrap Report\n'
+    printf 'ServerMesh Bootstrap Report\n'
     printf 'Generated at: %s\n' "$(ng_timestamp)"
     printf 'Host        : %s\n' "${NG_HOSTNAME}"
     printf 'Timezone    : %s\n' "${NG_TIMEZONE}"
