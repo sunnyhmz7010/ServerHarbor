@@ -124,13 +124,11 @@ show_banner() {
     ng_print_title_box "🚢 ServerHarbor" "Decentralized multi-server bootstrap, probe and security toolkit"
     ng_print_stat "Host" "${NG_HOSTNAME}" "🖥"
     ng_print_stat "Data Root" "${NG_DATA_ROOT}" "📦"
-    ng_print_stat "Reports" "$(find "${NG_REPORT_DIR}" -maxdepth 1 -type f | wc -l | tr -d ' ')" "📄"
     ng_print_stat "Total Nodes" "$(ng_total_node_count)" "🛰"
   else
     ng_print_title_box "🚢 ServerHarbor" "去中心化多服务器开荒、探测与安全工具箱"
     ng_print_stat "主机" "${NG_HOSTNAME}" "🖥"
     ng_print_stat "数据目录" "${NG_DATA_ROOT}" "📦"
-    ng_print_stat "报告数" "$(find "${NG_REPORT_DIR}" -maxdepth 1 -type f | wc -l | tr -d ' ')" "📄"
     ng_print_stat "总节点数" "$(ng_total_node_count)" "🛰"
   fi
 
