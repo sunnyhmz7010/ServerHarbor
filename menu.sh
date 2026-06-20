@@ -107,6 +107,7 @@ ng_uninstall() {
 
   chmod +x "${uninstaller}" 2>/dev/null || true
   bash "${uninstaller}"
+  exit 0
 }
 
 show_menu() {
