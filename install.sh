@@ -357,8 +357,7 @@ main() {
   validate_existing_launcher
 
   if is_managed_install; then
-    already_installed=1
-    show_existing_install_summary
+    exec bash "${APP_ROOT}/menu.sh"
   fi
 
   print_install_plan
@@ -369,12 +368,6 @@ main() {
   ensure_fetch_tools_installed
 
   extracted_root="$(download_and_extract)"
-  if [[ "${already_installed}" -eq 1 ]] && is_same_source_tree "${extracted_root}"; then
-    rm -f "${ARCHIVE_PATH}"
-    rm -rf "${EXTRACT_DIR}"
-    t already_latest
-    exit 0
-  fi
 
   mkdir -p "$(dirname "${BIN_PATH}")"
   rm -rf "${APP_ROOT}"
@@ -387,11 +380,7 @@ main() {
   rm -f "${ARCHIVE_PATH}"
   rm -rf "${EXTRACT_DIR}"
 
-  if [[ "${already_installed}" -eq 1 ]]; then
-    t updated
-  else
-    t installed
-  fi
+  t installed
   t run_cmd
 }
 
