@@ -48,7 +48,7 @@ ng_self_update() {
   fi
 
   chmod +x "${installer}" 2>/dev/null || true
-  bash "${installer}"
+  bash "${installer}" --update
 }
 
 run_cli_mode() {
@@ -150,7 +150,13 @@ main() {
       2) ng_security_menu ;;
       3) ng_probe_menu ;;
       4) ng_self_update ;;
-      5) ng_uninstall ;;
+      5)
+        if ng_is_installed; then
+          ng_uninstall
+        else
+          ng_t invalid_option
+        fi
+        ;;
       0) exit 0 ;;
       *) ng_t invalid_option ;;
     esac

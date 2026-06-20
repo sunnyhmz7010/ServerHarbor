@@ -72,6 +72,16 @@ ng_port_scan() {
   local start_port="${2:-1}"
   local end_port="${3:-1024}"
   
+  local range=$((end_port - start_port + 1))
+  if [[ "${range}" -gt 1024 ]]; then
+    if [[ "${NG_LANG}" == "en" ]]; then
+      printf 'Port range too large (%d ports). Limiting to 1024 ports.\n' "${range}"
+    else
+      printf '端口范围过大（%d 个端口），限制为 1024 个端口。\n' "${range}"
+    fi
+    end_port=$((start_port + 1023))
+  fi
+
   if [[ "${NG_LANG}" == "en" ]]; then
     ng_print_header "Port Scan: ${host} (${start_port}-${end_port})"
     printf 'Scanning ports %d to %d...\n' "${start_port}" "${end_port}"

@@ -286,7 +286,7 @@ ng_press_enter() {
 ng_log() {
   local level="$1"
   shift
-  local log_file="${NG_LOG_DIR}/nebula.log"
+  local log_file="${NG_LOG_DIR}/serverharbor.log"
   local level_color="${NG_C_ACCENT}"
   local level_icon="•"
 
@@ -387,7 +387,9 @@ ng_read_peers() {
 }
 
 ng_peer_count() {
-  ng_read_peers | wc -l | tr -d ' '
+  local count
+  count="$(ng_read_peers | wc -l | tr -d ' ')" || count=0
+  printf '%s' "${count}"
 }
 
 ng_total_node_count() {
@@ -432,6 +434,12 @@ ng_progress_bar() {
   local current="$1"
   local total="$2"
   local width="${3:-50}"
+  
+  if [[ "${total}" -eq 0 ]]; then
+    printf '\r[░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░] 0%%'
+    return 0
+  fi
+  
   local percentage=$((current * 100 / total))
   local filled=$((current * width / total))
   local empty=$((width - filled))

@@ -19,15 +19,11 @@ ng_disk_usage() {
   df -h / | awk 'NR==2 {print $5}' | cut -d'%' -f1
 }
 
-ng_system_load() {
-  uptime | awk -F'load average: ' '{print $2}' | tr -d '\r'
-}
-
 ng_process_count() {
   ps aux | wc -l | tr -d ' '
 }
 
-ng_network_connections() {
+ng_tcp_connection_count() {
   ss -s | awk '/^TCP:/ {print $2}'
 }
 
@@ -39,7 +35,7 @@ ng_monitor_single() {
     printf 'Disk Usage     : %s%%\n' "$(ng_disk_usage)"
     printf 'System Load    : %s\n' "$(ng_system_load)"
     printf 'Process Count  : %s\n' "$(ng_process_count)"
-    printf 'TCP Connections: %s\n' "$(ng_network_connections)"
+    printf 'TCP Connections: %s\n' "$(ng_tcp_connection_count)"
     printf '\nTop 5 CPU Processes:\n'
     ps aux --sort=-%cpu | head -6
     printf '\nTop 5 Memory Processes:\n'
@@ -51,7 +47,7 @@ ng_monitor_single() {
     printf '磁盘使用率     : %s%%\n' "$(ng_disk_usage)"
     printf '系统负载       : %s\n' "$(ng_system_load)"
     printf '进程数量       : %s\n' "$(ng_process_count)"
-    printf 'TCP 连接数     : %s\n' "$(ng_network_connections)"
+    printf 'TCP 连接数     : %s\n' "$(ng_tcp_connection_count)"
     printf '\nCPU 占用前 5 进程:\n'
     ps aux --sort=-%cpu | head -6
     printf '\n内存占用前 5 进程:\n'
@@ -80,7 +76,7 @@ ng_monitor_realtime() {
       printf '  %s %-15s %s\n' "💾" "Disk Usage" "$(ng_disk_usage)%"
       printf '  %s %-15s %s\n' "📈" "System Load" "$(ng_system_load)"
       printf '  %s %-15s %s\n' "⚙️" "Processes" "$(ng_process_count)"
-      printf '  %s %-15s %s\n' "🌐" "TCP Conn" "$(ng_network_connections)"
+      printf '  %s %-15s %s\n' "🌐" "TCP Conn" "$(ng_tcp_connection_count)"
       printf '\n%s\n' "$(ng_color "${NG_C_DIM}" "Press Ctrl+C to stop monitoring")"
     else
       ng_print_title_box "📊 实时系统监控" "刷新 #${count} - $(date '+%H:%M:%S')"
@@ -89,7 +85,7 @@ ng_monitor_realtime() {
       printf '  %s %-15s %s\n' "💾" "磁盘使用率" "$(ng_disk_usage)%"
       printf '  %s %-15s %s\n' "📈" "系统负载" "$(ng_system_load)"
       printf '  %s %-15s %s\n' "⚙️" "进程数量" "$(ng_process_count)"
-      printf '  %s %-15s %s\n' "🌐" "TCP 连接" "$(ng_network_connections)"
+      printf '  %s %-15s %s\n' "🌐" "TCP 连接" "$(ng_tcp_connection_count)"
       printf '\n%s\n' "$(ng_color "${NG_C_DIM}" "按 Ctrl+C 停止监控")"
     fi
     
@@ -112,7 +108,7 @@ ng_monitor_report() {
       ng_report_kv 'Disk Usage' "$(ng_disk_usage)%"
       ng_report_kv 'System Load' "$(ng_system_load)"
       ng_report_kv 'Process Count' "$(ng_process_count)"
-      ng_report_kv 'TCP Connections' "$(ng_network_connections)"
+      ng_report_kv 'TCP Connections' "$(ng_tcp_connection_count)"
       ng_report_section 'Top CPU Processes'
       ps aux --sort=-%cpu | head -6
       ng_report_section 'Top Memory Processes'
@@ -130,7 +126,7 @@ ng_monitor_report() {
       ng_report_kv '磁盘使用率' "$(ng_disk_usage)%"
       ng_report_kv '系统负载' "$(ng_system_load)"
       ng_report_kv '进程数量' "$(ng_process_count)"
-      ng_report_kv 'TCP 连接数' "$(ng_network_connections)"
+      ng_report_kv 'TCP 连接数' "$(ng_tcp_connection_count)"
       ng_report_section 'CPU 占用前 5 进程'
       ps aux --sort=-%cpu | head -6
       ng_report_section '内存占用前 5 进程'
@@ -149,9 +145,13 @@ ng_monitor_alert() {
   local alerts=()
   
   local cpu_usage mem_usage disk_usage
-  cpu_usage=$(ng_cpu_usage | cut -d'.' -f1)
-  mem_usage=$(ng_memory_usage | cut -d'.' -f1)
-  disk_usage=$(ng_disk_usage)
+  cpu_usage=$(ng_cpu_usage | cut -d'.' -f1) || cpu_usage=0
+  mem_usage=$(ng_memory_usage | cut -d'.' -f1) || mem_usage=0
+  disk_usage=$(ng_disk_usage) || disk_usage=0
+  
+  cpu_usage="${cpu_usage:-0}"
+  mem_usage="${mem_usage:-0}"
+  disk_usage="${disk_usage:-0}"
   
   if [[ "${cpu_usage}" -gt "${cpu_threshold}" ]]; then
     alerts+=("CPU usage (${cpu_usage}%) exceeds threshold (${cpu_threshold}%)")

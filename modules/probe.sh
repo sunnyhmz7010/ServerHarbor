@@ -22,10 +22,13 @@ ng_probe_single_peer() {
   local peer_host="$1"
   local peer_alias="$2"
   local ping_result ssh_result latency
+  local ping_output
 
-  if ping -c 1 -W "${NG_PROBE_TIMEOUT}" "${peer_host}" >/dev/null 2>&1; then
+  ping_output="$(ping -c 1 -W "${NG_PROBE_TIMEOUT}" "${peer_host}" 2>/dev/null)" || true
+  
+  if [[ -n "${ping_output}" ]] && echo "${ping_output}" | grep -q "bytes from"; then
     ping_result="up"
-    latency="$(ping -c 1 -W "${NG_PROBE_TIMEOUT}" "${peer_host}" 2>/dev/null | awk -F'time=' 'END {print $2}' | awk '{print $1}' || echo n/a)"
+    latency="$(echo "${ping_output}" | awk -F'time=' 'END {print $2}' | awk '{print $1}' || echo n/a)"
   else
     ping_result="down"
     latency="timeout"

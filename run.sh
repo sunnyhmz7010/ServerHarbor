@@ -264,7 +264,8 @@ main() {
 
   if [[ "${refresh_requested}" -eq 1 ]]; then
     export SERVERHARBOR_REFRESHING=1
-    bash -c 'exec bash <(curl -q -fsSL "https://raw.githubusercontent.com/sunnyhmz7010/ServerHarbor/main/run.sh?$(date +%s)")' "$@"
+    export SERVERHARBOR_ARGS="$*"
+    bash <(curl -q -fsSL "https://raw.githubusercontent.com/sunnyhmz7010/ServerHarbor/main/run.sh?$(date +%s)") ${SERVERHARBOR_ARGS}
     exit $?
   fi
 

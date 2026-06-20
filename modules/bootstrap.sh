@@ -114,7 +114,7 @@ ng_configure_swap() {
   fi
 
   local swap_file="/swapfile"
-  fallocate -l "${NG_SWAP_SIZE_MB}M" "${swap_file}" 2>/dev/null || dd if=/dev/zero of="${swap_file}" bs=1M count="${NG_SWAP_SIZE_MB}"
+  fallocate -l "${NG_SWAP_SIZE_MB}M" "${swap_file}" 2>/dev/null || dd if=/dev/zero of="${swap_file}" bs=1M count="${NG_SWAP_SIZE_MB}" 2>/dev/null
   chmod 600 "${swap_file}"
   mkswap "${swap_file}"
   swapon "${swap_file}"
@@ -126,7 +126,7 @@ ng_configure_swap() {
 ng_enable_bbr() {
   ng_require_root || return 1
 
-  local sysctl_file="/etc/sysctl.d/99-nebulaguard-bbr.conf"
+  local sysctl_file="/etc/sysctl.d/99-serverharbor-bbr.conf"
   cat > "${sysctl_file}" <<'EOF'
 net.core.default_qdisc=fq
 net.ipv4.tcp_congestion_control=bbr
@@ -166,7 +166,9 @@ ng_harden_ssh() {
     "${sshd_config}"
 
   if command -v systemctl >/dev/null 2>&1; then
-    systemctl restart sshd 2>/dev/null || systemctl restart ssh 2>/dev/null || true
+    if ! systemctl restart sshd 2>/dev/null && ! systemctl restart ssh 2>/dev/null; then
+      ng_log "WARN" "Failed to restart SSH service. Please restart manually."
+    fi
   fi
 
   ng_log "INFO" "SSH hardening rules applied."
@@ -218,7 +220,17 @@ ng_bootstrap_full() {
   ng_enable_bbr
   ng_configure_dns
   ng_configure_swap
-  ng_harden_ssh
+  
+  if [[ "${NG_LANG}" == "en" ]]; then
+    if ng_prompt_yes_no "SSH hardening may disable password login. Continue?"; then
+      ng_harden_ssh
+    fi
+  else
+    if ng_prompt_yes_no "SSH 加固可能禁用密码登录，是否继续？"; then
+      ng_harden_ssh
+    fi
+  fi
+  
   ng_bootstrap_report
 }
 

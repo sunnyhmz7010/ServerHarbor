@@ -65,7 +65,7 @@ ng_scan_web_attacks() {
   }
 
   summary="$(
-    grep -Ei 'wp-admin|phpmyadmin|\.env|/admin|/login|select.+from|union.+select' "${access_log}" \
+    grep -Ei 'wp-admin|phpmyadmin|\.env|select.+from|union.+select|/etc/passwd|\.\./' "${access_log}" \
       | awk '{print $1}' | sort | uniq -c | sort -nr | head || true
   )"
 
@@ -223,7 +223,7 @@ ng_rootkit_check() {
   fi
   
   local suspicious_files=(
-    "/usr/bin/... "
+    "/usr/bin/..."
     "/usr/bin/.xx"
     "/usr/bin/.sniffer"
     "/usr/bin/.squid"
@@ -235,10 +235,6 @@ ng_rootkit_check() {
     "/etc/cron.d/core.cron"
     "/etc/cron.d/.kork"
     "/etc/cron.d/.0"
-    "/tmp/.X11-unix"
-    "/tmp/.ICE-unix"
-    "/tmp/.font-unix"
-    "/tmp/.XIM-unix"
   )
   
   local found=0
@@ -313,12 +309,12 @@ ng_security_score() {
     issues+=("Running as root (-10)")
   fi
   
-  if ! grep -q "PasswordAuthentication no" /etc/ssh/sshd_config 2>/dev/null; then
+  if ! grep -qE '^[^#]*PasswordAuthentication no' /etc/ssh/sshd_config 2>/dev/null; then
     score=$((score - 15))
     issues+=("SSH password authentication enabled (-15)")
   fi
   
-  if grep -q "PermitRootLogin yes" /etc/ssh/sshd_config 2>/dev/null; then
+  if grep -qE '^[^#]*PermitRootLogin yes' /etc/ssh/sshd_config 2>/dev/null; then
     score=$((score - 20))
     issues+=("Root login permitted (-20)")
   fi
