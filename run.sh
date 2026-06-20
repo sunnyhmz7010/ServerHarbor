@@ -260,6 +260,7 @@ main() {
 
   if [[ "${menu_exit_code}" -eq "${REFRESH_EXIT_CODE}" ]]; then
     refresh_requested=1
+    printf 'Refresh requested, restarting...\n'
   fi
 
   if [[ "${refresh_requested}" -eq 1 ]]; then
