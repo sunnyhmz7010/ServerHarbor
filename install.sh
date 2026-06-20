@@ -48,16 +48,16 @@ t() {
       case "${key}" in
         need_root) printf 'Please run install.sh as root.\n' ;;
         missing_cmd) printf 'Missing required command: %s\n' "$2" ;;
-        continue) printf 'Continue? [y/N]: ' ;;
+        continue) printf 'Continue? [Y/n]: ' ;;
         plan_title) printf '%s will perform these actions:\n' "${PROJECT_NAME}" ;;
-        plan_dep) printf '  1. Ensure curl and tar are available (%s)\n' "$2" ;;
+        plan_dep) printf '  1. Dependency status: %s\n' "$2" ;;
         plan_download) printf '  2. Download source archive from %s\n' "${ARCHIVE_URL}" ;;
         plan_data) printf '  3. Create or preserve data under %s\n' "${DATA_ROOT}" ;;
         plan_launcher) printf '  4. Write managed launcher %s\n' "${BIN_PATH}" ;;
         plan_manifest) printf '  5. Write install manifest %s\n' "${MANIFEST_PATH}" ;;
         dep_ok) printf 'curl and tar already installed' ;;
-        dep_missing) printf 'missing curl/tar, will attempt install via %s' "$2" ;;
-        dep_installing) printf 'curl or tar not found. Attempting to install required tools via %s...\n' "$2" ;;
+        dep_missing) printf 'curl or tar missing' ;;
+        dep_installing) printf 'curl or tar not found. Attempting to install via %s...\n' "$2" ;;
         dep_unsupported) printf 'Unable to auto-install curl/tar: unsupported package manager.\n' ;;
         dep_manual) printf 'Please install curl and tar manually and re-run the installer.\n' ;;
         dep_failed) printf 'Required tools were not installed successfully. Please install curl and tar manually.\n' ;;
@@ -86,16 +86,16 @@ t() {
       case "${key}" in
         need_root) printf '请使用 root 身份运行 install.sh。\n' ;;
         missing_cmd) printf '缺少必要命令：%s\n' "$2" ;;
-        continue) printf '是否继续？[y/N]: ' ;;
-        plan_title) printf '%s 即将执行以下操作：\n' "${PROJECT_NAME}" ;;
-        plan_dep) printf '  1. 确保 curl 和 tar 可用（%s）\n' "$2" ;;
+        continue) printf '是否继续？[Y/n]: ' ;;
+        plan_title) printf '%s 将执行以下操作：\n' "${PROJECT_NAME}" ;;
+        plan_dep) printf '  1. 依赖状态：%s\n' "$2" ;;
         plan_download) printf '  2. 从 %s 下载源码压缩包\n' "${ARCHIVE_URL}" ;;
         plan_data) printf '  3. 创建或保留数据目录 %s\n' "${DATA_ROOT}" ;;
         plan_launcher) printf '  4. 写入受管快捷命令 %s\n' "${BIN_PATH}" ;;
         plan_manifest) printf '  5. 写入安装清单 %s\n' "${MANIFEST_PATH}" ;;
         dep_ok) printf 'curl 和 tar 已安装' ;;
-        dep_missing) printf '缺少 curl/tar，将尝试通过 %s 安装' "$2" ;;
-        dep_installing) printf '未找到 curl 或 tar，正在尝试通过 %s 安装所需工具...\n' "$2" ;;
+        dep_missing) printf '缺少 curl 或 tar' ;;
+        dep_installing) printf '未找到 curl 或 tar，正在尝试通过 %s 安装...\n' "$2" ;;
         dep_unsupported) printf '无法自动安装 curl/tar：不支持的包管理器。\n' ;;
         dep_manual) printf '请手动安装 curl 和 tar 后重新运行安装脚本。\n' ;;
         dep_failed) printf '依赖安装未成功，请手动安装 curl 和 tar。\n' ;;
