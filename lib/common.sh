@@ -209,7 +209,7 @@ ng_read_line() {
   local __var_name="$1"
   local __value=""
 
-  if ! IFS= read -r __value; then
+  if ! IFS= read -r __value < /dev/tty; then
     ng_t interrupted >&2
     return 130
   fi

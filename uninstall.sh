@@ -40,7 +40,7 @@ confirm() {
   printf '  - %s\n' "${DATA_ROOT}"
   printf '  - %s\n' "${MANIFEST_PATH}"
   printf 'Continue? [y/N]: '
-  read -r answer
+  read -r answer < /dev/tty
   [[ "${answer}" =~ ^[Yy]([Ee][Ss])?$ ]]
 }
 

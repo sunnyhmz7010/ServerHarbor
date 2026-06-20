@@ -38,10 +38,9 @@ select_language() {
   printf '  1. 中文\n'
   printf '  2. English\n'
   printf 'Select [1/2, default/默认: 1] / 请选择：'
-  if ! IFS= read -r choice; then
-    printf '\n'
-    printf 'Cancelled / 已取消\n' >&2
-    return 130
+  if ! IFS= read -r choice < /dev/tty; then
+    LANGUAGE="zh"
+    return 0
   fi
 
   case "${choice}" in
@@ -129,9 +128,8 @@ require_cmd() {
 confirm() {
   local answer
   t continue
-  if ! IFS= read -r answer; then
-    t cancelled
-    return 130
+  if ! IFS= read -r answer < /dev/tty; then
+    return 0
   fi
   [[ -z "${answer}" || "${answer}" =~ ^[Yy]([Ee][Ss])?$ ]]
 }
@@ -139,7 +137,7 @@ confirm() {
 confirm_remove_data() {
   local answer
   t remove_data
-  if ! IFS= read -r answer; then
+  if ! IFS= read -r answer < /dev/tty; then
     return 1
   fi
   [[ "${answer}" =~ ^[Yy]([Ee][Ss])?$ ]]
