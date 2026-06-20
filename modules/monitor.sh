@@ -261,7 +261,7 @@ ng_monitor_menu() {
         
         ng_monitor_alert "${cpu_thresh}" "${mem_thresh}" "${disk_thresh}"
         ;;
-      0) break ;;
+      0) return 0 ;;
       *) ng_t invalid_option ;;
     esac
     

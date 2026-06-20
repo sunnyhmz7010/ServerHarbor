@@ -423,7 +423,7 @@ ng_security_menu() {
       8) ng_rootkit_check ;;
       9) ng_port_security_scan ;;
       10) ng_security_score ;;
-      0) break ;;
+      0) return 0 ;;
       *) ng_t invalid_option ;;
     esac
   done

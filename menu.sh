@@ -190,8 +190,6 @@ main() {
       0) exit 0 ;;
       *) ng_t invalid_option ;;
     esac
-
-    ng_press_enter || exit 130
   done
 }
 

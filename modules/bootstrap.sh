@@ -82,7 +82,7 @@ ng_network_tune_shortcuts_menu() {
           "https://github.com/Eric86777/vps-tcp-tune" \
           "https://raw.githubusercontent.com/Eric86777/vps-tcp-tune/refs/heads/main/net-tcp-tune.sh"
         ;;
-      0) break ;;
+      0) return 0 ;;
       *) ng_t invalid_option ;;
     esac
 
@@ -275,7 +275,7 @@ ng_bootstrap_menu() {
         ;;
       7) ng_bootstrap_report ;;
       8) ng_network_tune_shortcuts_menu ;;
-      0) break ;;
+      0) return 0 ;;
       *) ng_t invalid_option ;;
     esac
   done

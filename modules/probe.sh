@@ -135,7 +135,7 @@ ng_probe_menu() {
       1) ng_probe_all_peers ;;
       2) cat "$(ng_collect_local_probe)" ;;
       3) ng_show_local_status ;;
-      0) break ;;
+      0) return 0 ;;
       *) ng_t invalid_option ;;
     esac
   done

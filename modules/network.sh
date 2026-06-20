@@ -334,7 +334,7 @@ ng_network_menu() {
         ng_network_diagnostics "${host}"
         ;;
       9) ng_network_report ;;
-      0) break ;;
+      0) return 0 ;;
       *) ng_t invalid_option ;;
     esac
     
