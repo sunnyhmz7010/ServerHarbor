@@ -133,6 +133,27 @@ This repository is `ServerHarbor`, a Bash-based Linux multi-server operations to
 - Keep comments sparse and only where the logic is not obvious.
 - Use ASCII in scripts unless a file already needs non-ASCII content.
 
+## Shell Portability Lessons
+
+### Piped stdin (`curl | bash`)
+
+- When a script runs via `curl ... | bash`, stdin is the pipe, not the terminal.
+- All `read` calls must use `read ... < /dev/tty` to read user input.
+- Apply this to: language selection, confirmations, and any interactive prompt.
+- If stdin is not a terminal and `/dev/tty` is unavailable, fall back to sensible defaults.
+
+### `set -e` and exit code capture
+
+- `set -e` causes the parent script to exit when a child script returns non-zero.
+- To capture a child's exit code, use: `child; code=$?` with `set +e` around it, or `child || code=$?`.
+- Do not rely on `if ! child; then code=$?` inside `set -e` — it may still exit.
+
+### `exec` and process substitution
+
+- When a script runs via `bash <(curl ...)`, `$0` is a temporary fd like `/dev/fd/63`.
+- `exec bash "$0"` will fail after the fd closes.
+- To restart, either re-download the script or save it to a temp file first.
+
 ## Repository Release Conventions
 
 - Tags should use `vX.Y.Z`.
