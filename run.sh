@@ -256,6 +256,7 @@ main() {
   chmod +x "${extracted_root}/menu.sh"
   if ! SERVERHARBOR_HOME="${DATA_ROOT}" SERVERHARBOR_LANG="${LANGUAGE}" SERVERHARBOR_RUNTIME="online" SERVERHARBOR_REFRESH_EXIT_CODE="${REFRESH_EXIT_CODE}" bash "${extracted_root}/menu.sh" "$@"; then
     menu_exit_code=$?
+    printf 'DEBUG: menu_exit_code=%s\n' "${menu_exit_code}" >&2
   fi
 
   if [[ "${menu_exit_code}" -eq "${REFRESH_EXIT_CODE}" ]]; then
