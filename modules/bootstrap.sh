@@ -227,26 +227,30 @@ ng_bootstrap_menu() {
 
   while true; do
     if [[ "${NG_LANG}" == "en" ]]; then
-      ng_print_title_box "🚀 Server Bootstrap" "First-run provisioning for a fresh server"
+      ng_print_title_box "🚀 System Bootstrap" "Server provisioning, monitoring and network tools"
       ng_print_option "1" "⚡" "Run full bootstrap" "Base packages, timezone, BBR, DNS, swap and SSH hardening"
       ng_print_option "2" "📦" "Install base packages" "curl, wget and common system/network tools"
       ng_print_option "3" "🌐" "Enable BBR" "Write sysctl tuning and reload kernel parameters"
       ng_print_option "4" "🧭" "Configure DNS" "Rewrite /etc/resolv.conf with configured resolvers"
       ng_print_option "5" "🧠" "Configure swap" "Create /swapfile when no swap exists"
       ng_print_option "6" "🔐" "Harden SSH" "Disable password login and tighten SSH defaults"
-      ng_print_option "7" "📄" "Generate bootstrap report" "Show timezone, DNS, memory and disk summary"
-      ng_print_option "8" "🌍" "External network tuning scripts" "Quick launch bbrv3-lite or vps-tcp-tune"
+      ng_print_option "7" "📊" "System monitor" "CPU, memory, disk usage and alerts"
+      ng_print_option "8" "🌐" "Network tools" "Ping, traceroute, DNS lookup, port scan"
+      ng_print_option "9" "📄" "Generate report" "Show system summary report"
+      ng_print_option "10" "🌍" "External scripts" "Quick launch bbrv3-lite or vps-tcp-tune"
       ng_print_option "0" "↩" "Back"
     else
-      ng_print_title_box "🚀 新服务器开荒" "面向新机器的一键初始化与基础加固"
+      ng_print_title_box "🚀 系统开荒" "服务器初始化、监控与网络工具"
       ng_print_option "1" "⚡" "执行完整开荒" "基础软件、时区、BBR、DNS、swap 与 SSH 加固"
       ng_print_option "2" "📦" "安装基础软件" "curl、wget 与常用系统/网络工具"
       ng_print_option "3" "🌐" "启用 BBR" "写入 sysctl 调优并重新加载内核参数"
       ng_print_option "4" "🧭" "配置 DNS" "按配置重写 /etc/resolv.conf"
       ng_print_option "5" "🧠" "配置 swap" "在无 swap 时创建 /swapfile"
       ng_print_option "6" "🔐" "加固 SSH" "禁用密码登录并收紧 SSH 默认项"
-      ng_print_option "7" "📄" "生成开荒报告" "输出时区、DNS、内存和磁盘摘要"
-      ng_print_option "8" "🌍" "第三方网络调优脚本" "快捷运行 bbrv3-lite 或 vps-tcp-tune"
+      ng_print_option "7" "📊" "系统监控" "CPU、内存、磁盘使用率与告警"
+      ng_print_option "8" "🌐" "网络工具" "Ping、路由追踪、DNS 查询、端口扫描"
+      ng_print_option "9" "📄" "生成报告" "输出系统摘要报告"
+      ng_print_option "10" "🌍" "第三方脚本" "快捷运行 bbrv3-lite 或 vps-tcp-tune"
       ng_print_option "0" "↩" "返回"
     fi
 
@@ -273,8 +277,10 @@ ng_bootstrap_menu() {
           fi
         fi
         ;;
-      7) ng_bootstrap_report ;;
-      8) ng_network_tune_shortcuts_menu ;;
+      7) ng_monitor_menu ;;
+      8) ng_network_menu ;;
+      9) ng_bootstrap_report ;;
+      10) ng_network_tune_shortcuts_menu ;;
       0) return 0 ;;
       *) ng_t invalid_option ;;
     esac

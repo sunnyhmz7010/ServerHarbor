@@ -112,13 +112,13 @@ ng_probe_menu() {
 
   while true; do
     if [[ "${NG_LANG}" == "en" ]]; then
-      ng_print_title_box "🛰 Peer Probe" "Peer reachability and local health inspection"
+      ng_print_title_box "🛰 Node Management" "Peer reachability and local health inspection"
       ng_print_option "1" "📡" "Probe all peers" "Check ICMP, SSH port and latency for configured peers"
       ng_print_option "2" "🧾" "Collect local status snapshot" "Write the current local state into the state directory"
       ng_print_option "3" "🩺" "Show local health" "Inspect uptime, load, memory, disk and listening ports"
       ng_print_option "0" "↩" "Back"
     else
-      ng_print_title_box "🛰 节点探测" "检查节点连通性，并采集本机健康状态"
+      ng_print_title_box "🛰 节点管理" "节点连通性检查与本机健康状态采集"
       ng_print_option "1" "📡" "探测所有节点" "检查已配置节点的 ICMP、SSH 端口和延迟"
       ng_print_option "2" "🧾" "采集本机状态快照" "将当前本机状态写入 state 目录"
       ng_print_option "3" "🩺" "查看本机健康状态" "检查运行时长、负载、内存、磁盘与监听端口"

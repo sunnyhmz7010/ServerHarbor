@@ -111,25 +111,21 @@ ng_uninstall() {
 
 show_menu() {
   if [[ "${NG_LANG}" == "en" ]]; then
-    ng_print_option "1" "🚀" "Server bootstrap" "DNS / swap / BBR / base packages / SSH hardening"
-    ng_print_option "2" "🛰" "Peer probe and health report" "Local snapshot and peer reachability checks"
-    ng_print_option "3" "🛡" "Security audit and hardening" "Auth logs, suspicious traffic, firewall and integrity checks"
-    ng_print_option "4" "📊" "System monitor" "Real-time CPU, memory, disk monitoring and alerts"
-    ng_print_option "5" "🌐" "Network tools" "Ping, traceroute, DNS lookup, port scan, bandwidth test"
-    ng_print_option "6" "♻️" "Update" "Download latest source and restart"
+    ng_print_option "1" "🚀" "System bootstrap" "Base packages / DNS / swap / BBR / SSH hardening / monitoring / network tools"
+    ng_print_option "2" "🛡" "Security guard" "Auth logs / web attacks / firewall / integrity / rootkit detection"
+    ng_print_option "3" "🛰" "Node management" "Peer probe / local health snapshot / connectivity checks"
+    ng_print_option "4" "♻️" "Update" "Download latest source and restart"
     if ng_is_installed; then
-      ng_print_option "7" "🗑" "Uninstall" "Remove ServerHarbor from this system"
+      ng_print_option "5" "🗑" "Uninstall" "Remove ServerHarbor from this system"
     fi
     ng_print_option "0" "↩" "Exit"
   else
-    ng_print_option "1" "🚀" "新服务器开荒" "DNS / swap / BBR / 基础软件 / SSH 加固"
-    ng_print_option "2" "🛰" "节点探测与健康报告" "本机快照与节点连通性检查"
-    ng_print_option "3" "🛡" "安全巡检与基础加固" "认证日志、可疑流量、防火墙与完整性校验"
-    ng_print_option "4" "📊" "系统监控" "实时 CPU、内存、磁盘监控与告警"
-    ng_print_option "5" "🌐" "网络工具" "Ping、路由追踪、DNS 查询、端口扫描、带宽测试"
-    ng_print_option "6" "♻️" "更新" "下载最新源码并重启"
+    ng_print_option "1" "🚀" "系统开荒" "基础软件 / DNS / swap / BBR / SSH 加固 / 监控 / 网络工具"
+    ng_print_option "2" "🛡" "安全卫士" "认证日志 / Web 攻击 / 防火墙 / 完整性 / Rootkit 检测"
+    ng_print_option "3" "🛰" "节点管理" "节点探测 / 本机健康快照 / 连通性检查"
+    ng_print_option "4" "♻️" "更新" "下载最新源码并重启"
     if ng_is_installed; then
-      ng_print_option "7" "🗑" "卸载" "从系统中移除 ServerHarbor"
+      ng_print_option "5" "🗑" "卸载" "从系统中移除 ServerHarbor"
     fi
     ng_print_option "0" "↩" "退出"
   fi
@@ -150,12 +146,10 @@ main() {
 
     case "${choice}" in
       1) ng_bootstrap_menu ;;
-      2) ng_probe_menu ;;
-      3) ng_security_menu ;;
-      4) ng_monitor_menu ;;
-      5) ng_network_menu ;;
-      6) ng_self_update ;;
-      7) ng_uninstall ;;
+      2) ng_security_menu ;;
+      3) ng_probe_menu ;;
+      4) ng_self_update ;;
+      5) ng_uninstall ;;
       0) exit 0 ;;
       *) ng_t invalid_option ;;
     esac

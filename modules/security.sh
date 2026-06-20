@@ -369,7 +369,7 @@ ng_security_menu() {
 
   while true; do
     if [[ "${NG_LANG}" == "en" ]]; then
-      ng_print_title_box "🛡 Security Guard" "Lightweight inspection and basic hardening"
+      ng_print_title_box "🛡 Security Guard" "Auth logs, web attacks, firewall, integrity and rootkit detection"
       ng_print_option "1" "📄" "Run security report" "Aggregate auth failures, web probes, ports and firewall state"
       ng_print_option "2" "🔍" "Show failed login statistics" "Count recent failed login source IPs"
       ng_print_option "3" "🌐" "Show suspicious web requests" "Inspect nginx access log for common attack patterns"
@@ -382,7 +382,7 @@ ng_security_menu() {
       ng_print_option "10" "📊" "Security score" "Calculate system security score"
       ng_print_option "0" "↩" "Back"
     else
-      ng_print_title_box "🛡 安全巡检" "轻量检查系统暴露面，并做基础加固"
+      ng_print_title_box "🛡 安全卫士" "认证日志、Web 攻击、防火墙、完整性与 Rootkit 检测"
       ng_print_option "1" "📄" "生成安全报告" "汇总认证失败、Web 探测、端口与防火墙状态"
       ng_print_option "2" "🔍" "查看失败登录统计" "统计近期失败登录来源 IP"
       ng_print_option "3" "🌐" "查看可疑 Web 请求" "检查 nginx 访问日志中的常见攻击特征"
