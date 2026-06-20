@@ -255,7 +255,11 @@ main() {
   extracted_root="$(extract_repo)"
   chmod +x "${extracted_root}/menu.sh"
   menu_exit_code=0
-  SERVERHARBOR_HOME="${DATA_ROOT}" SERVERHARBOR_LANG="${LANGUAGE}" SERVERHARBOR_RUNTIME="online" SERVERHARBOR_REFRESH_EXIT_CODE="${REFRESH_EXIT_CODE}" bash "${extracted_root}/menu.sh" "$@" || menu_exit_code=$?
+  set +e
+  SERVERHARBOR_HOME="${DATA_ROOT}" SERVERHARBOR_LANG="${LANGUAGE}" SERVERHARBOR_RUNTIME="online" SERVERHARBOR_REFRESH_EXIT_CODE="${REFRESH_EXIT_CODE}" bash "${extracted_root}/menu.sh" "$@"
+  menu_exit_code=$?
+  set -e
+  printf 'DEBUG: menu_exit_code=%s\n' "${menu_exit_code}" >&2
 
   if [[ "${menu_exit_code}" -eq "${REFRESH_EXIT_CODE}" ]]; then
     refresh_requested=1
