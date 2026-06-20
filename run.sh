@@ -259,16 +259,13 @@ main() {
   SERVERHARBOR_HOME="${DATA_ROOT}" SERVERHARBOR_LANG="${LANGUAGE}" SERVERHARBOR_RUNTIME="online" SERVERHARBOR_REFRESH_EXIT_CODE="${REFRESH_EXIT_CODE}" bash "${extracted_root}/menu.sh" "$@"
   menu_exit_code=$?
   set -e
-  printf 'DEBUG: menu_exit_code=%s\n' "${menu_exit_code}" >&2
 
   if [[ "${menu_exit_code}" -eq "${REFRESH_EXIT_CODE}" ]]; then
     refresh_requested=1
-    printf 'Refresh requested, restarting...\n'
   fi
 
   if [[ "${refresh_requested}" -eq 1 ]]; then
     export SERVERHARBOR_REFRESHING=1
-    printf 'DEBUG: Restarting with new source...\n' >&2
     bash -c 'exec bash <(curl -q -fsSL "https://raw.githubusercontent.com/sunnyhmz7010/ServerHarbor/main/run.sh?$(date +%s)")' "$@"
     exit $?
   fi

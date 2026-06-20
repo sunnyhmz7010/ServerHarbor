@@ -92,7 +92,6 @@ ng_self_update() {
   fi
 
   if ng_is_online_runtime; then
-    printf 'DEBUG: Exiting with code %s\n' "${SERVERHARBOR_REFRESH_EXIT_CODE:-42}" >&2
     exit "${SERVERHARBOR_REFRESH_EXIT_CODE:-42}"
   fi
 
