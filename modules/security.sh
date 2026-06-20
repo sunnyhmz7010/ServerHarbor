@@ -175,42 +175,105 @@ ng_integrity_verify() {
 }
 
 ng_security_report() {
-  local content
-
   if [[ "${NG_LANG}" == "en" ]]; then
-    content="$(
-      ng_report_title 'ServerHarbor Security Report'
-      ng_report_section 'Summary'
-      ng_report_kv 'Generated At' "$(ng_timestamp)"
-      ng_report_kv 'Host' "${NG_HOSTNAME}"
-      ng_report_section 'Failed Login Sources'
-      ng_scan_auth_failures
-      ng_report_section 'Suspicious Web Requests'
-      ng_scan_web_attacks
-      ng_report_section 'Listening Ports'
-      ss -lntp 2>/dev/null | sed -n '1,25p' || true
-      ng_report_section 'Firewall'
-      ng_firewall_summary
-    )"
+    ng_report_header "🛡 ServerHarbor Security Report"
+    ng_report_meta "Generated At" "$(ng_timestamp)"
+    ng_report_meta "Host" "${NG_HOSTNAME}"
+    ng_report_section_start "Failed Login Sources"
+    local auth_log=""
+    [[ -f /var/log/auth.log ]] && auth_log="/var/log/auth.log"
+    [[ -f /var/log/secure ]] && auth_log="/var/log/secure"
+    if [[ -n "${auth_log}" ]]; then
+      ng_report_kv_styled "Auth Log" "${auth_log}"
+      grep -Ei 'Failed password' "${auth_log}" 2>/dev/null | grep -Eo '([0-9]{1,3}\.){3}[0-9]{1,3}' | sort | uniq -c | sort -nr | head -5 | while IFS= read -r line; do
+        ng_report_line "  ${line}"
+      done || ng_report_line "  No failed login entries found."
+    else
+      ng_report_line "  No auth log found."
+    fi
+    ng_report_section_start "Suspicious Web Requests"
+    local access_log="/var/log/nginx/access.log"
+    if [[ -f "${access_log}" ]]; then
+      grep -Ei 'wp-admin|phpmyadmin|\.env|select.+from|union.+select' "${access_log}" 2>/dev/null | awk '{print $1}' | sort | uniq -c | sort -nr | head -5 | while IFS= read -r line; do
+        ng_report_line "  ${line}"
+      done || ng_report_line "  No suspicious requests found."
+    else
+      ng_report_line "  No nginx access log found."
+    fi
+    ng_report_section_start "Listening Ports"
+    ss -lntp 2>/dev/null | sed -n '1,15p' | while IFS= read -r line; do
+      ng_report_line "  ${line}"
+    done || true
+    ng_report_section_start "Firewall"
+    if command -v ufw >/dev/null 2>&1; then
+      ng_report_kv_styled "Backend" "ufw"
+      ufw status verbose 2>/dev/null | while IFS= read -r line; do
+        ng_report_line "  ${line}"
+      done || true
+    elif command -v firewall-cmd >/dev/null 2>&1; then
+      ng_report_kv_styled "Backend" "firewalld"
+      firewall-cmd --list-all 2>/dev/null | while IFS= read -r line; do
+        ng_report_line "  ${line}"
+      done || true
+    elif command -v iptables >/dev/null 2>&1; then
+      ng_report_kv_styled "Backend" "iptables"
+      iptables -L -n --line-numbers 2>/dev/null | sed -n '1,15p' | while IFS= read -r line; do
+        ng_report_line "  ${line}"
+      done || true
+    else
+      ng_report_line "  No firewall tool found."
+    fi
+    ng_report_footer
   else
-    content="$(
-      ng_report_title 'ServerHarbor 安全巡检报告'
-      ng_report_section '摘要'
-      ng_report_kv '生成时间' "$(ng_timestamp)"
-      ng_report_kv '主机' "${NG_HOSTNAME}"
-      ng_report_section '失败登录来源'
-      ng_scan_auth_failures
-      ng_report_section '可疑 Web 请求'
-      ng_scan_web_attacks
-      ng_report_section '监听端口'
-      ss -lntp 2>/dev/null | sed -n '1,25p' || true
-      ng_report_section '防火墙'
-      ng_firewall_summary
-    )"
+    ng_report_header "🛡 ServerHarbor 安全巡检报告"
+    ng_report_meta "生成时间" "$(ng_timestamp)"
+    ng_report_meta "主机" "${NG_HOSTNAME}"
+    ng_report_section_start "失败登录来源"
+    local auth_log=""
+    [[ -f /var/log/auth.log ]] && auth_log="/var/log/auth.log"
+    [[ -f /var/log/secure ]] && auth_log="/var/log/secure"
+    if [[ -n "${auth_log}" ]]; then
+      ng_report_kv_styled "日志文件" "${auth_log}"
+      grep -Ei 'Failed password' "${auth_log}" 2>/dev/null | grep -Eo '([0-9]{1,3}\.){3}[0-9]{1,3}' | sort | uniq -c | sort -nr | head -5 | while IFS= read -r line; do
+        ng_report_line "  ${line}"
+      done || ng_report_line "  未发现失败登录记录。"
+    else
+      ng_report_line "  未找到认证日志文件。"
+    fi
+    ng_report_section_start "可疑 Web 请求"
+    local access_log="/var/log/nginx/access.log"
+    if [[ -f "${access_log}" ]]; then
+      grep -Ei 'wp-admin|phpmyadmin|\.env|select.+from|union.+select' "${access_log}" 2>/dev/null | awk '{print $1}' | sort | uniq -c | sort -nr | head -5 | while IFS= read -r line; do
+        ng_report_line "  ${line}"
+      done || ng_report_line "  未发现可疑请求特征。"
+    else
+      ng_report_line "  未找到 nginx 访问日志。"
+    fi
+    ng_report_section_start "监听端口"
+    ss -lntp 2>/dev/null | sed -n '1,15p' | while IFS= read -r line; do
+      ng_report_line "  ${line}"
+    done || true
+    ng_report_section_start "防火墙"
+    if command -v ufw >/dev/null 2>&1; then
+      ng_report_kv_styled "后端" "ufw"
+      ufw status verbose 2>/dev/null | while IFS= read -r line; do
+        ng_report_line "  ${line}"
+      done || true
+    elif command -v firewall-cmd >/dev/null 2>&1; then
+      ng_report_kv_styled "后端" "firewalld"
+      firewall-cmd --list-all 2>/dev/null | while IFS= read -r line; do
+        ng_report_line "  ${line}"
+      done || true
+    elif command -v iptables >/dev/null 2>&1; then
+      ng_report_kv_styled "后端" "iptables"
+      iptables -L -n --line-numbers 2>/dev/null | sed -n '1,15p' | while IFS= read -r line; do
+        ng_report_line "  ${line}"
+      done || true
+    else
+      ng_report_line "  未找到防火墙工具。"
+    fi
+    ng_report_footer
   fi
-
-  ng_write_report "security" "${content}" >/dev/null
-  printf '%s\n' "${content}"
 }
 
 ng_rootkit_check() {
@@ -220,6 +283,36 @@ ng_rootkit_check() {
   else
     ng_print_header "Rootkit 检测"
     printf '检查常见 rootkit 和可疑文件...\n'
+  fi
+  
+  if command -v rkhunter >/dev/null 2>&1; then
+    if [[ "${NG_LANG}" == "en" ]]; then
+      printf 'Found rkhunter, running professional scan...\n'
+      rkhunter --check --skip-keypress --quiet 2>/dev/null || true
+    else
+      printf '检测到 rkhunter，运行专业扫描...\n'
+      rkhunter --check --skip-keypress --quiet 2>/dev/null || true
+    fi
+    return 0
+  fi
+  
+  if command -v chkrootkit >/dev/null 2>&1; then
+    if [[ "${NG_LANG}" == "en" ]]; then
+      printf 'Found chkrootkit, running professional scan...\n'
+      chkrootkit 2>/dev/null || true
+    else
+      printf '检测到 chkrootkit，运行专业扫描...\n'
+      chkrootkit 2>/dev/null || true
+    fi
+    return 0
+  fi
+  
+  if [[ "${NG_LANG}" == "en" ]]; then
+    printf 'No professional rootkit scanner found, running manual checks...\n'
+    printf 'Tip: Install rkhunter or chkrootkit for better detection.\n\n'
+  else
+    printf '未找到专业 rootkit 扫描器，运行手动检查...\n'
+    printf '提示: 安装 rkhunter 或 chkrootkit 可获得更好的检测效果。\n\n'
   fi
   
   local suspicious_files=(
@@ -259,14 +352,36 @@ ng_rootkit_check() {
   
   if [[ "${NG_LANG}" == "en" ]]; then
     printf '\nChecking for suspicious processes...\n'
-    ps aux | awk '{print $11}' | grep -E '^\.' | head -10 || true
+    ps aux --sort=-%cpu | head -10 || true
     printf '\nChecking for hidden files in /tmp...\n'
     find /tmp -name ".*" -type f 2>/dev/null | head -10 || true
+    printf '\nChecking for LD_PRELOAD hijacking...\n'
+    if [[ -f /etc/ld.so.preload ]]; then
+      printf '⚠️  Found /etc/ld.so.preload\n'
+      cat /etc/ld.so.preload
+    else
+      printf 'No LD_PRELOAD hijacking detected.\n'
+    fi
+    printf '\nChecking for suspicious crontab entries...\n'
+    for user in $(cut -f1 -d: /etc/passwd 2>/dev/null); do
+      crontab -l -u "${user}" 2>/dev/null | grep -E '^\*|^@|wget|curl|bash' && printf '  User: %s\n' "${user}"
+    done || true
   else
     printf '\n检查可疑进程...\n'
-    ps aux | awk '{print $11}' | grep -E '^\.' | head -10 || true
+    ps aux --sort=-%cpu | head -10 || true
     printf '\n检查 /tmp 目录中的隐藏文件...\n'
     find /tmp -name ".*" -type f 2>/dev/null | head -10 || true
+    printf '\n检查 LD_PRELOAD 劫持...\n'
+    if [[ -f /etc/ld.so.preload ]]; then
+      printf '⚠️  发现 /etc/ld.so.preload\n'
+      cat /etc/ld.so.preload
+    else
+      printf '未检测到 LD_PRELOAD 劫持。\n'
+    fi
+    printf '\n检查可疑 crontab 条目...\n'
+    for user in $(cut -f1 -d: /etc/passwd 2>/dev/null); do
+      crontab -l -u "${user}" 2>/dev/null | grep -E '^\*|^@|wget|curl|bash' && printf '  用户: %s\n' "${user}"
+    done || true
   fi
 }
 

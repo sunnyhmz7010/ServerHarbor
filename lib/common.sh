@@ -82,6 +82,9 @@ ng_init_environment() {
   : "${NG_DNS_SECONDARY:=8.8.8.8}"
   : "${NG_SWAP_SIZE_MB:=1024}"
   : "${NG_PROBE_TIMEOUT:=2}"
+  : "${NG_ALERT_CPU_THRESHOLD:=80}"
+  : "${NG_ALERT_MEM_THRESHOLD:=80}"
+  : "${NG_ALERT_DISK_THRESHOLD:=90}"
 }
 
 ng_init_theme() {
@@ -205,6 +208,47 @@ ng_report_kv() {
 
 ng_report_note() {
   printf '  %s\n' "$1"
+}
+
+ng_report_box() {
+  local width=68
+  printf '%s\n' "$(ng_color "${NG_C_PANEL}" "╔$(ng_repeat '═' "${width}")")"
+}
+
+ng_report_footer() {
+  local width=68
+  printf '%s\n' "$(ng_color "${NG_C_PANEL}" "╚$(ng_repeat '═' "${width}")")"
+}
+
+ng_report_header() {
+  local title="$1"
+  local width=68
+  printf '%s\n' "$(ng_color "${NG_C_PANEL}" "╔$(ng_repeat '═' "${width}")")"
+  printf '%s %s\n' "$(ng_color "${NG_C_PANEL}" "║")" "$(ng_color "${NG_C_BOLD}${NG_C_ACCENT}" "${title}")"
+  printf '%s\n' "$(ng_color "${NG_C_PANEL}" "╠$(ng_repeat '═' "${width}")")"
+}
+
+ng_report_meta() {
+  local key="$1"
+  local value="$2"
+  printf '%s %-10s %s\n' "$(ng_color "${NG_C_PANEL}" "║")" "$(ng_color "${NG_C_DIM}" "${key}")" "${value}"
+}
+
+ng_report_section_start() {
+  local title="$1"
+  local width=68
+  printf '%s\n' "$(ng_color "${NG_C_PANEL}" "╠$(ng_repeat '─' "${width}")")"
+  printf '%s %s\n' "$(ng_color "${NG_C_PANEL}" "║")" "$(ng_color "${NG_C_BOLD}" "${title}")"
+}
+
+ng_report_line() {
+  printf '%s %s\n' "$(ng_color "${NG_C_PANEL}" "║")" "$1"
+}
+
+ng_report_kv_styled() {
+  local key="$1"
+  local value="$2"
+  printf '%s %-14s %s\n' "$(ng_color "${NG_C_PANEL}" "║")" "$(ng_color "${NG_C_DIM}" "${key}")" "${value}"
 }
 
 ng_t() {

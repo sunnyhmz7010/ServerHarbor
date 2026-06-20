@@ -175,42 +175,43 @@ ng_harden_ssh() {
 }
 
 ng_bootstrap_report() {
-  local content
-
   if [[ "${NG_LANG}" == "en" ]]; then
-    content="$(
-      ng_report_title 'ServerHarbor Bootstrap Report'
-      ng_report_section 'Summary'
-      ng_report_kv 'Generated At' "$(ng_timestamp)"
-      ng_report_kv 'Host' "${NG_HOSTNAME}"
-      ng_report_kv 'Timezone' "${NG_TIMEZONE}"
-      ng_report_kv 'DNS' "${NG_DNS_PRIMARY}, ${NG_DNS_SECONDARY}"
-      ng_report_kv 'Swap Size' "${NG_SWAP_SIZE_MB}MB"
-      ng_report_kv 'Kernel BBR' "$(sysctl -n net.ipv4.tcp_congestion_control 2>/dev/null || echo unknown)"
-      ng_report_section 'Memory'
-      ng_memory_summary
-      ng_report_section 'Disk'
-      ng_disk_summary
-    )"
+    ng_report_header "🚀 ServerHarbor Bootstrap Report"
+    ng_report_meta "Generated At" "$(ng_timestamp)"
+    ng_report_meta "Host" "${NG_HOSTNAME}"
+    ng_report_section_start "System Configuration"
+    ng_report_kv_styled "Timezone" "${NG_TIMEZONE}"
+    ng_report_kv_styled "DNS" "${NG_DNS_PRIMARY}, ${NG_DNS_SECONDARY}"
+    ng_report_kv_styled "Swap Size" "${NG_SWAP_SIZE_MB}MB"
+    ng_report_kv_styled "Kernel BBR" "$(sysctl -n net.ipv4.tcp_congestion_control 2>/dev/null || echo unknown)"
+    ng_report_section_start "Memory"
+    free -h 2>/dev/null | while IFS= read -r line; do
+      ng_report_line "  ${line}"
+    done
+    ng_report_section_start "Disk"
+    df -hT 2>/dev/null | while IFS= read -r line; do
+      ng_report_line "  ${line}"
+    done
+    ng_report_footer
   else
-    content="$(
-      ng_report_title 'ServerHarbor 开荒报告'
-      ng_report_section '摘要'
-      ng_report_kv '生成时间' "$(ng_timestamp)"
-      ng_report_kv '主机' "${NG_HOSTNAME}"
-      ng_report_kv '时区' "${NG_TIMEZONE}"
-      ng_report_kv 'DNS' "${NG_DNS_PRIMARY}, ${NG_DNS_SECONDARY}"
-      ng_report_kv 'Swap 大小' "${NG_SWAP_SIZE_MB}MB"
-      ng_report_kv '当前拥塞控制' "$(sysctl -n net.ipv4.tcp_congestion_control 2>/dev/null || echo unknown)"
-      ng_report_section '内存'
-      ng_memory_summary
-      ng_report_section '磁盘'
-      ng_disk_summary
-    )"
+    ng_report_header "🚀 ServerHarbor 开荒报告"
+    ng_report_meta "生成时间" "$(ng_timestamp)"
+    ng_report_meta "主机" "${NG_HOSTNAME}"
+    ng_report_section_start "系统配置"
+    ng_report_kv_styled "时区" "${NG_TIMEZONE}"
+    ng_report_kv_styled "DNS" "${NG_DNS_PRIMARY}, ${NG_DNS_SECONDARY}"
+    ng_report_kv_styled "Swap 大小" "${NG_SWAP_SIZE_MB}MB"
+    ng_report_kv_styled "当前拥塞控制" "$(sysctl -n net.ipv4.tcp_congestion_control 2>/dev/null || echo unknown)"
+    ng_report_section_start "内存"
+    free -h 2>/dev/null | while IFS= read -r line; do
+      ng_report_line "  ${line}"
+    done
+    ng_report_section_start "磁盘"
+    df -hT 2>/dev/null | while IFS= read -r line; do
+      ng_report_line "  ${line}"
+    done
+    ng_report_footer
   fi
-
-  ng_write_report "bootstrap" "${content}" >/dev/null
-  printf '%s\n' "${content}"
 }
 
 ng_bootstrap_full() {

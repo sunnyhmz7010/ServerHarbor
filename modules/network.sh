@@ -67,6 +67,14 @@ ng_dns_lookup() {
   fi
 }
 
+ng_check_port() {
+  local host="$1"
+  local port="$2"
+  if timeout 1 bash -c "cat < /dev/null > /dev/tcp/${host}/${port}" >/dev/null 2>&1; then
+    printf '%d\n' "${port}"
+  fi
+}
+
 ng_port_scan() {
   local host="$1"
   local start_port="${2:-1}"
@@ -93,12 +101,26 @@ ng_port_scan() {
   if command -v nmap >/dev/null 2>&1; then
     nmap -p "${start_port}-${end_port}" "${host}"
   else
-    local port
-    for ((port=start_port; port<=end_port; port++)); do
-      if timeout 1 bash -c "cat < /dev/null > /dev/tcp/${host}/${port}" >/dev/null 2>&1; then
-        printf 'Port %d: open\n' "${port}"
+    export -f ng_check_port
+    local open_ports
+    open_ports="$(seq "${start_port}" "${end_port}" | xargs -P 50 -I {} bash -c "ng_check_port '${host}' {}" 2>/dev/null | sort -n)"
+    
+    if [[ -n "${open_ports}" ]]; then
+      if [[ "${NG_LANG}" == "en" ]]; then
+        printf 'Open ports found:\n'
+      else
+        printf '发现开放端口:\n'
       fi
-    done
+      echo "${open_ports}" | while IFS= read -r port; do
+        printf '  Port %s: open\n' "${port}"
+      done
+    else
+      if [[ "${NG_LANG}" == "en" ]]; then
+        printf 'No open ports found in range %d-%d.\n' "${start_port}" "${end_port}"
+      else
+        printf '在端口范围 %d-%d 内未发现开放端口。\n' "${start_port}" "${end_port}"
+      fi
+    fi
   fi
 }
 
@@ -159,42 +181,57 @@ ng_network_connections() {
 }
 
 ng_network_report() {
-  local content
-  
   if [[ "${NG_LANG}" == "en" ]]; then
-    content="$(
-      ng_report_title 'ServerHarbor Network Report'
-      ng_report_section 'Summary'
-      ng_report_kv 'Generated At' "$(ng_timestamp)"
-      ng_report_kv 'Host' "${NG_HOSTNAME}"
-      ng_report_section 'Network Interfaces'
-      ip addr show 2>/dev/null || ifconfig 2>/dev/null || printf 'No network interface tool available\n'
-      ng_report_section 'Routing Table'
-      ip route show 2>/dev/null || route -n 2>/dev/null || printf 'No routing tool available\n'
-      ng_report_section 'Listening Ports'
-      ss -lntp 2>/dev/null || netstat -tlnp 2>/dev/null || printf 'No socket tool available\n'
-      ng_report_section 'DNS Configuration'
-      cat /etc/resolv.conf 2>/dev/null || printf 'No resolv.conf found\n'
-    )"
+    ng_report_header "🌐 ServerHarbor Network Report"
+    ng_report_meta "Generated At" "$(ng_timestamp)"
+    ng_report_meta "Host" "${NG_HOSTNAME}"
+    ng_report_section_start "Network Interfaces"
+    ip addr show 2>/dev/null | while IFS= read -r line; do
+      ng_report_line "  ${line}"
+    done || ifconfig 2>/dev/null | while IFS= read -r line; do
+      ng_report_line "  ${line}"
+    done || ng_report_line "  No network interface tool available"
+    ng_report_section_start "Routing Table"
+    ip route show 2>/dev/null | while IFS= read -r line; do
+      ng_report_line "  ${line}"
+    done || route -n 2>/dev/null | while IFS= read -r line; do
+      ng_report_line "  ${line}"
+    done || ng_report_line "  No routing tool available"
+    ng_report_section_start "Listening Ports"
+    ss -lntp 2>/dev/null | sed -n '1,15p' | while IFS= read -r line; do
+      ng_report_line "  ${line}"
+    done || ng_report_line "  No socket tool available"
+    ng_report_section_start "DNS Configuration"
+    cat /etc/resolv.conf 2>/dev/null | while IFS= read -r line; do
+      ng_report_line "  ${line}"
+    done || ng_report_line "  No resolv.conf found"
+    ng_report_footer
   else
-    content="$(
-      ng_report_title 'ServerHarbor 网络报告'
-      ng_report_section '摘要'
-      ng_report_kv '生成时间' "$(ng_timestamp)"
-      ng_report_kv '主机' "${NG_HOSTNAME}"
-      ng_report_section '网络接口'
-      ip addr show 2>/dev/null || ifconfig 2>/dev/null || printf '无网络接口工具可用\n'
-      ng_report_section '路由表'
-      ip route show 2>/dev/null || route -n 2>/dev/null || printf '无路由工具可用\n'
-      ng_report_section '监听端口'
-      ss -lntp 2>/dev/null || netstat -tlnp 2>/dev/null || printf '无套接字工具可用\n'
-      ng_report_section 'DNS 配置'
-      cat /etc/resolv.conf 2>/dev/null || printf '未找到 resolv.conf\n'
-    )"
+    ng_report_header "🌐 ServerHarbor 网络报告"
+    ng_report_meta "生成时间" "$(ng_timestamp)"
+    ng_report_meta "主机" "${NG_HOSTNAME}"
+    ng_report_section_start "网络接口"
+    ip addr show 2>/dev/null | while IFS= read -r line; do
+      ng_report_line "  ${line}"
+    done || ifconfig 2>/dev/null | while IFS= read -r line; do
+      ng_report_line "  ${line}"
+    done || ng_report_line "  无网络接口工具可用"
+    ng_report_section_start "路由表"
+    ip route show 2>/dev/null | while IFS= read -r line; do
+      ng_report_line "  ${line}"
+    done || route -n 2>/dev/null | while IFS= read -r line; do
+      ng_report_line "  ${line}"
+    done || ng_report_line "  无路由工具可用"
+    ng_report_section_start "监听端口"
+    ss -lntp 2>/dev/null | sed -n '1,15p' | while IFS= read -r line; do
+      ng_report_line "  ${line}"
+    done || ng_report_line "  无套接字工具可用"
+    ng_report_section_start "DNS 配置"
+    cat /etc/resolv.conf 2>/dev/null | while IFS= read -r line; do
+      ng_report_line "  ${line}"
+    done || ng_report_line "  未找到 resolv.conf"
+    ng_report_footer
   fi
-  
-  ng_write_report "network" "${content}" >/dev/null
-  printf '%s\n' "${content}"
 }
 
 ng_network_diagnostics() {

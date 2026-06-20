@@ -45,7 +45,6 @@ ng_probe_single_peer() {
 
 ng_probe_all_peers() {
   local output_file="${NG_STATE_DIR}/${NG_HOSTNAME}-peers.state"
-  local report
 
   {
     printf 'Peer Alias       Peer Host                ICMP     SSH Port   Latency\n'
@@ -57,31 +56,36 @@ ng_probe_all_peers() {
   } | tee "${output_file}"
 
   if [[ "${NG_LANG}" == "en" ]]; then
-    report="$(
-      ng_report_title 'ServerHarbor Probe Report'
-      ng_report_section 'Summary'
-      ng_report_kv 'Generated At' "$(ng_timestamp)"
-      ng_report_kv 'Host' "${NG_HOSTNAME}"
-      ng_report_section 'Peer Matrix'
-      cat "${output_file}"
-      ng_report_section 'Local Snapshot'
-      cat "$(ng_collect_local_probe)"
-    )"
+    ng_report_header "🛰 ServerHarbor Probe Report"
+    ng_report_meta "Generated At" "$(ng_timestamp)"
+    ng_report_meta "Host" "${NG_HOSTNAME}"
+    ng_report_section_start "Peer Matrix"
+    cat "${output_file}" | while IFS= read -r line; do
+      ng_report_line "  ${line}"
+    done
+    ng_report_section_start "Local Snapshot"
+    local state_file
+    state_file="$(ng_collect_local_probe)"
+    cat "${state_file}" | while IFS= read -r line; do
+      ng_report_line "  ${line}"
+    done
+    ng_report_footer
   else
-    report="$(
-      ng_report_title 'ServerHarbor 节点探测报告'
-      ng_report_section '摘要'
-      ng_report_kv '生成时间' "$(ng_timestamp)"
-      ng_report_kv '主机' "${NG_HOSTNAME}"
-      ng_report_section '节点矩阵'
-      cat "${output_file}"
-      ng_report_section '本机快照'
-      cat "$(ng_collect_local_probe)"
-    )"
+    ng_report_header "🛰 ServerHarbor 节点探测报告"
+    ng_report_meta "生成时间" "$(ng_timestamp)"
+    ng_report_meta "主机" "${NG_HOSTNAME}"
+    ng_report_section_start "节点矩阵"
+    cat "${output_file}" | while IFS= read -r line; do
+      ng_report_line "  ${line}"
+    done
+    ng_report_section_start "本机快照"
+    local state_file
+    state_file="$(ng_collect_local_probe)"
+    cat "${state_file}" | while IFS= read -r line; do
+      ng_report_line "  ${line}"
+    done
+    ng_report_footer
   fi
-
-  ng_write_report "probe" "${report}" >/dev/null
-  printf '%s\n' "${report}"
 }
 
 ng_show_local_status() {
@@ -110,6 +114,34 @@ ng_show_local_status() {
   ss -lntp 2>/dev/null | sed -n '1,20p' || true
 }
 
+ng_local_health() {
+  local state_file
+  state_file="$(ng_collect_local_probe)"
+  
+  ng_report_header "本机健康状态"
+  ng_report_meta "主机名" "${NG_HOSTNAME}"
+  ng_report_meta "采集时间" "$(ng_timestamp)"
+  ng_report_section_start "系统信息"
+  ng_report_kv_styled "运行时长" "$(uptime -p 2>/dev/null || uptime)"
+  ng_report_kv_styled "系统负载" "$(ng_system_load)"
+  ng_report_section_start "资源使用"
+  ng_report_kv_styled "内存" "$(free -m 2>/dev/null | awk '/Mem:/ {printf "%s/%sMB (%.1f%%)", $3, $2, $3/$2*100}' || echo unknown)"
+  ng_report_kv_styled "磁盘 /" "$(df -h / 2>/dev/null | awk 'NR==2 {print $3"/"$2" ("$5")"}' || echo unknown)"
+  ng_report_section_start "网络端口"
+  ng_report_line "监听端口:"
+  ss -lntp 2>/dev/null | sed -n '1,15p' | while IFS= read -r line; do
+    ng_report_line "  ${line}"
+  done
+  ng_report_footer
+  printf '\n'
+  
+  if [[ "${NG_LANG}" == "en" ]]; then
+    printf 'State saved to: %s\n' "${state_file}"
+  else
+    printf '状态已保存至: %s\n' "${state_file}"
+  fi
+}
+
 ng_probe_menu() {
   local choice
 
@@ -117,14 +149,12 @@ ng_probe_menu() {
     if [[ "${NG_LANG}" == "en" ]]; then
       ng_print_title_box "🛰 Node Management" "Peer reachability and local health inspection"
       ng_print_option "1" "📡" "Probe all peers" "Check ICMP, SSH port and latency for configured peers"
-      ng_print_option "2" "🧾" "Collect local status snapshot" "Write the current local state into the state directory"
-      ng_print_option "3" "🩺" "Show local health" "Inspect uptime, load, memory, disk and listening ports"
+      ng_print_option "2" "🩺" "Local health status" "Collect and display local system status"
       ng_print_option "0" "↩" "Back"
     else
       ng_print_title_box "🛰 节点管理" "节点连通性检查与本机健康状态采集"
       ng_print_option "1" "📡" "探测所有节点" "检查已配置节点的 ICMP、SSH 端口和延迟"
-      ng_print_option "2" "🧾" "采集本机状态快照" "将当前本机状态写入 state 目录"
-      ng_print_option "3" "🩺" "查看本机健康状态" "检查运行时长、负载、内存、磁盘与监听端口"
+      ng_print_option "2" "🩺" "本机健康状态" "采集并展示本机系统状态"
       ng_print_option "0" "↩" "返回"
     fi
 
@@ -136,8 +166,7 @@ ng_probe_menu() {
 
     case "${choice}" in
       1) ng_probe_all_peers ;;
-      2) cat "$(ng_collect_local_probe)" ;;
-      3) ng_show_local_status ;;
+      2) ng_local_health ;;
       0) return 0 ;;
       *) ng_t invalid_option ;;
     esac

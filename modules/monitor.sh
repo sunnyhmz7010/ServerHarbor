@@ -94,54 +94,53 @@ ng_monitor_realtime() {
 }
 
 ng_monitor_report() {
-  local content
-  
   if [[ "${NG_LANG}" == "en" ]]; then
-    content="$(
-      ng_report_title 'ServerHarbor Monitor Report'
-      ng_report_section 'Summary'
-      ng_report_kv 'Generated At' "$(ng_timestamp)"
-      ng_report_kv 'Host' "${NG_HOSTNAME}"
-      ng_report_section 'System Resources'
-      ng_report_kv 'CPU Usage' "$(ng_cpu_usage)%"
-      ng_report_kv 'Memory Usage' "$(ng_memory_usage)%"
-      ng_report_kv 'Disk Usage' "$(ng_disk_usage)%"
-      ng_report_kv 'System Load' "$(ng_system_load)"
-      ng_report_kv 'Process Count' "$(ng_process_count)"
-      ng_report_kv 'TCP Connections' "$(ng_tcp_connection_count)"
-      ng_report_section 'Top CPU Processes'
-      ps aux --sort=-%cpu | head -6
-      ng_report_section 'Top Memory Processes'
-      ps aux --sort=-%mem | head -6
-    )"
+    ng_report_header "📊 ServerHarbor Monitor Report"
+    ng_report_meta "Generated At" "$(ng_timestamp)"
+    ng_report_meta "Host" "${NG_HOSTNAME}"
+    ng_report_section_start "System Resources"
+    ng_report_kv_styled "CPU Usage" "$(ng_cpu_usage)%"
+    ng_report_kv_styled "Memory Usage" "$(ng_memory_usage)%"
+    ng_report_kv_styled "Disk Usage" "$(ng_disk_usage)%"
+    ng_report_kv_styled "System Load" "$(ng_system_load)"
+    ng_report_kv_styled "Process Count" "$(ng_process_count)"
+    ng_report_kv_styled "TCP Connections" "$(ng_tcp_connection_count)"
+    ng_report_section_start "Top CPU Processes"
+    ps aux --sort=-%cpu | head -6 | while IFS= read -r line; do
+      ng_report_line "  ${line}"
+    done
+    ng_report_section_start "Top Memory Processes"
+    ps aux --sort=-%mem | head -6 | while IFS= read -r line; do
+      ng_report_line "  ${line}"
+    done
+    ng_report_footer
   else
-    content="$(
-      ng_report_title 'ServerHarbor 系统监控报告'
-      ng_report_section '摘要'
-      ng_report_kv '生成时间' "$(ng_timestamp)"
-      ng_report_kv '主机' "${NG_HOSTNAME}"
-      ng_report_section '系统资源'
-      ng_report_kv 'CPU 使用率' "$(ng_cpu_usage)%"
-      ng_report_kv '内存使用率' "$(ng_memory_usage)%"
-      ng_report_kv '磁盘使用率' "$(ng_disk_usage)%"
-      ng_report_kv '系统负载' "$(ng_system_load)"
-      ng_report_kv '进程数量' "$(ng_process_count)"
-      ng_report_kv 'TCP 连接数' "$(ng_tcp_connection_count)"
-      ng_report_section 'CPU 占用前 5 进程'
-      ps aux --sort=-%cpu | head -6
-      ng_report_section '内存占用前 5 进程'
-      ps aux --sort=-%mem | head -6
-    )"
+    ng_report_header "📊 ServerHarbor 系统监控报告"
+    ng_report_meta "生成时间" "$(ng_timestamp)"
+    ng_report_meta "主机" "${NG_HOSTNAME}"
+    ng_report_section_start "系统资源"
+    ng_report_kv_styled "CPU 使用率" "$(ng_cpu_usage)%"
+    ng_report_kv_styled "内存使用率" "$(ng_memory_usage)%"
+    ng_report_kv_styled "磁盘使用率" "$(ng_disk_usage)%"
+    ng_report_kv_styled "系统负载" "$(ng_system_load)"
+    ng_report_kv_styled "进程数量" "$(ng_process_count)"
+    ng_report_kv_styled "TCP 连接数" "$(ng_tcp_connection_count)"
+    ng_report_section_start "CPU 占用前 5 进程"
+    ps aux --sort=-%cpu | head -6 | while IFS= read -r line; do
+      ng_report_line "  ${line}"
+    done
+    ng_report_section_start "内存占用前 5 进程"
+    ps aux --sort=-%mem | head -6 | while IFS= read -r line; do
+      ng_report_line "  ${line}"
+    done
+    ng_report_footer
   fi
-  
-  ng_write_report "monitor" "${content}" >/dev/null
-  printf '%s\n' "${content}"
 }
 
 ng_monitor_alert() {
-  local cpu_threshold="${1:-80}"
-  local mem_threshold="${2:-80}"
-  local disk_threshold="${3:-90}"
+  local cpu_threshold="${NG_ALERT_CPU_THRESHOLD:-80}"
+  local mem_threshold="${NG_ALERT_MEM_THRESHOLD:-80}"
+  local disk_threshold="${NG_ALERT_DISK_THRESHOLD:-90}"
   local alerts=()
   
   local cpu_usage mem_usage disk_usage
@@ -236,30 +235,42 @@ ng_monitor_menu() {
       5)
         local cpu_thresh mem_thresh disk_thresh
         if [[ "${NG_LANG}" == "en" ]]; then
-          printf 'CPU threshold (%%, default 80): '
+          printf 'CPU threshold (%%, current: %s): ' "${NG_ALERT_CPU_THRESHOLD}"
         else
-          printf 'CPU 阈值（%%，默认 80）: '
+          printf 'CPU 阈值（%%，当前: %s）: ' "${NG_ALERT_CPU_THRESHOLD}"
         fi
         ng_read_line cpu_thresh || return 130
-        cpu_thresh="${cpu_thresh:-80}"
+        cpu_thresh="${cpu_thresh:-${NG_ALERT_CPU_THRESHOLD}}"
         
         if [[ "${NG_LANG}" == "en" ]]; then
-          printf 'Memory threshold (%%, default 80): '
+          printf 'Memory threshold (%%, current: %s): ' "${NG_ALERT_MEM_THRESHOLD}"
         else
-          printf '内存阈值（%%，默认 80）: '
+          printf '内存阈值（%%，当前: %s）: ' "${NG_ALERT_MEM_THRESHOLD}"
         fi
         ng_read_line mem_thresh || return 130
-        mem_thresh="${mem_thresh:-80}"
+        mem_thresh="${mem_thresh:-${NG_ALERT_MEM_THRESHOLD}}"
         
         if [[ "${NG_LANG}" == "en" ]]; then
-          printf 'Disk threshold (%%, default 90): '
+          printf 'Disk threshold (%%, current: %s): ' "${NG_ALERT_DISK_THRESHOLD}"
         else
-          printf '磁盘阈值（%%，默认 90）: '
+          printf '磁盘阈值（%%，当前: %s）: ' "${NG_ALERT_DISK_THRESHOLD}"
         fi
         ng_read_line disk_thresh || return 130
-        disk_thresh="${disk_thresh:-90}"
+        disk_thresh="${disk_thresh:-${NG_ALERT_DISK_THRESHOLD}}"
         
-        ng_monitor_alert "${cpu_thresh}" "${mem_thresh}" "${disk_thresh}"
+        NG_ALERT_CPU_THRESHOLD="${cpu_thresh}"
+        NG_ALERT_MEM_THRESHOLD="${mem_thresh}"
+        NG_ALERT_DISK_THRESHOLD="${disk_thresh}"
+        
+        sed -i "s/^NG_ALERT_CPU_THRESHOLD=.*/NG_ALERT_CPU_THRESHOLD=\"${cpu_thresh}\"/" "${NG_CONFIG_FILE}" 2>/dev/null || true
+        sed -i "s/^NG_ALERT_MEM_THRESHOLD=.*/NG_ALERT_MEM_THRESHOLD=\"${mem_thresh}\"/" "${NG_CONFIG_FILE}" 2>/dev/null || true
+        sed -i "s/^NG_ALERT_DISK_THRESHOLD=.*/NG_ALERT_DISK_THRESHOLD=\"${disk_thresh}\"/" "${NG_CONFIG_FILE}" 2>/dev/null || true
+        
+        if [[ "${NG_LANG}" == "en" ]]; then
+          ng_log "INFO" "Alert thresholds saved: CPU=${cpu_thresh}%, MEM=${mem_thresh}%, DISK=${disk_thresh}%"
+        else
+          ng_log "INFO" "告警阈值已保存: CPU=${cpu_thresh}%, 内存=${mem_thresh}%, 磁盘=${disk_thresh}%"
+        fi
         ;;
       0) return 0 ;;
       *) ng_t invalid_option ;;
