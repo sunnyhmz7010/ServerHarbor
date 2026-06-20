@@ -26,17 +26,11 @@ select_language() {
     return 0
   fi
 
-  # If stdin is not a terminal (piped), use default language
-  if [[ ! -t 0 ]]; then
-    LANGUAGE="zh"
-    return 0
-  fi
-
   printf 'Choose language / 选择语言:\n'
   printf '  1. 中文\n'
   printf '  2. English\n'
   printf 'Select [1/2, default/默认: 1] / 请选择：'
-  if ! IFS= read -r choice; then
+  if ! IFS= read -r choice < /dev/tty; then
     LANGUAGE="zh"
     return 0
   fi
@@ -153,12 +147,8 @@ require_cmd() {
 confirm() {
   local answer
   t continue
-  if [[ ! -t 0 ]]; then
-    printf '\n'
-    return 0
-  fi
-  if ! IFS= read -r answer; then
-    return 0
+  if ! IFS= read -r answer < /dev/tty; then
+    return 130
   fi
   [[ -z "${answer}" || "${answer}" =~ ^[Yy]([Ee][Ss])?$ ]]
 }
