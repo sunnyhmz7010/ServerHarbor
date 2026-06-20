@@ -89,6 +89,26 @@ show_banner() {
   printf '\n'
 }
 
+ng_is_installed() {
+  [[ -f "/opt/serverharbor/.serverharbor-install" ]]
+}
+
+ng_uninstall() {
+  local uninstaller="${PROJECT_ROOT}/uninstall.sh"
+
+  if [[ ! -f "${uninstaller}" ]]; then
+    if [[ "${NG_LANG}" == "en" ]]; then
+      ng_log "ERROR" "uninstall.sh not found."
+    else
+      ng_log "ERROR" "未找到 uninstall.sh。"
+    fi
+    return 1
+  fi
+
+  chmod +x "${uninstaller}" 2>/dev/null || true
+  bash "${uninstaller}"
+}
+
 show_menu() {
   if [[ "${NG_LANG}" == "en" ]]; then
     ng_print_option "1" "🚀" "Server bootstrap" "DNS / swap / BBR / base packages / SSH hardening"
@@ -97,6 +117,9 @@ show_menu() {
     ng_print_option "4" "📊" "System monitor" "Real-time CPU, memory, disk monitoring and alerts"
     ng_print_option "5" "🌐" "Network tools" "Ping, traceroute, DNS lookup, port scan, bandwidth test"
     ng_print_option "6" "♻️" "Update" "Download latest source and restart"
+    if ng_is_installed; then
+      ng_print_option "7" "🗑" "Uninstall" "Remove ServerHarbor from this system"
+    fi
     ng_print_option "0" "↩" "Exit"
   else
     ng_print_option "1" "🚀" "新服务器开荒" "DNS / swap / BBR / 基础软件 / SSH 加固"
@@ -105,6 +128,9 @@ show_menu() {
     ng_print_option "4" "📊" "系统监控" "实时 CPU、内存、磁盘监控与告警"
     ng_print_option "5" "🌐" "网络工具" "Ping、路由追踪、DNS 查询、端口扫描、带宽测试"
     ng_print_option "6" "♻️" "更新" "下载最新源码并重启"
+    if ng_is_installed; then
+      ng_print_option "7" "🗑" "卸载" "从系统中移除 ServerHarbor"
+    fi
     ng_print_option "0" "↩" "退出"
   fi
 
@@ -129,6 +155,7 @@ main() {
       4) ng_monitor_menu ;;
       5) ng_network_menu ;;
       6) ng_self_update ;;
+      7) ng_uninstall ;;
       0) exit 0 ;;
       *) ng_t invalid_option ;;
     esac
