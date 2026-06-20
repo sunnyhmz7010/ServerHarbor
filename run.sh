@@ -264,7 +264,10 @@ main() {
 
   if [[ "${refresh_requested}" -eq 1 ]]; then
     export SERVERHARBOR_REFRESHING=1
+    printf 'DEBUG: About to exec bash %s\n' "$0" >&2
     exec bash "$0" "$@"
+    printf 'DEBUG: exec failed!\n' >&2
+    exit 1
   fi
 
   if confirm_remove_data; then
