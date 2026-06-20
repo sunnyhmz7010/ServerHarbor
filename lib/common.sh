@@ -6,7 +6,18 @@ NG_PROJECT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 NG_MODULE_DIR="${NG_PROJECT_ROOT}/modules"
 NG_HOSTNAME="$(hostname 2>/dev/null || echo unknown-host)"
 NG_PROJECT_NAME="ServerHarbor"
-NG_DATA_ROOT="${SERVERHARBOR_HOME:-${XDG_CONFIG_HOME:-${HOME}/.config}/serverharbor}"
+NG_INSTALL_ROOT="/opt/serverharbor"
+NG_INSTALL_DATA="${NG_INSTALL_ROOT}/data"
+NG_ONLINE_DATA="${SERVERHARBOR_HOME:-${XDG_CONFIG_HOME:-${HOME}/.config}/serverharbor}"
+
+if [[ -f "${NG_INSTALL_ROOT}/.serverharbor-install" ]]; then
+  NG_RUNTIME_MODE="installed"
+  NG_DATA_ROOT="${NG_INSTALL_DATA}"
+else
+  NG_RUNTIME_MODE="online"
+  NG_DATA_ROOT="${NG_ONLINE_DATA}"
+fi
+
 NG_LANG="${SERVERHARBOR_LANG:-zh}"
 NG_CONFIG_DIR="${NG_DATA_ROOT}/config"
 NG_LOG_DIR="${NG_DATA_ROOT}/logs"
@@ -30,9 +41,34 @@ NG_C_ERR=""
 NG_C_PANEL=""
 NG_C_PANEL_2=""
 
+ng_migrate_config() {
+  local source_dir=""
+  local target_dir="${NG_DATA_ROOT}"
+
+  if [[ "${NG_RUNTIME_MODE}" == "installed" ]] && [[ -d "${NG_ONLINE_DATA}/config" ]]; then
+    source_dir="${NG_ONLINE_DATA}"
+  fi
+
+  if [[ -z "${source_dir}" ]]; then
+    return 0
+  fi
+
+  if [[ ! -f "${target_dir}/config/app.conf" ]] && [[ -f "${source_dir}/config/app.conf" ]]; then
+    if [[ "${NG_LANG}" == "en" ]]; then
+      printf 'Migrating config from %s to %s\n' "${source_dir}" "${target_dir}"
+    else
+      printf '正在迁移配置文件从 %s 到 %s\n' "${source_dir}" "${target_dir}"
+    fi
+    mkdir -p "${target_dir}/config" "${target_dir}/state"
+    cp -n "${source_dir}/config/"*.conf "${target_dir}/config/" 2>/dev/null || true
+    cp -n "${source_dir}/state/"* "${target_dir}/state/" 2>/dev/null || true
+  fi
+}
+
 ng_init_environment() {
   mkdir -p "${NG_CONFIG_DIR}" "${NG_LOG_DIR}" "${NG_REPORT_DIR}" "${NG_STATE_DIR}" "${NG_TMP_DIR}"
 
+  ng_migrate_config
   ng_init_theme
   ng_seed_default_configs
 
