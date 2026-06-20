@@ -36,14 +36,12 @@ ng_self_update_confirm() {
       printf '  1. Download the latest source archive from GitHub\n'
       printf '  2. Restart the current online session with the same data directory\n'
       printf '  3. Keep your existing configuration and reports\n'
-      printf '  4. Do not write /opt or shortcut commands\n'
       printf 'Continue with online refresh? [Y/n]: '
     else
       printf '在线更新将执行以下操作：\n'
       printf '  1. 从 GitHub 下载最新源码压缩包\n'
       printf '  2. 使用相同数据目录重启当前在线会话\n'
       printf '  3. 保留现有配置与报告\n'
-      printf '  4. 不写入 /opt，也不写入快捷命令\n'
       printf '是否继续在线更新？[Y/n]: '
     fi
   else
