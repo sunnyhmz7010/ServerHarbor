@@ -50,11 +50,11 @@ t() {
         missing_cmd) printf 'Missing required command: %s\n' "$2" ;;
         continue) printf 'Continue? [Y/n]: ' ;;
         plan_title) printf '%s will perform these actions:\n' "${PROJECT_NAME}" ;;
-        plan_dep) printf '  1. Dependency status: %s\n' "$2" ;;
-        plan_download) printf '  2. Download source archive from %s\n' "${ARCHIVE_URL}" ;;
-        plan_data) printf '  3. Create or preserve data under %s\n' "${DATA_ROOT}" ;;
-        plan_launcher) printf '  4. Write managed launcher %s\n' "${BIN_PATH}" ;;
-        plan_manifest) printf '  5. Write install manifest %s\n' "${MANIFEST_PATH}" ;;
+        plan_dep) printf '  5. Dependency status: %s\n' "$2" ;;
+        plan_download) printf '  1. Download source archive from %s\n' "${ARCHIVE_URL}" ;;
+        plan_data) printf '  2. Create or preserve data under %s\n' "${DATA_ROOT}" ;;
+        plan_launcher) printf '  3. Write managed launcher %s\n' "${BIN_PATH}" ;;
+        plan_manifest) printf '  4. Write install manifest %s\n' "${MANIFEST_PATH}" ;;
         dep_ok) printf 'curl and tar already installed' ;;
         dep_missing) printf 'curl or tar missing' ;;
         dep_installing) printf 'curl or tar not found. Attempting to install via %s...\n' "$2" ;;
@@ -88,11 +88,11 @@ t() {
         missing_cmd) printf '缺少必要命令：%s\n' "$2" ;;
         continue) printf '是否继续？[Y/n]: ' ;;
         plan_title) printf '%s 将执行以下操作：\n' "${PROJECT_NAME}" ;;
-        plan_dep) printf '  1. 依赖状态：%s\n' "$2" ;;
-        plan_download) printf '  2. 从 %s 下载源码压缩包\n' "${ARCHIVE_URL}" ;;
-        plan_data) printf '  3. 创建或保留数据目录 %s\n' "${DATA_ROOT}" ;;
-        plan_launcher) printf '  4. 写入受管快捷命令 %s\n' "${BIN_PATH}" ;;
-        plan_manifest) printf '  5. 写入安装清单 %s\n' "${MANIFEST_PATH}" ;;
+        plan_dep) printf '  5. 依赖状态：%s\n' "$2" ;;
+        plan_download) printf '  1. 从 %s 下载源码压缩包\n' "${ARCHIVE_URL}" ;;
+        plan_data) printf '  2. 创建或保留数据目录 %s\n' "${DATA_ROOT}" ;;
+        plan_launcher) printf '  3. 写入受管快捷命令 %s\n' "${BIN_PATH}" ;;
+        plan_manifest) printf '  4. 写入安装清单 %s\n' "${MANIFEST_PATH}" ;;
         dep_ok) printf 'curl 和 tar 已安装' ;;
         dep_missing) printf '缺少 curl 或 tar' ;;
         dep_installing) printf '未找到 curl 或 tar，正在尝试通过 %s 安装...\n' "$2" ;;
@@ -176,11 +176,11 @@ print_install_plan() {
   fi
 
   t plan_title
-  t plan_dep "${dep_note}"
   t plan_download
   t plan_data
   t plan_launcher
   t plan_manifest
+  t plan_dep "${dep_note}"
 }
 
 ensure_fetch_tools_installed() {
