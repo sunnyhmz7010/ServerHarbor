@@ -357,7 +357,7 @@ main() {
   validate_existing_launcher
 
   if is_managed_install; then
-    exec bash "${APP_ROOT}/menu.sh"
+    exec bash "${APP_ROOT}/menu.sh" < /dev/tty
   fi
 
   print_install_plan
