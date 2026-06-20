@@ -12,6 +12,10 @@ source "${PROJECT_ROOT}/modules/bootstrap.sh"
 source "${PROJECT_ROOT}/modules/probe.sh"
 # shellcheck source=modules/security.sh
 source "${PROJECT_ROOT}/modules/security.sh"
+# shellcheck source=modules/monitor.sh
+source "${PROJECT_ROOT}/modules/monitor.sh"
+# shellcheck source=modules/network.sh
+source "${PROJECT_ROOT}/modules/network.sh"
 
 ng_init_environment
 
@@ -140,20 +144,24 @@ show_menu() {
     ng_print_option "1" "🚀" "Server bootstrap" "DNS / swap / BBR / base packages / SSH hardening"
     ng_print_option "2" "🛰" "Peer probe and health report" "Local snapshot and peer reachability checks"
     ng_print_option "3" "🛡" "Security audit and hardening" "Auth logs, suspicious traffic, firewall and integrity checks"
+    ng_print_option "4" "📊" "System monitor" "Real-time CPU, memory, disk monitoring and alerts"
+    ng_print_option "5" "🌐" "Network tools" "Ping, traceroute, DNS lookup, port scan, bandwidth test"
     if ng_is_online_runtime; then
-      ng_print_option "4" "♻️" "Refresh online session" "Re-download latest source and restart this temporary session"
+      ng_print_option "6" "♻️" "Refresh online session" "Re-download latest source and restart this temporary session"
     else
-      ng_print_option "4" "♻️" "Update ServerHarbor" "Run managed installer update without replacing your data root"
+      ng_print_option "6" "♻️" "Update ServerHarbor" "Run managed installer update without replacing your data root"
     fi
     ng_print_option "0" "↩" "Exit"
   else
     ng_print_option "1" "🚀" "新服务器开荒" "DNS / swap / BBR / 基础软件 / SSH 加固"
     ng_print_option "2" "🛰" "节点探测与健康报告" "本机快照与节点连通性检查"
     ng_print_option "3" "🛡" "安全巡检与基础加固" "认证日志、可疑流量、防火墙与完整性校验"
+    ng_print_option "4" "📊" "系统监控" "实时 CPU、内存、磁盘监控与告警"
+    ng_print_option "5" "🌐" "网络工具" "Ping、路由追踪、DNS 查询、端口扫描、带宽测试"
     if ng_is_online_runtime; then
-      ng_print_option "4" "♻️" "在线更新当前会话" "重新拉取最新源码并重启当前临时会话"
+      ng_print_option "6" "♻️" "在线更新当前会话" "重新拉取最新源码并重启当前临时会话"
     else
-      ng_print_option "4" "♻️" "更新 ServerHarbor" "调用受管安装器更新代码，不覆盖数据目录"
+      ng_print_option "6" "♻️" "更新 ServerHarbor" "调用受管安装器更新代码，不覆盖数据目录"
     fi
     ng_print_option "0" "↩" "退出"
   fi
@@ -176,7 +184,9 @@ main() {
       1) ng_bootstrap_menu ;;
       2) ng_probe_menu ;;
       3) ng_security_menu ;;
-      4) ng_self_update ;;
+      4) ng_monitor_menu ;;
+      5) ng_network_menu ;;
+      6) ng_self_update ;;
       0) exit 0 ;;
       *) ng_t invalid_option ;;
     esac
