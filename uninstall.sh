@@ -34,12 +34,23 @@ leave_critical_section() {
 
 confirm() {
   local answer
-  printf 'This will remove:\n'
-  printf '  - %s\n' "${BIN_PATH}"
-  printf '  - %s\n' "${APP_ROOT}"
-  printf '  - %s\n' "${DATA_ROOT}"
-  printf '  - %s\n' "${MANIFEST_PATH}"
-  printf 'Continue? [y/N]: '
+  local lang="${SERVERHARBOR_LANG:-zh}"
+  
+  if [[ "${lang}" == "en" ]]; then
+    printf 'This will remove:\n'
+    printf '  - %s\n' "${BIN_PATH}"
+    printf '  - %s\n' "${APP_ROOT}"
+    printf '  - %s\n' "${DATA_ROOT}"
+    printf '  - %s\n' "${MANIFEST_PATH}"
+    printf 'Continue? [y/N]: '
+  else
+    printf '将删除以下内容：\n'
+    printf '  - %s\n' "${BIN_PATH}"
+    printf '  - %s\n' "${APP_ROOT}"
+    printf '  - %s\n' "${DATA_ROOT}"
+    printf '  - %s\n' "${MANIFEST_PATH}"
+    printf '是否继续？[y/N]: '
+  fi
   read -r answer < /dev/tty
   [[ "${answer}" =~ ^[Yy]([Ee][Ss])?$ ]]
 }
