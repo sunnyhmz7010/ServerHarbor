@@ -65,7 +65,10 @@ ng_self_update_confirm() {
 
 ng_self_update() {
   local installer="${PROJECT_ROOT}/install.sh"
-  local answer=""
+
+  if ng_is_online_runtime; then
+    exit "${SERVERHARBOR_REFRESH_EXIT_CODE:-42}"
+  fi
 
   if [[ ! -f "${installer}" ]]; then
     if [[ "${NG_LANG}" == "en" ]]; then
@@ -77,6 +80,7 @@ ng_self_update() {
   fi
 
   ng_self_update_confirm
+  local answer=""
   if ! ng_read_line answer; then
     return 130
   fi
@@ -87,10 +91,6 @@ ng_self_update() {
       ng_log "WARN" "已取消更新。"
     fi
     return 0
-  fi
-
-  if ng_is_online_runtime; then
-    exit "${SERVERHARBOR_REFRESH_EXIT_CODE:-42}"
   fi
 
   chmod +x "${installer}" 2>/dev/null || true
