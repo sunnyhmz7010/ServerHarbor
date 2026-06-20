@@ -233,14 +233,22 @@ main() {
   local refresh_requested=0
 
   trap handle_preflight_interrupt INT
-  select_language || exit $?
-  persist_language
-  trap handle_interrupt INT
-  require_cmd bash
-  print_run_plan
-  if ! confirm; then
-    exit 130
+  
+  # Skip language selection and confirmation if this is a refresh
+  if [[ "${SERVERHARBOR_REFRESHING:-}" != "1" ]]; then
+    select_language || exit $?
+    persist_language
+    trap handle_interrupt INT
+    require_cmd bash
+    print_run_plan
+    if ! confirm; then
+      exit 130
+    fi
+  else
+    trap handle_interrupt INT
+    require_cmd bash
   fi
+  
   ensure_fetch_tools_installed
 
   t fetching
@@ -255,7 +263,7 @@ main() {
   fi
 
   if [[ "${refresh_requested}" -eq 1 ]]; then
-    exec bash "$0" "$@"
+    SERVERHARBOR_REFRESHING=1 exec bash "$0" "$@"
   fi
 
   if confirm_remove_data; then
