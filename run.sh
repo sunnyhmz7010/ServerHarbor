@@ -263,7 +263,8 @@ main() {
   fi
 
   if [[ "${refresh_requested}" -eq 1 ]]; then
-    SERVERHARBOR_REFRESHING=1 exec bash "$0" "$@"
+    export SERVERHARBOR_REFRESHING=1
+    exec bash "$0" "$@"
   fi
 
   if confirm_remove_data; then
