@@ -26,14 +26,19 @@ select_language() {
     return 0
   fi
 
+  # If stdin is not a terminal (piped), use default language
+  if [[ ! -t 0 ]]; then
+    LANGUAGE="zh"
+    return 0
+  fi
+
   printf 'Choose language / 选择语言:\n'
   printf '  1. 中文\n'
   printf '  2. English\n'
   printf 'Select [1/2, default/默认: 1] / 请选择：'
   if ! IFS= read -r choice; then
-    printf '\n'
-    printf 'Cancelled / 已取消\n' >&2
-    return 130
+    LANGUAGE="zh"
+    return 0
   fi
 
   case "${choice}" in
@@ -148,11 +153,14 @@ require_cmd() {
 confirm() {
   local answer
   t continue
-  if ! IFS= read -r answer; then
-    t cancelled
-    return 130
+  if [[ ! -t 0 ]]; then
+    printf '\n'
+    return 0
   fi
-  [[ "${answer}" =~ ^[Yy]([Ee][Ss])?$ ]]
+  if ! IFS= read -r answer; then
+    return 0
+  fi
+  [[ -z "${answer}" || "${answer}" =~ ^[Yy]([Ee][Ss])?$ ]]
 }
 
 detect_pkg_manager() {
