@@ -73,8 +73,13 @@ ng_init_environment() {
   ng_seed_default_configs
 
   if [[ -f "${NG_CONFIG_FILE}" ]]; then
-    # shellcheck disable=SC1090
-    source "${NG_CONFIG_FILE}"
+    # Basic config file validation - only allow KEY=VALUE patterns
+    if grep -qPv '^\s*(#|$|[A-Z_]+=)' "${NG_CONFIG_FILE}" 2>/dev/null; then
+      ng_log "WARN" "Config file contains unexpected syntax. Using defaults."
+    else
+      # shellcheck disable=SC1090
+      source "${NG_CONFIG_FILE}"
+    fi
   fi
 
   : "${NG_TIMEZONE:=Asia/Shanghai}"
@@ -451,6 +456,13 @@ ng_service_state() {
   else
     echo "unknown"
   fi
+}
+
+ng_validate_integer() {
+  local value="$1"
+  local min="${2:-0}"
+  local max="${3:-999999}"
+  [[ "${value}" =~ ^[0-9]+$ ]] && (( value >= min && value <= max ))
 }
 
 

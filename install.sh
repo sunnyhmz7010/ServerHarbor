@@ -343,10 +343,30 @@ seed_data_root() {
   done
 }
 
+LOCK_FILE="/tmp/.serverharbor-install.lock"
+
+acquire_lock() {
+  local lock_fd=9
+  eval "exec ${lock_fd}> \"${LOCK_FILE}\""
+  if ! flock -n "${lock_fd}" 2>/dev/null; then
+    printf 'Another install/uninstall process is running. Aborting.\n' >&2
+    exit 1
+  fi
+}
+
+cleanup() {
+  rm -f "${ARCHIVE_PATH}"
+  rm -rf "${EXTRACT_DIR}"
+  rm -f "${LOCK_FILE}"
+}
+
 main() {
   local already_installed=0
   local extracted_root=""
   local update_mode=0
+
+  # Set up EXIT trap for cleanup
+  trap cleanup EXIT
 
   if [[ "${1:-}" == "--update" ]]; then
     update_mode=1
@@ -357,6 +377,7 @@ main() {
   trap handle_interrupt INT
   require_root
   require_cmd bash
+  acquire_lock
 
   validate_existing_install_root
   validate_existing_launcher
@@ -386,7 +407,10 @@ main() {
   fi
 
   mkdir -p "$(dirname "${BIN_PATH}")"
-  rm -rf "${APP_ROOT}"
+  # Defensive check before rm -rf
+  if [[ -n "${APP_ROOT}" && -d "${APP_ROOT}" ]]; then
+    rm -rf "${APP_ROOT}"
+  fi
   mkdir -p "${INSTALL_ROOT}"
   cp -R "${extracted_root}" "${APP_ROOT}"
   chmod +x "${APP_ROOT}/menu.sh" "${APP_ROOT}/run.sh" "${APP_ROOT}/install.sh" "${APP_ROOT}/uninstall.sh"

@@ -80,6 +80,34 @@ ng_port_scan() {
   local start_port="${2:-1}"
   local end_port="${3:-1024}"
   
+  # Validate port numbers
+  if ! ng_validate_integer "${start_port}" 1 65535; then
+    if [[ "${NG_LANG}" == "en" ]]; then
+      ng_log "ERROR" "Invalid start port: ${start_port}"
+    else
+      ng_log "ERROR" "无效的起始端口: ${start_port}"
+    fi
+    return 1
+  fi
+  
+  if ! ng_validate_integer "${end_port}" 1 65535; then
+    if [[ "${NG_LANG}" == "en" ]]; then
+      ng_log "ERROR" "Invalid end port: ${end_port}"
+    else
+      ng_log "ERROR" "无效的结束端口: ${end_port}"
+    fi
+    return 1
+  fi
+  
+  if [[ "${start_port}" -gt "${end_port}" ]]; then
+    if [[ "${NG_LANG}" == "en" ]]; then
+      ng_log "ERROR" "Start port must be less than end port"
+    else
+      ng_log "ERROR" "起始端口必须小于结束端口"
+    fi
+    return 1
+  fi
+  
   local range=$((end_port - start_port + 1))
   if [[ "${range}" -gt 1024 ]]; then
     if [[ "${NG_LANG}" == "en" ]]; then

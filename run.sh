@@ -263,7 +263,17 @@ main() {
   fi
 
   if [[ "${refresh_requested}" -eq 1 ]]; then
+    # Limit refresh retries to prevent infinite recursion
+    local max_retries="${SERVERHARBOR_MAX_REFRESH_RETRIES:-3}"
+    local current_retry="${SERVERHARBOR_REFRESH_RETRY:-0}"
+    
+    if [[ "${current_retry}" -ge "${max_retries}" ]]; then
+      printf 'Maximum refresh retries (%d) reached. Aborting.\n' "${max_retries}" >&2
+      exit 1
+    fi
+    
     export SERVERHARBOR_REFRESHING=1
+    export SERVERHARBOR_REFRESH_RETRY=$((current_retry + 1))
     bash <(curl -q -fsSL "https://raw.githubusercontent.com/sunnyhmz7010/ServerHarbor/main/run.sh?$(date +%s)") "$@"
     exit $?
   fi

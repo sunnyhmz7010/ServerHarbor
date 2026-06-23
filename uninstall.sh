@@ -79,12 +79,24 @@ confirm() {
   esac
 }
 
+LOCK_FILE="/tmp/.serverharbor-install.lock"
+
+acquire_lock() {
+  local lock_fd=9
+  eval "exec ${lock_fd}> \"${LOCK_FILE}\""
+  if ! flock -n "${lock_fd}" 2>/dev/null; then
+    printf 'Another install/uninstall process is running. Aborting.\n' >&2
+    exit 1
+  fi
+}
+
 if [[ "${EUID}" -ne 0 ]]; then
   printf 'Please run uninstall.sh as root.\n' >&2
   exit 1
 fi
 
 trap handle_interrupt INT
+acquire_lock
 
 if [[ ! -f "${MANIFEST_PATH}" ]]; then
   printf 'ServerHarbor manifest not found at %s\n' "${MANIFEST_PATH}" >&2
@@ -110,11 +122,17 @@ fi
 
 enter_critical_section
 if [[ "${KEEP_DATA}" -eq 1 ]]; then
-  rm -rf "${APP_ROOT}"
+  # Defensive check before rm -rf
+  if [[ -n "${APP_ROOT}" && -d "${APP_ROOT}" ]]; then
+    rm -rf "${APP_ROOT}"
+  fi
   rm -f "${MANIFEST_PATH}"
   printf 'ServerHarbor program removed. Data preserved at %s\n' "${DATA_ROOT}"
 else
-  rm -rf "${INSTALL_ROOT}"
+  # Defensive check before rm -rf
+  if [[ -n "${INSTALL_ROOT}" && -d "${INSTALL_ROOT}" ]]; then
+    rm -rf "${INSTALL_ROOT}"
+  fi
   printf 'ServerHarbor removed completely.\n'
 fi
 leave_critical_section

@@ -3,11 +3,45 @@
 set -euo pipefail
 
 ng_cpu_usage() {
-  local cpu_usage
-  cpu_usage=$(top -bn1 | grep "Cpu(s)" | awk '{print $2}' | cut -d'%' -f1)
-  if [[ -z "${cpu_usage}" ]]; then
-    cpu_usage=$(grep 'cpu ' /proc/stat | awk '{usage=($2+$4)*100/($2+$4+$5)} END {printf "%.1f", usage}')
+  local cpu_usage=""
+  
+  # Primary method: /proc/stat (more reliable across distributions)
+  if [[ -f /proc/stat ]]; then
+    # Read initial values
+    local cpu_line1
+    cpu_line1=$(grep '^cpu ' /proc/stat 2>/dev/null) || true
+    if [[ -n "${cpu_line1}" ]]; then
+      local user1 nice1 system1 idle1 iowait1 irq1 softirq1
+      read -r _ user1 nice1 system1 idle1 iowait1 irq1 softirq1 _ <<< "${cpu_line1}"
+      local total1=$((user1 + nice1 + system1 + idle1 + iowait1 + irq1 + softirq1))
+      local busy1=$((user1 + nice1 + system1 + irq1 + softirq1))
+      
+      # Wait a moment and read again
+      sleep 0.5
+      
+      local cpu_line2
+      cpu_line2=$(grep '^cpu ' /proc/stat 2>/dev/null) || true
+      if [[ -n "${cpu_line2}" ]]; then
+        local user2 nice2 system2 idle2 iowait2 irq2 softirq2
+        read -r _ user2 nice2 system2 idle2 iowait2 irq2 softirq2 _ <<< "${cpu_line2}"
+        local total2=$((user2 + nice2 + system2 + idle2 + iowait2 + irq2 + softirq2))
+        local busy2=$((user2 + nice2 + system2 + irq2 + softirq2))
+        
+        local total_diff=$((total2 - total1))
+        local busy_diff=$((busy2 - busy1))
+        
+        if [[ "${total_diff}" -gt 0 ]]; then
+          cpu_usage=$(awk "BEGIN {printf \"%.1f\", ${busy_diff}*100/${total_diff}}")
+        fi
+      fi
+    fi
   fi
+  
+  # Fallback: top command
+  if [[ -z "${cpu_usage}" ]]; then
+    cpu_usage=$(top -bn1 2>/dev/null | grep "Cpu(s)" | awk '{print $2}' | cut -d'%' -f1)
+  fi
+  
   printf '%s' "${cpu_usage:-0}"
 }
 
@@ -257,6 +291,34 @@ ng_monitor_menu() {
         fi
         ng_read_line disk_thresh || return 130
         disk_thresh="${disk_thresh:-${NG_ALERT_DISK_THRESHOLD}}"
+        
+        # Validate thresholds
+        if ! ng_validate_integer "${cpu_thresh}" 0 100; then
+          if [[ "${NG_LANG}" == "en" ]]; then
+            ng_log "ERROR" "Invalid CPU threshold: ${cpu_thresh} (must be 0-100)"
+          else
+            ng_log "ERROR" "无效的 CPU 阈值: ${cpu_thresh}（必须为 0-100）"
+          fi
+          return 1
+        fi
+        
+        if ! ng_validate_integer "${mem_thresh}" 0 100; then
+          if [[ "${NG_LANG}" == "en" ]]; then
+            ng_log "ERROR" "Invalid memory threshold: ${mem_thresh} (must be 0-100)"
+          else
+            ng_log "ERROR" "无效的内存阈值: ${mem_thresh}（必须为 0-100）"
+          fi
+          return 1
+        fi
+        
+        if ! ng_validate_integer "${disk_thresh}" 0 100; then
+          if [[ "${NG_LANG}" == "en" ]]; then
+            ng_log "ERROR" "Invalid disk threshold: ${disk_thresh} (must be 0-100)"
+          else
+            ng_log "ERROR" "无效的磁盘阈值: ${disk_thresh}（必须为 0-100）"
+          fi
+          return 1
+        fi
         
         NG_ALERT_CPU_THRESHOLD="${cpu_thresh}"
         NG_ALERT_MEM_THRESHOLD="${mem_thresh}"

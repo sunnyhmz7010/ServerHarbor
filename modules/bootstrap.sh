@@ -96,6 +96,13 @@ ng_configure_dns() {
   local resolv_conf="/etc/resolv.conf"
   local backup_file="${NG_STATE_DIR}/resolv.conf.$(date '+%Y%m%d-%H%M%S').bak"
 
+  # Check if DNS is already configured with the same values
+  if grep -q "nameserver ${NG_DNS_PRIMARY}" "${resolv_conf}" 2>/dev/null \
+     && grep -q "nameserver ${NG_DNS_SECONDARY}" "${resolv_conf}" 2>/dev/null; then
+    ng_log "INFO" "DNS already configured. Skip."
+    return 0
+  fi
+
   cp "${resolv_conf}" "${backup_file}" 2>/dev/null || true
   {
     printf 'nameserver %s\n' "${NG_DNS_PRIMARY}"
@@ -114,12 +121,33 @@ ng_configure_swap() {
   fi
 
   local swap_file="/swapfile"
+  
+  # Create swapfile
   fallocate -l "${NG_SWAP_SIZE_MB}M" "${swap_file}" 2>/dev/null || dd if=/dev/zero of="${swap_file}" bs=1M count="${NG_SWAP_SIZE_MB}" 2>/dev/null
-  chmod 600 "${swap_file}"
-  mkswap "${swap_file}"
-  swapon "${swap_file}"
-  grep -q '^/swapfile' /etc/fstab || printf '/swapfile none swap sw 0 0\n' >> /etc/fstab
+  
+  # Verify swapfile was created
+  if [[ ! -f "${swap_file}" ]]; then
+    ng_log "ERROR" "Failed to create swapfile."
+    return 1
+  fi
 
+  chmod 600 "${swap_file}"
+  
+  # mkswap and swapon - if either fails, clean up and return error
+  if ! mkswap "${swap_file}" 2>/dev/null; then
+    ng_log "ERROR" "Failed to create swap space. Cleaning up."
+    rm -f "${swap_file}"
+    return 1
+  fi
+  
+  if ! swapon "${swap_file}" 2>/dev/null; then
+    ng_log "ERROR" "Failed to activate swap. Cleaning up."
+    rm -f "${swap_file}"
+    return 1
+  fi
+
+  # Only write fstab on success
+  grep -q '^/swapfile' /etc/fstab || printf '/swapfile none swap sw 0 0\n' >> /etc/fstab
   ng_log "INFO" "Swap created at ${swap_file} with size ${NG_SWAP_SIZE_MB}MB"
 }
 
@@ -127,6 +155,15 @@ ng_enable_bbr() {
   ng_require_root || return 1
 
   local sysctl_file="/etc/sysctl.d/99-serverharbor-bbr.conf"
+  
+  # Check if BBR is already enabled
+  local current_congestion
+  current_congestion="$(sysctl -n net.ipv4.tcp_congestion_control 2>/dev/null || echo unknown)"
+  if [[ "${current_congestion}" == "bbr" ]] && [[ -f "${sysctl_file}" ]]; then
+    ng_log "INFO" "BBR already enabled. Skip."
+    return 0
+  fi
+  
   cat > "${sysctl_file}" <<'EOF'
 net.core.default_qdisc=fq
 net.ipv4.tcp_congestion_control=bbr
@@ -242,23 +279,40 @@ ng_bootstrap_report() {
 
 ng_bootstrap_full() {
   ng_require_root || return 1
-  ng_install_base_packages
-  ng_set_timezone
-  ng_enable_bbr
-  ng_configure_dns
-  ng_configure_swap
+  local errors=0
+  
+  ng_install_base_packages || { ng_log "WARN" "Base packages installation failed."; ((errors++)); true; }
+  ng_set_timezone || { ng_log "WARN" "Timezone configuration failed."; ((errors++)); true; }
+  ng_enable_bbr || { ng_log "WARN" "BBR enable failed."; ((errors++)); true; }
+  ng_configure_dns || { ng_log "WARN" "DNS configuration failed."; ((errors++)); true; }
+  ng_configure_swap || { ng_log "WARN" "Swap configuration failed."; ((errors++)); true; }
   
   if [[ "${NG_LANG}" == "en" ]]; then
     if ng_prompt_yes_no "SSH hardening may disable password login. Continue?"; then
-      ng_harden_ssh
+      ng_harden_ssh || { ng_log "WARN" "SSH hardening failed."; ((errors++)); true; }
     fi
   else
     if ng_prompt_yes_no "SSH 加固可能禁用密码登录，是否继续？"; then
-      ng_harden_ssh
+      ng_harden_ssh || { ng_log "WARN" "SSH hardening failed."; ((errors++)); true; }
     fi
   fi
   
   ng_bootstrap_report
+  
+  if [[ "${errors}" -gt 0 ]]; then
+    if [[ "${NG_LANG}" == "en" ]]; then
+      ng_log "WARN" "Bootstrap completed with ${errors} error(s)."
+    else
+      ng_log "WARN" "开荒完成，但有 ${errors} 个错误。"
+    fi
+    return 1
+  fi
+  
+  if [[ "${NG_LANG}" == "en" ]]; then
+    ng_log "INFO" "Bootstrap completed successfully."
+  else
+    ng_log "INFO" "开荒完成。"
+  fi
 }
 
 ng_bootstrap_menu() {
