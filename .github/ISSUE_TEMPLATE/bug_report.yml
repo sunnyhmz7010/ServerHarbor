@@ -1,5 +1,5 @@
 name: Bug report
-description: Report a reproducible problem in ServerMesh
+description: Report a reproducible problem in ServerHarbor
 title: "[Bug]: "
 labels:
   - bug

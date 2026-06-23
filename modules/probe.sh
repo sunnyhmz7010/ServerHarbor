@@ -4,6 +4,7 @@ set -euo pipefail
 
 ng_collect_local_probe() {
   local state_file="${NG_STATE_DIR}/${NG_HOSTNAME}-local.state"
+  local tmp_file="${state_file}.tmp"
 
   {
     printf 'timestamp=%s\n' "$(date '+%s')"
@@ -13,9 +14,16 @@ ng_collect_local_probe() {
     printf 'disk_root=%s\n' "$(df -h / 2>/dev/null | awk 'NR==2 {print $5}' || echo unknown)"
     printf 'mem_used=%s\n' "$(free -m 2>/dev/null | awk '/Mem:/ {printf "%s/%sMB", $3, $2}' || echo unknown)"
     printf 'ssh=%s\n' "$(ng_service_state sshd)"
-  } > "${state_file}"
+  } > "${tmp_file}"
 
-  printf '%s\n' "${state_file}"
+  # Atomic move to ensure data integrity
+  if mv -f "${tmp_file}" "${state_file}" 2>/dev/null; then
+    printf '%s\n' "${state_file}"
+  else
+    rm -f "${tmp_file}" 2>/dev/null
+    ng_log "ERROR" "Failed to write state file"
+    return 1
+  fi
 }
 
 ng_probe_single_peer() {
@@ -34,7 +42,10 @@ ng_probe_single_peer() {
     latency="timeout"
   fi
 
-  if timeout "${NG_PROBE_TIMEOUT}" bash -c "cat < /dev/null > /dev/tcp/${peer_host}/22" >/dev/null 2>&1; then
+  # Try nc first, fallback to /dev/tcp
+  if nc -z -w "${NG_PROBE_TIMEOUT}" "${peer_host}" 22 2>/dev/null; then
+    ssh_result="open"
+  elif timeout "${NG_PROBE_TIMEOUT}" bash -c "cat < /dev/null > /dev/tcp/${peer_host}/22" >/dev/null 2>&1; then
     ssh_result="open"
   else
     ssh_result="closed"
@@ -118,26 +129,41 @@ ng_local_health() {
   local state_file
   state_file="$(ng_collect_local_probe)"
   
-  ng_report_header "本机健康状态"
-  ng_report_meta "主机名" "${NG_HOSTNAME}"
-  ng_report_meta "采集时间" "$(ng_timestamp)"
-  ng_report_section_start "系统信息"
-  ng_report_kv_styled "运行时长" "$(uptime -p 2>/dev/null || uptime)"
-  ng_report_kv_styled "系统负载" "$(ng_system_load)"
-  ng_report_section_start "资源使用"
-  ng_report_kv_styled "内存" "$(free -m 2>/dev/null | awk '/Mem:/ {printf "%s/%sMB (%.1f%%)", $3, $2, $3/$2*100}' || echo unknown)"
-  ng_report_kv_styled "磁盘 /" "$(df -h / 2>/dev/null | awk 'NR==2 {print $3"/"$2" ("$5")"}' || echo unknown)"
-  ng_report_section_start "网络端口"
-  ng_report_line "监听端口:"
-  ss -lntp 2>/dev/null | sed -n '1,15p' | while IFS= read -r line; do
-    ng_report_line "  ${line}"
-  done
-  ng_report_footer
-  printf '\n'
-  
   if [[ "${NG_LANG}" == "en" ]]; then
+    ng_report_header "Local Health Status"
+    ng_report_meta "Hostname" "${NG_HOSTNAME}"
+    ng_report_meta "Collected At" "$(ng_timestamp)"
+    ng_report_section_start "System Info"
+    ng_report_kv_styled "Uptime" "$(uptime -p 2>/dev/null || uptime)"
+    ng_report_kv_styled "System Load" "$(ng_system_load)"
+    ng_report_section_start "Resource Usage"
+    ng_report_kv_styled "Memory" "$(free -m 2>/dev/null | awk '/Mem:/ {printf "%s/%sMB (%.1f%%)", $3, $2, $3/$2*100}' || echo unknown)"
+    ng_report_kv_styled "Disk /" "$(df -h / 2>/dev/null | awk 'NR==2 {print $3"/"$2" ("$5")"}' || echo unknown)"
+    ng_report_section_start "Network Ports"
+    ng_report_line "Listening ports:"
+    ss -lntp 2>/dev/null | sed -n '1,15p' | while IFS= read -r line; do
+      ng_report_line "  ${line}"
+    done
+    ng_report_footer
+    printf '\n'
     printf 'State saved to: %s\n' "${state_file}"
   else
+    ng_report_header "本机健康状态"
+    ng_report_meta "主机名" "${NG_HOSTNAME}"
+    ng_report_meta "采集时间" "$(ng_timestamp)"
+    ng_report_section_start "系统信息"
+    ng_report_kv_styled "运行时长" "$(uptime -p 2>/dev/null || uptime)"
+    ng_report_kv_styled "系统负载" "$(ng_system_load)"
+    ng_report_section_start "资源使用"
+    ng_report_kv_styled "内存" "$(free -m 2>/dev/null | awk '/Mem:/ {printf "%s/%sMB (%.1f%%)", $3, $2, $3/$2*100}' || echo unknown)"
+    ng_report_kv_styled "磁盘 /" "$(df -h / 2>/dev/null | awk 'NR==2 {print $3"/"$2" ("$5")"}' || echo unknown)"
+    ng_report_section_start "网络端口"
+    ng_report_line "监听端口:"
+    ss -lntp 2>/dev/null | sed -n '1,15p' | while IFS= read -r line; do
+      ng_report_line "  ${line}"
+    done
+    ng_report_footer
+    printf '\n'
     printf '状态已保存至: %s\n' "${state_file}"
   fi
 }

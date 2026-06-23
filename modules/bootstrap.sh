@@ -227,10 +227,39 @@ ng_harden_ssh() {
     -e 's/^#\?PermitRootLogin.*/PermitRootLogin prohibit-password/' \
     -e 's/^#\?X11Forwarding.*/X11Forwarding no/' \
     "${sshd_config}"
+  
+  # Also check sshd_config.d directory for overrides
+  local config_d="/etc/ssh/sshd_config.d"
+  if [[ -d "${config_d}" ]]; then
+    local override_files
+    override_files=$(grep -rl "PasswordAuthentication\|PermitRootLogin" "${config_d}/" 2>/dev/null || true)
+    if [[ -n "${override_files}" ]]; then
+      if [[ "${NG_LANG}" == "en" ]]; then
+        ng_log "WARN" "Found SSH config overrides in ${config_d}: ${override_files}"
+        printf 'Warning: SSH config overrides found in %s\n' "${config_d}"
+        printf 'These files may override the hardening settings:\n'
+        echo "${override_files}" | while IFS= read -r f; do printf '  - %s\n' "$f"; done
+      else
+        ng_log "WARN" "在 ${config_d} 中发现 SSH 配置覆盖: ${override_files}"
+        printf '警告：在 %s 中发现 SSH 配置覆盖\n' "${config_d}"
+        printf '这些文件可能覆盖加固设置：\n'
+        echo "${override_files}" | while IFS= read -r f; do printf '  - %s\n' "$f"; done
+      fi
+    fi
+  fi
 
   if command -v systemctl >/dev/null 2>&1; then
     if ! systemctl restart sshd 2>/dev/null && ! systemctl restart ssh 2>/dev/null; then
       ng_log "WARN" "Failed to restart SSH service. Please restart manually."
+    fi
+  fi
+  
+  # Verify actual SSH config
+  if command -v sshd >/dev/null 2>&1; then
+    local actual_config
+    actual_config=$(sshd -T 2>/dev/null | grep -E "^(passwordauthentication|permitrootlogin|x11forwarding)" || true)
+    if [[ -n "${actual_config}" ]]; then
+      ng_log "INFO" "Actual SSH config: ${actual_config}"
     fi
   fi
 
@@ -277,33 +306,45 @@ ng_bootstrap_report() {
   fi
 }
 
+ng_run_step() {
+  local label="$1"
+  shift
+  if "$@"; then
+    return 0
+  else
+    ng_log "WARN" "${label}"
+    STEP_ERRORS=$((STEP_ERRORS + 1))
+    return 0
+  fi
+}
+
 ng_bootstrap_full() {
   ng_require_root || return 1
-  local errors=0
+  STEP_ERRORS=0
   
-  ng_install_base_packages || { ng_log "WARN" "Base packages installation failed."; ((errors++)); true; }
-  ng_set_timezone || { ng_log "WARN" "Timezone configuration failed."; ((errors++)); true; }
-  ng_enable_bbr || { ng_log "WARN" "BBR enable failed."; ((errors++)); true; }
-  ng_configure_dns || { ng_log "WARN" "DNS configuration failed."; ((errors++)); true; }
-  ng_configure_swap || { ng_log "WARN" "Swap configuration failed."; ((errors++)); true; }
+  ng_run_step "Base packages installation failed" ng_install_base_packages
+  ng_run_step "Timezone configuration failed" ng_set_timezone
+  ng_run_step "BBR enable failed" ng_enable_bbr
+  ng_run_step "DNS configuration failed" ng_configure_dns
+  ng_run_step "Swap configuration failed" ng_configure_swap
   
   if [[ "${NG_LANG}" == "en" ]]; then
     if ng_prompt_yes_no "SSH hardening may disable password login. Continue?"; then
-      ng_harden_ssh || { ng_log "WARN" "SSH hardening failed."; ((errors++)); true; }
+      ng_run_step "SSH hardening failed" ng_harden_ssh
     fi
   else
     if ng_prompt_yes_no "SSH 加固可能禁用密码登录，是否继续？"; then
-      ng_harden_ssh || { ng_log "WARN" "SSH hardening failed."; ((errors++)); true; }
+      ng_run_step "SSH hardening failed" ng_harden_ssh
     fi
   fi
   
   ng_bootstrap_report
   
-  if [[ "${errors}" -gt 0 ]]; then
+  if [[ "${STEP_ERRORS}" -gt 0 ]]; then
     if [[ "${NG_LANG}" == "en" ]]; then
-      ng_log "WARN" "Bootstrap completed with ${errors} error(s)."
+      ng_log "WARN" "Bootstrap completed with ${STEP_ERRORS} error(s)."
     else
-      ng_log "WARN" "开荒完成，但有 ${errors} 个错误。"
+      ng_log "WARN" "开荒完成，但有 ${STEP_ERRORS} 个错误。"
     fi
     return 1
   fi

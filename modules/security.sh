@@ -129,6 +129,24 @@ ng_simple_firewall_hardening() {
   elif command -v firewall-cmd >/dev/null 2>&1; then
     firewall-cmd --permanent --add-service=ssh
     firewall-cmd --reload
+  elif command -v iptables >/dev/null 2>&1; then
+    # Basic iptables hardening
+    iptables -F
+    iptables -P INPUT DROP
+    iptables -P FORWARD DROP
+    iptables -P OUTPUT ACCEPT
+    iptables -A INPUT -i lo -j ACCEPT
+    iptables -A INPUT -m state --state ESTABLISHED,RELATED -j ACCEPT
+    iptables -A INPUT -p tcp --dport 22 -j ACCEPT
+    # Save rules if iptables-save is available
+    if command -v iptables-save >/dev/null 2>&1; then
+      iptables-save > /etc/iptables/rules.v4 2>/dev/null || true
+    fi
+    if [[ "${NG_LANG}" == "en" ]]; then
+      ng_log "INFO" "iptables rules applied: default DROP incoming, allow SSH"
+    else
+      ng_log "INFO" "iptables 规则已应用：默认拒绝入站，允许 SSH"
+    fi
   else
     ng_log "WARN" "No supported firewall manager found."
   fi
@@ -147,12 +165,37 @@ ng_integrity_create_baseline() {
   }
 
   : > "${baseline_file}"
+  local skipped_paths=0
   while IFS= read -r watch_path; do
     [[ -n "${watch_path}" && "${watch_path}" != \#* ]] || continue
     if [[ -e "${watch_path}" ]]; then
-      find "${watch_path}" -type f -exec sha256sum {} \; >> "${baseline_file}"
+      if [[ -r "${watch_path}" ]]; then
+        find "${watch_path}" -type f -exec sha256sum {} \; >> "${baseline_file}" 2>/dev/null || true
+      else
+        if [[ "${NG_LANG}" == "en" ]]; then
+          printf 'Warning: Path not readable, skipping: %s\n' "${watch_path}"
+        else
+          printf '警告：路径不可读，跳过：%s\n' "${watch_path}"
+        fi
+        ((skipped_paths++)) || true
+      fi
+    else
+      if [[ "${NG_LANG}" == "en" ]]; then
+        printf 'Warning: Path not found, skipping: %s\n' "${watch_path}"
+      else
+        printf '警告：路径不存在，跳过：%s\n' "${watch_path}"
+      fi
+      ((skipped_paths++)) || true
     fi
   done < "${NG_WATCH_FILE}"
+  
+  if [[ "${skipped_paths}" -gt 0 ]]; then
+    if [[ "${NG_LANG}" == "en" ]]; then
+      printf 'Skipped %d path(s) due to access issues.\n' "${skipped_paths}"
+    else
+      printf '跳过了 %d 个无法访问的路径。\n' "${skipped_paths}"
+    fi
+  fi
 
   if [[ "${NG_LANG}" == "en" ]]; then
     printf 'Integrity baseline written to %s\n' "${baseline_file}"
@@ -463,9 +506,13 @@ ng_security_score() {
     issues+=("No firewall detected (-25)")
   fi
   
-  if [[ -f /var/log/auth.log ]]; then
+  local auth_log=""
+  [[ -f /var/log/auth.log ]] && auth_log="/var/log/auth.log"
+  [[ -f /var/log/secure ]] && auth_log="/var/log/secure"
+  
+  if [[ -n "${auth_log}" ]]; then
     local failed_count
-    failed_count=$(grep -c "Failed password" /var/log/auth.log 2>/dev/null || echo 0)
+    failed_count=$(grep -c "Failed password" "${auth_log}" 2>/dev/null || echo 0)
     if [[ "${failed_count}" -gt 100 ]]; then
       score=$((score - 10))
       issues+=("High number of failed login attempts: ${failed_count} (-10)")

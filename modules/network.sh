@@ -131,7 +131,9 @@ ng_port_scan() {
   else
     export -f ng_check_port
     local open_ports
-    open_ports="$(seq "${start_port}" "${end_port}" | xargs -P 50 -I {} bash -c "ng_check_port '${host}' {}" 2>/dev/null | sort -n)"
+    export SCAN_HOST="${host}"
+    open_ports="$(seq "${start_port}" "${end_port}" | xargs -P 50 -I {} bash -c 'ng_check_port "$SCAN_HOST" {}' 2>/dev/null | sort -n)"
+    unset SCAN_HOST
     
     if [[ -n "${open_ports}" ]]; then
       if [[ "${NG_LANG}" == "en" ]]; then

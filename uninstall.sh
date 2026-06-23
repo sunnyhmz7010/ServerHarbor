@@ -82,8 +82,9 @@ confirm() {
 LOCK_FILE="/tmp/.serverharbor-install.lock"
 
 acquire_lock() {
-  local lock_fd=9
-  eval "exec ${lock_fd}> \"${LOCK_FILE}\""
+  # Create lock file atomically to avoid symlink attacks
+  install -m 600 /dev/null "${LOCK_FILE}" 2>/dev/null || true
+  exec {lock_fd}>"${LOCK_FILE}"
   if ! flock -n "${lock_fd}" 2>/dev/null; then
     printf 'Another install/uninstall process is running. Aborting.\n' >&2
     exit 1

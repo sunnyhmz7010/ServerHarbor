@@ -198,7 +198,13 @@ ng_monitor_alert() {
     alerts+=("Disk usage (${disk_usage}%) exceeds threshold (${disk_threshold}%)")
   fi
   
+  NG_MONITOR_ALERTS=()
+  NG_MONITOR_ALERT_COUNT=0
+  
   if [[ "${#alerts[@]}" -gt 0 ]]; then
+    NG_MONITOR_ALERTS=("${alerts[@]}")
+    NG_MONITOR_ALERT_COUNT="${#alerts[@]}"
+    
     if [[ "${NG_LANG}" == "en" ]]; then
       ng_print_header "System Alerts"
       printf '⚠️  System resource alerts detected:\n'
@@ -212,13 +218,12 @@ ng_monitor_alert() {
         printf '  • %s\n' "${alert}"
       done
     fi
-    return 1
-  fi
-  
-  if [[ "${NG_LANG}" == "en" ]]; then
-    ng_log "INFO" "System resources within normal thresholds"
   else
-    ng_log "INFO" "系统资源在正常阈值内"
+    if [[ "${NG_LANG}" == "en" ]]; then
+      ng_log "INFO" "System resources within normal thresholds"
+    else
+      ng_log "INFO" "系统资源在正常阈值内"
+    fi
   fi
   return 0
 }

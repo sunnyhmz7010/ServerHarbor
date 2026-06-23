@@ -153,6 +153,7 @@ This repository is `ServerHarbor`, a Bash-based Linux multi-server operations to
 - When a script runs via `bash <(curl ...)`, `$0` is a temporary fd like `/dev/fd/63`.
 - `exec bash "$0"` will fail after the fd closes.
 - To restart, either re-download the script or save it to a temp file first.
+- Note: This issue has been resolved in run.sh by re-downloading from GitHub on refresh.
 
 ## Repository Release Conventions
 
