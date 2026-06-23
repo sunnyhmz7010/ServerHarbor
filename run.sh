@@ -129,7 +129,7 @@ confirm() {
   local answer
   t continue
   if ! IFS= read -r answer < /dev/tty; then
-    return 0
+    return 130
   fi
   [[ -z "${answer}" || "${answer}" =~ ^[Yy]([Ee][Ss])?$ ]]
 }
@@ -264,8 +264,7 @@ main() {
 
   if [[ "${refresh_requested}" -eq 1 ]]; then
     export SERVERHARBOR_REFRESHING=1
-    export SERVERHARBOR_ARGS="$*"
-    bash <(curl -q -fsSL "https://raw.githubusercontent.com/sunnyhmz7010/ServerHarbor/main/run.sh?$(date +%s)") ${SERVERHARBOR_ARGS}
+    bash <(curl -q -fsSL "https://raw.githubusercontent.com/sunnyhmz7010/ServerHarbor/main/run.sh?$(date +%s)") "$@"
     exit $?
   fi
 

@@ -9,6 +9,7 @@ BIN_PATH="/usr/local/bin/shr"
 MANIFEST_PATH="${INSTALL_ROOT}/.serverharbor-install"
 INTERRUPT_REQUESTED=0
 CRITICAL_SECTION=0
+KEEP_DATA=0
 
 handle_interrupt() {
   if [[ "${CRITICAL_SECTION}" -eq 1 ]]; then
@@ -40,19 +41,42 @@ confirm() {
     printf 'This will remove:\n'
     printf '  - %s\n' "${BIN_PATH}"
     printf '  - %s\n' "${APP_ROOT}"
-    printf '  - %s\n' "${DATA_ROOT}"
     printf '  - %s\n' "${MANIFEST_PATH}"
-    printf 'Continue? [y/N]: '
+    printf '\nData directory (config, reports, logs):\n'
+    printf '  - %s\n' "${DATA_ROOT}"
+    printf '\nOptions:\n'
+    printf '  [y] Remove everything including data\n'
+    printf '  [k] Keep data directory, only remove program\n'
+    printf '  [n] Cancel\n'
+    printf 'Choose [y/k/N]: '
   else
     printf '将删除以下内容：\n'
     printf '  - %s\n' "${BIN_PATH}"
     printf '  - %s\n' "${APP_ROOT}"
-    printf '  - %s\n' "${DATA_ROOT}"
     printf '  - %s\n' "${MANIFEST_PATH}"
-    printf '是否继续？[y/N]: '
+    printf '\n数据目录（配置、报告、日志）：\n'
+    printf '  - %s\n' "${DATA_ROOT}"
+    printf '\n选项：\n'
+    printf '  [y] 删除所有内容（包括数据）\n'
+    printf '  [k] 保留数据目录，仅删除程序\n'
+    printf '  [n] 取消\n'
+    printf '请选择 [y/k/N]: '
   fi
   read -r answer < /dev/tty
-  [[ "${answer}" =~ ^[Yy]([Ee][Ss])?$ ]]
+  
+  case "${answer}" in
+    [Yy]|[Yy][Ee][Ss])
+      KEEP_DATA=0
+      return 0
+      ;;
+    [Kk])
+      KEEP_DATA=1
+      return 0
+      ;;
+    *)
+      return 1
+      ;;
+  esac
 }
 
 if [[ "${EUID}" -ne 0 ]]; then
@@ -85,7 +109,12 @@ if [[ -e "${BIN_PATH}" ]]; then
 fi
 
 enter_critical_section
-rm -rf "${INSTALL_ROOT}"
+if [[ "${KEEP_DATA}" -eq 1 ]]; then
+  rm -rf "${APP_ROOT}"
+  rm -f "${MANIFEST_PATH}"
+  printf 'ServerHarbor program removed. Data preserved at %s\n' "${DATA_ROOT}"
+else
+  rm -rf "${INSTALL_ROOT}"
+  printf 'ServerHarbor removed completely.\n'
+fi
 leave_critical_section
-
-printf 'ServerHarbor removed.\n'

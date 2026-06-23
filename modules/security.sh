@@ -185,18 +185,30 @@ ng_security_report() {
     [[ -f /var/log/secure ]] && auth_log="/var/log/secure"
     if [[ -n "${auth_log}" ]]; then
       ng_report_kv_styled "Auth Log" "${auth_log}"
-      grep -Ei 'Failed password' "${auth_log}" 2>/dev/null | grep -Eo '([0-9]{1,3}\.){3}[0-9]{1,3}' | sort | uniq -c | sort -nr | head -5 | while IFS= read -r line; do
-        ng_report_line "  ${line}"
-      done || ng_report_line "  No failed login entries found."
+      local login_output
+      login_output="$(grep -Ei 'Failed password' "${auth_log}" 2>/dev/null | grep -Eo '([0-9]{1,3}\.){3}[0-9]{1,3}' | sort | uniq -c | sort -nr | head -5)" || true
+      if [[ -n "${login_output}" ]]; then
+        echo "${login_output}" | while IFS= read -r line; do
+          ng_report_line "  ${line}"
+        done
+      else
+        ng_report_line "  No failed login entries found."
+      fi
     else
       ng_report_line "  No auth log found."
     fi
     ng_report_section_start "Suspicious Web Requests"
     local access_log="/var/log/nginx/access.log"
     if [[ -f "${access_log}" ]]; then
-      grep -Ei 'wp-admin|phpmyadmin|\.env|select.+from|union.+select' "${access_log}" 2>/dev/null | awk '{print $1}' | sort | uniq -c | sort -nr | head -5 | while IFS= read -r line; do
-        ng_report_line "  ${line}"
-      done || ng_report_line "  No suspicious requests found."
+      local web_output
+      web_output="$(grep -Ei 'wp-admin|phpmyadmin|\.env|select.+from|union.+select' "${access_log}" 2>/dev/null | awk '{print $1}' | sort | uniq -c | sort -nr | head -5)" || true
+      if [[ -n "${web_output}" ]]; then
+        echo "${web_output}" | while IFS= read -r line; do
+          ng_report_line "  ${line}"
+        done
+      else
+        ng_report_line "  No suspicious requests found."
+      fi
     else
       ng_report_line "  No nginx access log found."
     fi
@@ -234,18 +246,30 @@ ng_security_report() {
     [[ -f /var/log/secure ]] && auth_log="/var/log/secure"
     if [[ -n "${auth_log}" ]]; then
       ng_report_kv_styled "日志文件" "${auth_log}"
-      grep -Ei 'Failed password' "${auth_log}" 2>/dev/null | grep -Eo '([0-9]{1,3}\.){3}[0-9]{1,3}' | sort | uniq -c | sort -nr | head -5 | while IFS= read -r line; do
-        ng_report_line "  ${line}"
-      done || ng_report_line "  未发现失败登录记录。"
+      local login_output
+      login_output="$(grep -Ei 'Failed password' "${auth_log}" 2>/dev/null | grep -Eo '([0-9]{1,3}\.){3}[0-9]{1,3}' | sort | uniq -c | sort -nr | head -5)" || true
+      if [[ -n "${login_output}" ]]; then
+        echo "${login_output}" | while IFS= read -r line; do
+          ng_report_line "  ${line}"
+        done
+      else
+        ng_report_line "  未发现失败登录记录。"
+      fi
     else
       ng_report_line "  未找到认证日志文件。"
     fi
     ng_report_section_start "可疑 Web 请求"
     local access_log="/var/log/nginx/access.log"
     if [[ -f "${access_log}" ]]; then
-      grep -Ei 'wp-admin|phpmyadmin|\.env|select.+from|union.+select' "${access_log}" 2>/dev/null | awk '{print $1}' | sort | uniq -c | sort -nr | head -5 | while IFS= read -r line; do
-        ng_report_line "  ${line}"
-      done || ng_report_line "  未发现可疑请求特征。"
+      local web_output
+      web_output="$(grep -Ei 'wp-admin|phpmyadmin|\.env|select.+from|union.+select' "${access_log}" 2>/dev/null | awk '{print $1}' | sort | uniq -c | sort -nr | head -5)" || true
+      if [[ -n "${web_output}" ]]; then
+        echo "${web_output}" | while IFS= read -r line; do
+          ng_report_line "  ${line}"
+        done
+      else
+        ng_report_line "  未发现可疑请求特征。"
+      fi
     else
       ng_report_line "  未找到 nginx 访问日志。"
     fi

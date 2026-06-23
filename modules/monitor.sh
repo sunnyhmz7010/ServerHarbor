@@ -262,9 +262,26 @@ ng_monitor_menu() {
         NG_ALERT_MEM_THRESHOLD="${mem_thresh}"
         NG_ALERT_DISK_THRESHOLD="${disk_thresh}"
         
-        sed -i "s/^NG_ALERT_CPU_THRESHOLD=.*/NG_ALERT_CPU_THRESHOLD=\"${cpu_thresh}\"/" "${NG_CONFIG_FILE}" 2>/dev/null || true
-        sed -i "s/^NG_ALERT_MEM_THRESHOLD=.*/NG_ALERT_MEM_THRESHOLD=\"${mem_thresh}\"/" "${NG_CONFIG_FILE}" 2>/dev/null || true
-        sed -i "s/^NG_ALERT_DISK_THRESHOLD=.*/NG_ALERT_DISK_THRESHOLD=\"${disk_thresh}\"/" "${NG_CONFIG_FILE}" 2>/dev/null || true
+        # Save CPU threshold
+        if grep -q "^NG_ALERT_CPU_THRESHOLD=" "${NG_CONFIG_FILE}" 2>/dev/null; then
+          sed -i "s/^NG_ALERT_CPU_THRESHOLD=.*/NG_ALERT_CPU_THRESHOLD=\"${cpu_thresh}\"/" "${NG_CONFIG_FILE}" 2>/dev/null || true
+        else
+          echo "NG_ALERT_CPU_THRESHOLD=\"${cpu_thresh}\"" >> "${NG_CONFIG_FILE}" 2>/dev/null || true
+        fi
+        
+        # Save MEM threshold
+        if grep -q "^NG_ALERT_MEM_THRESHOLD=" "${NG_CONFIG_FILE}" 2>/dev/null; then
+          sed -i "s/^NG_ALERT_MEM_THRESHOLD=.*/NG_ALERT_MEM_THRESHOLD=\"${mem_thresh}\"/" "${NG_CONFIG_FILE}" 2>/dev/null || true
+        else
+          echo "NG_ALERT_MEM_THRESHOLD=\"${mem_thresh}\"" >> "${NG_CONFIG_FILE}" 2>/dev/null || true
+        fi
+        
+        # Save DISK threshold
+        if grep -q "^NG_ALERT_DISK_THRESHOLD=" "${NG_CONFIG_FILE}" 2>/dev/null; then
+          sed -i "s/^NG_ALERT_DISK_THRESHOLD=.*/NG_ALERT_DISK_THRESHOLD=\"${disk_thresh}\"/" "${NG_CONFIG_FILE}" 2>/dev/null || true
+        else
+          echo "NG_ALERT_DISK_THRESHOLD=\"${disk_thresh}\"" >> "${NG_CONFIG_FILE}" 2>/dev/null || true
+        fi
         
         if [[ "${NG_LANG}" == "en" ]]; then
           ng_log "INFO" "Alert thresholds saved: CPU=${cpu_thresh}%, MEM=${mem_thresh}%, DISK=${disk_thresh}%"

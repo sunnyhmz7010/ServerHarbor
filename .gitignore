@@ -1,3 +1,39 @@
+# Runtime logs
 logs/*.log
+*.log
+
+# Temporary files
 tmp/*
+*.tmp
+*.bak
+
+# Backups
 backups/*.tar.gz
+
+# Reports (generated at runtime)
+reports/*.txt
+reports/*.md
+
+# State files (generated at runtime)
+state/*.state
+state/*.sha256
+state/*.bak
+
+# Config files with sensitive data (keep templates only)
+# config/app.conf
+# config/peers.conf
+# config/watch.conf
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Editor files
+*.swp
+*.swo
+*~
+.vscode/
+.idea/
+
+# Node modules (if any)
+node_modules/

@@ -158,6 +158,32 @@ ng_harden_ssh() {
     return 0
   }
 
+  # Check if SSH keys exist to avoid lockout
+  local has_ssh_keys=0
+  if [[ -f ~/.ssh/authorized_keys ]] && [[ -s ~/.ssh/authorized_keys ]]; then
+    has_ssh_keys=1
+  fi
+
+  if [[ "${has_ssh_keys}" -eq 0 ]]; then
+    if [[ "${NG_LANG}" == "en" ]]; then
+      ng_log "WARN" "No SSH authorized_keys found. Disabling password login may lock you out!"
+      printf 'Warning: No SSH authorized_keys found at ~/.ssh/authorized_keys\n'
+      printf 'Disabling password authentication may prevent future login.\n'
+      if ! ng_prompt_yes_no "Continue with SSH hardening anyway?"; then
+        ng_log "INFO" "SSH hardening cancelled by user."
+        return 0
+      fi
+    else
+      ng_log "WARN" "未找到 SSH authorized_keys，禁用密码登录可能导致无法登录！"
+      printf '警告：未找到 ~/.ssh/authorized_keys\n'
+      printf '禁用密码认证可能导致以后无法登录服务器。\n'
+      if ! ng_prompt_yes_no "是否继续执行 SSH 加固？"; then
+        ng_log "INFO" "用户取消了 SSH 加固。"
+        return 0
+      fi
+    fi
+  fi
+
   cp "${sshd_config}" "${backup_file}"
   sed -i \
     -e 's/^#\?PasswordAuthentication.*/PasswordAuthentication no/' \

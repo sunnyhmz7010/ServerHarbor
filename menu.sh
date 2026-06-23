@@ -164,4 +164,4 @@ main() {
 }
 
 run_cli_mode "${1:-}"
-main "$@"
+main

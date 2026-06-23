@@ -210,11 +210,6 @@ ng_report_note() {
   printf '  %s\n' "$1"
 }
 
-ng_report_box() {
-  local width=68
-  printf '%s\n' "$(ng_color "${NG_C_PANEL}" "╔$(ng_repeat '═' "${width}")")"
-}
-
 ng_report_footer() {
   local width=68
   printf '%s\n' "$(ng_color "${NG_C_PANEL}" "╚$(ng_repeat '═' "${width}")")"
@@ -416,15 +411,6 @@ ng_install_base_packages() {
   esac
 }
 
-ng_write_report() {
-  local report_name="$1"
-  local content="$2"
-  local report_file="${NG_REPORT_DIR}/${report_name}-$(date '+%Y%m%d-%H%M%S').txt"
-
-  printf '%s\n' "${content}" > "${report_file}"
-  printf '%s\n' "${report_file}"
-}
-
 ng_read_peers() {
   [[ -f "${NG_PEERS_FILE}" ]] || return 0
   grep -Ev '^\s*#|^\s*$' "${NG_PEERS_FILE}"
@@ -444,13 +430,6 @@ ng_total_node_count() {
 
 ng_timestamp() {
   date '+%Y-%m-%d %H:%M:%S'
-}
-
-ng_run_safe() {
-  local description="$1"
-  shift
-  ng_print_header "${description}"
-  "$@"
 }
 
 ng_system_load() {
@@ -474,141 +453,4 @@ ng_service_state() {
   fi
 }
 
-ng_progress_bar() {
-  local current="$1"
-  local total="$2"
-  local width="${3:-50}"
-  
-  if [[ "${total}" -eq 0 ]]; then
-    printf '\r[░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░] 0%%'
-    return 0
-  fi
-  
-  local percentage=$((current * 100 / total))
-  local filled=$((current * width / total))
-  local empty=$((width - filled))
-  
-  printf '\r['
-  printf '%0.s█' $(seq 1 ${filled} 2>/dev/null) || true
-  printf '%0.s░' $(seq 1 ${empty} 2>/dev/null) || true
-  printf '] %d%%' "${percentage}"
-}
 
-ng_spinner() {
-  local pid="$1"
-  local delay=0.1
-  local spinstr='⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏'
-  
-  while kill -0 "${pid}" 2>/dev/null; do
-    for ((i=0; i<${#spinstr}; i++)); do
-      printf '\r%s' "${spinstr:i:1}"
-      sleep "${delay}"
-    done
-  done
-  printf '\r'
-}
-
-ng_confirm_enhanced() {
-  local prompt="$1"
-  local default="${2:-n}"
-  local answer
-  
-  if [[ "${default}" == "y" ]]; then
-    printf '%s %s' "$(ng_color "${NG_C_WARN}" "${prompt}")" "$(ng_color "${NG_C_DIM}" "[Y/n]: ")"
-  else
-    printf '%s %s' "$(ng_color "${NG_C_WARN}" "${prompt}")" "$(ng_color "${NG_C_DIM}" "[y/N]: ")"
-  fi
-  
-  ng_read_line answer || return 130
-  
-  if [[ -z "${answer}" ]]; then
-    [[ "${default}" == "y" ]]
-  else
-    [[ "${answer}" =~ ^[Yy]([Ee][Ss])?$ ]]
-  fi
-}
-
-ng_select_option() {
-  local prompt="$1"
-  shift
-  local options=("$@")
-  local choice
-  
-  printf '%s\n' "$(ng_color "${NG_C_BOLD}" "${prompt}")"
-  for i in "${!options[@]}"; do
-    printf '  %s %s\n' "$(ng_color "${NG_C_ACCENT}" "[$((i+1))]")" "${options[i]}"
-  done
-  
-  printf '\n%s' "$(ng_color "${NG_C_ACCENT}" "Select > ")"
-  ng_read_line choice || return 130
-  
-  if [[ "${choice}" =~ ^[0-9]+$ ]] && [[ "${choice}" -ge 1 ]] && [[ "${choice}" -le "${#options[@]}" ]]; then
-    printf '%s\n' "${options[$((choice-1))]}"
-    return 0
-  fi
-  
-  return 1
-}
-
-ng_show_help() {
-  local topic="$1"
-  
-  case "${topic}" in
-    monitor)
-      if [[ "${NG_LANG}" == "en" ]]; then
-        printf 'System Monitor Help:\n'
-        printf '  - Single snapshot: View current resource usage\n'
-        printf '  - Real-time monitor: Continuous monitoring with configurable refresh\n'
-        printf '  - Monitor report: Generate detailed system report\n'
-        printf '  - System alerts: Check for resource threshold violations\n'
-      else
-        printf '系统监控帮助:\n'
-        printf '  - 单次快照: 查看当前资源使用情况\n'
-        printf '  - 实时监控: 可配置刷新间隔的持续监控\n'
-        printf '  - 监控报告: 生成详细的系统报告\n'
-        printf '  - 系统告警: 检查资源阈值违规情况\n'
-      fi
-      ;;
-    network)
-      if [[ "${NG_LANG}" == "en" ]]; then
-        printf 'Network Tools Help:\n'
-        printf '  - Ping test: Test host connectivity\n'
-        printf '  - Traceroute: Trace network path to host\n'
-        printf '  - DNS lookup: Query DNS records for domain\n'
-        printf '  - Port scan: Scan open ports on host\n'
-        printf '  - Bandwidth test: Test internet connection speed\n'
-      else
-        printf '网络工具帮助:\n'
-        printf '  - Ping 测试: 测试主机连通性\n'
-        printf '  - 路由追踪: 追踪到主机的网络路径\n'
-        printf '  - DNS 查询: 查询域名的 DNS 记录\n'
-        printf '  - 端口扫描: 扫描主机开放端口\n'
-        printf '  - 带宽测试: 测试互联网连接速度\n'
-      fi
-      ;;
-    security)
-      if [[ "${NG_LANG}" == "en" ]]; then
-        printf 'Security Tools Help:\n'
-        printf '  - Security report: Aggregate security analysis\n'
-        printf '  - Failed login statistics: Count failed login source IPs\n'
-        printf '  - Suspicious web requests: Inspect nginx access logs\n'
-        printf '  - Firewall summary: Display firewall state\n'
-        printf '  - Integrity baseline: Create file integrity baseline\n'
-      else
-        printf '安全工具帮助:\n'
-        printf '  - 安全报告: 综合安全分析\n'
-        printf '  - 失败登录统计: 统计失败登录来源 IP\n'
-        printf '  - 可疑 Web 请求: 检查 nginx 访问日志\n'
-        printf '  - 防火墙状态: 显示防火墙状态\n'
-        printf '  - 完整性基线: 创建文件完整性基线\n'
-      fi
-      ;;
-    *)
-      if [[ "${NG_LANG}" == "en" ]]; then
-        printf 'No help available for topic: %s\n' "${topic}"
-      else
-        printf '没有关于 %s 的帮助信息\n' "${topic}"
-      fi
-      ;;
-  esac
-}

@@ -55,6 +55,10 @@ ng_probe_all_peers() {
     done < <(ng_read_peers)
   } | tee "${output_file}"
 
+  # Collect local probe once
+  local state_file
+  state_file="$(ng_collect_local_probe)"
+
   if [[ "${NG_LANG}" == "en" ]]; then
     ng_report_header "🛰 ServerHarbor Probe Report"
     ng_report_meta "Generated At" "$(ng_timestamp)"
@@ -64,8 +68,6 @@ ng_probe_all_peers() {
       ng_report_line "  ${line}"
     done
     ng_report_section_start "Local Snapshot"
-    local state_file
-    state_file="$(ng_collect_local_probe)"
     cat "${state_file}" | while IFS= read -r line; do
       ng_report_line "  ${line}"
     done
@@ -79,8 +81,6 @@ ng_probe_all_peers() {
       ng_report_line "  ${line}"
     done
     ng_report_section_start "本机快照"
-    local state_file
-    state_file="$(ng_collect_local_probe)"
     cat "${state_file}" | while IFS= read -r line; do
       ng_report_line "  ${line}"
     done
