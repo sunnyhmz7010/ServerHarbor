@@ -2,8 +2,7 @@
 
 set -euo pipefail
 
-NG_PROJECT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-NG_MODULE_DIR="${NG_PROJECT_ROOT}/modules"
+NG_PROJECT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 NG_HOSTNAME="$(hostname 2>/dev/null || echo unknown-host)"
 NG_PROJECT_NAME="ServerHarbor"
 NG_INSTALL_ROOT="/opt/serverharbor"

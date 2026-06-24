@@ -4,14 +4,14 @@ set -euo pipefail
 
 PROJECT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
-# shellcheck source=lib/common.sh
-source "${PROJECT_ROOT}/lib/common.sh"
-# shellcheck source=modules/bootstrap.sh
-source "${PROJECT_ROOT}/modules/bootstrap.sh"
-# shellcheck source=modules/probe.sh
-source "${PROJECT_ROOT}/modules/probe.sh"
-# shellcheck source=modules/security.sh
-source "${PROJECT_ROOT}/modules/security.sh"
+# shellcheck source=common.sh
+source "${PROJECT_ROOT}/common.sh"
+# shellcheck source=bootstrap.sh
+source "${PROJECT_ROOT}/bootstrap.sh"
+# shellcheck source=probe.sh
+source "${PROJECT_ROOT}/probe.sh"
+# shellcheck source=security.sh
+source "${PROJECT_ROOT}/security.sh"
 
 ng_init_environment
 
