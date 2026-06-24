@@ -382,6 +382,236 @@ ng_backup_manager() {
   esac
 }
 
+ng_has_peers() {
+  [[ -f "${NG_PEERS_FILE}" ]] && [[ -n "$(grep -Ev '^\s*#|^\s*$' "${NG_PEERS_FILE}" 2>/dev/null)" ]]
+}
+
+ng_show_no_peers_warning() {
+  if [[ "${NG_LANG}" == "en" ]]; then
+    ng_print_header "No Peers Configured"
+    printf 'No peer nodes found in configuration.\n\n'
+    printf 'To add peers, edit: %s\n' "${NG_PEERS_FILE}"
+    printf 'Format: alias,host\n'
+    printf 'Example:\n'
+    printf '  server1,192.168.1.10\n'
+    printf '  server2,192.168.1.11\n\n'
+    printf 'Or use option 7 to manage peers interactively.\n'
+  else
+    ng_print_header "未配置节点"
+    printf '配置文件中未找到节点。\n\n'
+    printf '要添加节点，请编辑: %s\n' "${NG_PEERS_FILE}"
+    printf '格式：别名,主机\n'
+    printf '示例：\n'
+    printf '  server1,192.168.1.10\n'
+    printf '  server2,192.168.1.11\n\n'
+    printf '或使用选项 7 交互式管理节点。\n'
+  fi
+}
+
+ng_manage_peers() {
+  local choice
+
+  while true; do
+    clear || true
+    if [[ "${NG_LANG}" == "en" ]]; then
+      ng_print_title_box "🔧 Peer Management" "Add, remove, or list peer nodes"
+      ng_print_option "1" "📋" "List peers" "Show all configured peers"
+      ng_print_option "2" "➕" "Add peer" "Add a new peer node"
+      ng_print_option "3" "➖" "Remove peer" "Remove a peer node"
+      ng_print_option "4" "📝" "Edit peers file" "Open peers.conf in editor"
+      ng_print_option "0" "↩" "Back"
+    else
+      ng_print_title_box "🔧 节点管理" "添加、删除或列出节点"
+      ng_print_option "1" "📋" "列出节点" "显示所有已配置的节点"
+      ng_print_option "2" "➕" "添加节点" "添加新的节点"
+      ng_print_option "3" "➖" "删除节点" "删除节点"
+      ng_print_option "4" "📝" "编辑节点文件" "用编辑器打开 peers.conf"
+      ng_print_option "0" "↩" "返回"
+    fi
+
+    printf '\n'
+    ng_print_menu_hint
+    printf '\n'
+    ng_t select
+    ng_read_line choice || return 130
+
+    case "${choice}" in
+      1)
+        if [[ "${NG_LANG}" == "en" ]]; then
+          ng_print_header "Configured Peers"
+        else
+          ng_print_header "已配置节点"
+        fi
+        if [[ -f "${NG_PEERS_FILE}" ]]; then
+          cat "${NG_PEERS_FILE}"
+        else
+          if [[ "${NG_LANG}" == "en" ]]; then
+            printf 'No peers file found.\n'
+          else
+            printf '未找到节点配置文件。\n'
+          fi
+        fi
+        ;;
+      2)
+        local alias host
+        if [[ "${NG_LANG}" == "en" ]]; then
+          printf 'Enter peer alias (e.g., server1): '
+        else
+          printf '输入节点别名（如 server1）：'
+        fi
+        ng_read_line alias || return 130
+        
+        if [[ "${NG_LANG}" == "en" ]]; then
+          printf 'Enter peer host (IP or hostname): '
+        else
+          printf '输入节点主机（IP 或主机名）：'
+        fi
+        ng_read_line host || return 130
+        
+        if [[ -n "${alias}" && -n "${host}" ]]; then
+          # Create peers file if it doesn't exist
+          if [[ ! -f "${NG_PEERS_FILE}" ]]; then
+            printf '# alias,host\n' > "${NG_PEERS_FILE}"
+          fi
+          printf '%s,%s\n' "${alias}" "${host}" >> "${NG_PEERS_FILE}"
+          if [[ "${NG_LANG}" == "en" ]]; then
+            printf 'Peer added: %s (%s)\n' "${alias}" "${host}"
+          else
+            printf '节点已添加: %s (%s)\n' "${alias}" "${host}"
+          fi
+        fi
+        ;;
+      3)
+        if [[ ! -f "${NG_PEERS_FILE}" ]] || [[ -z "$(grep -Ev '^\s*#|^\s*$' "${NG_PEERS_FILE}" 2>/dev/null)" ]]; then
+          if [[ "${NG_LANG}" == "en" ]]; then
+            printf 'No peers to remove.\n'
+          else
+            printf '没有可删除的节点。\n'
+          fi
+        else
+          if [[ "${NG_LANG}" == "en" ]]; then
+            printf 'Current peers:\n'
+          else
+            printf '当前节点：\n'
+          fi
+          grep -Ev '^\s*#|^\s*$' "${NG_PEERS_FILE}" | nl
+          printf '\n'
+          if [[ "${NG_LANG}" == "en" ]]; then
+            printf 'Enter line number to remove: '
+          else
+            printf '输入要删除的行号：'
+          fi
+          local line_num
+          ng_read_line line_num || return 130
+          if [[ "${line_num}" =~ ^[0-9]+$ ]]; then
+            sed -i "${line_num}d" "${NG_PEERS_FILE}"
+            if [[ "${NG_LANG}" == "en" ]]; then
+              printf 'Peer removed.\n'
+            else
+              printf '节点已删除。\n'
+            fi
+          fi
+        fi
+        ;;
+      4)
+        if [[ ! -f "${NG_PEERS_FILE}" ]]; then
+          printf '# alias,host\n' > "${NG_PEERS_FILE}"
+        fi
+        if [[ "${NG_LANG}" == "en" ]]; then
+          printf 'Opening %s in editor...\n' "${NG_PEERS_FILE}"
+        else
+          printf '正在打开 %s...\n' "${NG_PEERS_FILE}"
+        fi
+        ${EDITOR:-vi} "${NG_PEERS_FILE}" 2>/dev/null || nano "${NG_PEERS_FILE}" 2>/dev/null || vi "${NG_PEERS_FILE}"
+        ;;
+      0) return 0 ;;
+      *) ng_t invalid_option ;;
+    esac
+    
+    ng_press_enter || return 130
+  done
+}
+
+ng_setup_ssh_keys() {
+  if [[ "${NG_LANG}" == "en" ]]; then
+    ng_print_header "SSH Key Setup"
+    printf 'This will generate an SSH key pair and distribute it to all peers.\n'
+    printf 'This allows password-less SSH access for batch operations.\n\n'
+  else
+    ng_print_header "SSH 密钥设置"
+    printf '这将生成 SSH 密钥对并分发到所有节点。\n'
+    printf '这允许批量操作使用免密 SSH 登录。\n\n'
+  fi
+
+  # Check if SSH key exists
+  if [[ ! -f ~/.ssh/id_rsa ]] && [[ ! -f ~/.ssh/id_ed25519 ]]; then
+    if [[ "${NG_LANG}" == "en" ]]; then
+      printf 'No SSH key found. Generating new key...\n'
+    else
+      printf '未找到 SSH 密钥。正在生成新密钥...\n'
+    fi
+    ssh-keygen -t ed25519 -f ~/.ssh/id_ed25519 -N "" -q
+    if [[ "${NG_LANG}" == "en" ]]; then
+      printf 'SSH key generated.\n'
+    else
+      printf 'SSH 密钥已生成。\n'
+    fi
+  else
+    if [[ "${NG_LANG}" == "en" ]]; then
+      printf 'SSH key already exists.\n'
+    else
+      printf 'SSH 密钥已存在。\n'
+    fi
+  fi
+
+  # Check if peers are configured
+  if ! ng_has_peers; then
+    ng_show_no_peers_warning
+    return 0
+  fi
+
+  if [[ "${NG_LANG}" == "en" ]]; then
+    printf '\nDistributing key to peers...\n'
+  else
+    printf '\n正在分发密钥到节点...\n'
+  fi
+
+  local success=0
+  local failed=0
+
+  while IFS=',' read -r peer_alias peer_host; do
+    [[ -n "${peer_alias}" && -n "${peer_host}" ]] || continue
+    
+    if [[ "${NG_LANG}" == "en" ]]; then
+      printf '  %s (%s): ' "${peer_alias}" "${peer_host}"
+    else
+      printf '  %s (%s): ' "${peer_alias}" "${peer_host}"
+    fi
+    
+    if ssh-copy-id -o ConnectTimeout=5 -o StrictHostKeyChecking=no "${peer_host}" 2>/dev/null; then
+      if [[ "${NG_LANG}" == "en" ]]; then
+        printf 'OK\n'
+      else
+        printf '成功\n'
+      fi
+      ((success++)) || true
+    else
+      if [[ "${NG_LANG}" == "en" ]]; then
+        printf 'Failed\n'
+      else
+        printf '失败\n'
+      fi
+      ((failed++)) || true
+    fi
+  done < <(ng_read_peers)
+
+  if [[ "${NG_LANG}" == "en" ]]; then
+    printf '\nKey distribution completed: %d success, %d failed\n' "${success}" "${failed}"
+  else
+    printf '\n密钥分发完成: %d 成功, %d 失败\n' "${success}" "${failed}"
+  fi
+}
+
 ng_probe_menu() {
   local choice
 
@@ -395,6 +625,8 @@ ng_probe_menu() {
       ng_print_option "4" "📋" "View logs" "View system logs (auth/syslog/dmesg)"
       ng_print_option "5" "📁" "Sync configuration" "Sync config files to all peers (decentralized)"
       ng_print_option "6" "💾" "Backup management" "Backup and restore config/state files"
+      ng_print_option "7" "🔧" "Manage peers" "Add/remove/list peer nodes"
+      ng_print_option "8" "🔑" "Setup SSH keys" "Generate and distribute SSH keys for peers"
       ng_print_option "0" "↩" "Back"
     else
       ng_print_title_box "🛰 节点管理" "节点监控、批量操作与配置同步"
@@ -404,6 +636,8 @@ ng_probe_menu() {
       ng_print_option "4" "📋" "查看日志" "查看系统日志（认证/系统/内核）"
       ng_print_option "5" "📁" "配置文件同步" "将配置同步到所有节点（去中心化）"
       ng_print_option "6" "💾" "备份管理" "备份和恢复配置/状态文件"
+      ng_print_option "7" "🔧" "节点管理" "添加/删除/列出节点"
+      ng_print_option "8" "🔑" "设置 SSH 密钥" "生成并分发 SSH 密钥以实现免密登录"
       ng_print_option "0" "↩" "返回"
     fi
 
@@ -414,18 +648,28 @@ ng_probe_menu() {
     ng_read_line choice || return 130
 
     case "${choice}" in
-      1) ng_probe_all_peers ;;
+      1)
+        if ! ng_has_peers; then
+          ng_show_no_peers_warning
+        else
+          ng_probe_all_peers
+        fi
+        ;;
       2) ng_local_health ;;
       3)
-        if [[ "${NG_LANG}" == "en" ]]; then
-          printf 'Enter command to execute: '
+        if ! ng_has_peers; then
+          ng_show_no_peers_warning
         else
-          printf '输入要执行的命令: '
-        fi
-        local cmd
-        ng_read_line cmd || return 130
-        if [[ -n "${cmd}" ]]; then
-          ng_batch_exec "${cmd}"
+          if [[ "${NG_LANG}" == "en" ]]; then
+            printf 'Enter command to execute: '
+          else
+            printf '输入要执行的命令: '
+          fi
+          local cmd
+          ng_read_line cmd || return 130
+          if [[ -n "${cmd}" ]]; then
+            ng_batch_exec "${cmd}"
+          fi
         fi
         ;;
       4)
@@ -450,27 +694,33 @@ ng_probe_menu() {
         esac
         ;;
       5)
-        if [[ "${NG_LANG}" == "en" ]]; then
-          printf 'Enter source file path: '
+        if ! ng_has_peers; then
+          ng_show_no_peers_warning
         else
-          printf '输入源文件路径: '
-        fi
-        local src_file
-        ng_read_line src_file || return 130
-        
-        if [[ "${NG_LANG}" == "en" ]]; then
-          printf 'Enter remote target path: '
-        else
-          printf '输入远程目标路径: '
-        fi
-        local remote_path
-        ng_read_line remote_path || return 130
-        
-        if [[ -n "${src_file}" && -n "${remote_path}" ]]; then
-          ng_sync_config "${src_file}" "${remote_path}"
+          if [[ "${NG_LANG}" == "en" ]]; then
+            printf 'Enter source file path: '
+          else
+            printf '输入源文件路径: '
+          fi
+          local src_file
+          ng_read_line src_file || return 130
+          
+          if [[ "${NG_LANG}" == "en" ]]; then
+            printf 'Enter remote target path: '
+          else
+            printf '输入远程目标路径: '
+          fi
+          local remote_path
+          ng_read_line remote_path || return 130
+          
+          if [[ -n "${src_file}" && -n "${remote_path}" ]]; then
+            ng_sync_config "${src_file}" "${remote_path}"
+          fi
         fi
         ;;
       6) ng_backup_manager ;;
+      7) ng_manage_peers ;;
+      8) ng_setup_ssh_keys ;;
       0) return 0 ;;
       *) ng_t invalid_option ;;
     esac
