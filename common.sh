@@ -487,21 +487,17 @@ ng_install_base_packages() {
       else
         status_icon=" "
       fi
-      printf '  [%s] %s %s\n' "${status_icon}" "$(ng_color "${NG_C_ACCENT_2}" "${pkg_icons[i]}")" "${pkg_names[i]}"
-      printf '      %s\n' "$(ng_color "${NG_C_DIM}" "${pkg_descriptions[i]}")"
+      printf '  [%s] %s %-3s %s\n' "${status_icon}" "$(ng_color "${NG_C_ACCENT_2}" "${pkg_icons[i]}")" "$((i+1))" "${pkg_names[i]}"
+      printf '          %s\n' "$(ng_color "${NG_C_DIM}" "${pkg_descriptions[i]}")"
     done
 
     printf '\n'
     if [[ "${NG_LANG}" == "en" ]]; then
-      printf '  [a] Select all\n'
-      printf '  [n] Deselect all\n'
-      printf '  [y] Confirm and install\n'
-      printf '  [0] Cancel\n'
+      printf '  Enter number to toggle, or:\n'
+      printf '  [a] Select all  [n] Deselect all  [y] Confirm  [0] Cancel\n'
     else
-      printf '  [a] 全选\n'
-      printf '  [n] 全不选\n'
-      printf '  [y] 确认安装\n'
-      printf '  [0] 取消\n'
+      printf '  输入编号切换选择状态，或：\n'
+      printf '  [a] 全选  [n] 全不选  [y] 确认安装  [0] 取消\n'
     fi
     printf '\n'
 
