@@ -56,33 +56,17 @@ ServerHarbor 的目标，就是用一个可以直接在 Linux 上运行的 Shell
 - Rootkit 检测和端口安全扫描
 - 系统安全评分计算
 
-### 系统监控
-
-- 实时 CPU、内存、磁盘使用率监控
-- 系统负载和进程数量监控
-- 可配置的资源阈值告警
-- 生成详细的系统监控报告
-
-### 网络工具
-
-- Ping 测试和路由追踪
-- DNS 记录查询
-- 端口扫描和带宽测试
-- 网络接口和连接状态查看
-- 综合网络诊断
-
 ## 快速开始
 
-### 运行要求
+### 前置要求
 
 - Linux 服务器或支持 Bash 的 Linux 环境
-- 建议具备 `bash`、`curl`、`tar` 与常见系统工具
-- 开荒、swap、DNS、SSH 加固、防火墙相关功能通常需要 `root` 权限
+- 需要 `root` 权限执行开荒、加固等操作
 
-检查 Bash：
+**重要**：确保服务器已安装 `curl`。如果未安装，请先执行：
 
 ```bash
-bash --version
+apt update -y && apt install curl -y
 ```
 
 ### 使用方式
@@ -100,6 +84,14 @@ cd ServerHarbor
 chmod +x menu.sh
 ./menu.sh
 ```
+
+### 一键全流程
+
+新开荒功能支持一键全流程，自动完成：
+- 基础软件安装（curl、socat、wget、sudo、iptables）
+- Docker 安装（自动检测地区，中国使用阿里云镜像）
+- TCP/BBR 优化（使用 [bbrv3-lite](https://github.com/ike-sh/bbrv3-lite) 脚本）
+- 生成开荒报告
 
 3. 首次使用前，建议先检查配置
 

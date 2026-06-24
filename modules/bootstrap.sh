@@ -356,35 +356,217 @@ ng_bootstrap_full() {
   fi
 }
 
+ng_bootstrap_oneclick() {
+  ng_require_root || return 1
+
+  # ========== Step 1: Base packages ==========
+  if [[ "${NG_LANG}" == "en" ]]; then
+    ng_print_header "Step 1/4: Base Software Installation"
+    printf 'Default packages: curl socat wget sudo iptables\n\n'
+    printf '  [1] Use default list (install directly)\n'
+    printf '  [2] Custom list (add/remove packages)\n'
+    printf '  [3] Skip this step\n\n'
+  else
+    ng_print_header "步骤 1/4: 基础软件安装"
+    printf '默认安装：curl socat wget sudo iptables\n\n'
+    printf '  [1] 使用默认列表（直接安装）\n'
+    printf '  [2] 自定义列表（添加/删除软件）\n'
+    printf '  [3] 跳过此步骤\n\n'
+  fi
+
+  local pkg_choice
+  ng_read_line pkg_choice || return 130
+
+  case "${pkg_choice}" in
+    1)
+      apt update -y && apt upgrade -y && apt install -y curl socat wget sudo iptables
+      ;;
+    2)
+      local default_packages="curl socat wget sudo iptables"
+      if [[ "${NG_LANG}" == "en" ]]; then
+        printf 'Current list: %s\n\n' "${default_packages}"
+        printf 'Packages to remove (space-separated, Enter to skip): '
+      else
+        printf '当前列表：%s\n\n' "${default_packages}"
+        printf '输入要删除的软件（空格分隔，直接回车跳过）：'
+      fi
+      local remove_list
+      ng_read_line remove_list || return 130
+
+      if [[ "${NG_LANG}" == "en" ]]; then
+        printf 'Packages to add (space-separated, Enter to skip): '
+      else
+        printf '输入要添加的软件（空格分隔，直接回车跳过）：'
+      fi
+      local add_list
+      ng_read_line add_list || return 130
+
+      local final_packages="${default_packages}"
+      if [[ -n "${remove_list}" ]]; then
+        for pkg in ${remove_list}; do
+          final_packages=$(echo "${final_packages}" | sed "s/\b${pkg}\b//g")
+        done
+      fi
+      if [[ -n "${add_list}" ]]; then
+        final_packages="${final_packages} ${add_list}"
+      fi
+
+      if [[ "${NG_LANG}" == "en" ]]; then
+        printf '\nWill install: %s\n\n' "${final_packages}"
+      else
+        printf '\n将安装：%s\n\n' "${final_packages}"
+      fi
+      apt update -y && apt upgrade -y && apt install -y ${final_packages}
+      ;;
+    3)
+      if [[ "${NG_LANG}" == "en" ]]; then
+        printf 'Skipped base software installation.\n'
+      else
+        printf '已跳过基础软件安装\n'
+      fi
+      ;;
+    *)
+      ng_t invalid_option
+      return 1
+      ;;
+  esac
+
+  # ========== Step 2: Docker ==========
+  if [[ "${NG_LANG}" == "en" ]]; then
+    ng_print_header "Step 2/4: Docker Installation"
+  else
+    ng_print_header "步骤 2/4: Docker 安装"
+  fi
+
+  if ng_prompt_yes_no "$( [[ "${NG_LANG}" == "en" ]] && printf 'Install Docker?' || printf '是否安装 Docker？' )"; then
+    local country
+    country=$(curl -s ipinfo.io/country 2>/dev/null || echo "unknown")
+
+    if [[ "${country}" == "CN" ]]; then
+      if [[ "${NG_LANG}" == "en" ]]; then
+        printf 'Detected China server, installing Docker with Aliyun mirror...\n'
+      else
+        printf '检测到中国服务器，使用阿里云镜像安装 Docker...\n'
+      fi
+      curl -fsSL https://get.docker.com | bash -s docker --mirror Aliyun
+    else
+      if [[ "${NG_LANG}" == "en" ]]; then
+        printf 'Installing Docker with official source...\n'
+      else
+        printf '使用官方源安装 Docker...\n'
+      fi
+      curl -fsSL https://get.docker.com | sh
+    fi
+  else
+    if [[ "${NG_LANG}" == "en" ]]; then
+      printf 'Skipped Docker installation.\n'
+    else
+      printf '已跳过 Docker 安装\n'
+    fi
+  fi
+
+  # ========== Step 3: TCP/BBR ==========
+  if [[ "${NG_LANG}" == "en" ]]; then
+    ng_print_header "Step 3/4: TCP/BBR Optimization"
+    printf 'Description:\n'
+    printf '  - BBR v3 kernel: Install XanMod kernel, requires restart\n'
+    printf '  - TCP tuning: Optimize network buffers and queue algorithms (includes DNS purification)\n\n'
+  else
+    ng_print_header "步骤 3/4: TCP/BBR 优化"
+    printf '说明：\n'
+    printf '  - BBR v3 内核：安装 XanMod 内核，需要重启才能生效\n'
+    printf '  - TCP 调优：优化网络缓冲区和队列算法，包含 DNS 净化\n\n'
+  fi
+
+  local install_kernel=0
+  local install_tcp=0
+
+  if ng_prompt_yes_no "$( [[ "${NG_LANG}" == "en" ]] && printf 'Install BBR v3 kernel?' || printf '是否安装 BBR v3 内核？' )"; then
+    install_kernel=1
+  fi
+
+  if ng_prompt_yes_no "$( [[ "${NG_LANG}" == "en" ]] && printf 'Execute TCP tuning?' || printf '是否执行 TCP 调优？' )"; then
+    install_tcp=1
+  fi
+
+  if [[ "${install_kernel}" -eq 1 && "${install_tcp}" -eq 1 ]]; then
+    if [[ "${NG_LANG}" == "en" ]]; then
+      printf '\nInstalling BBR v3 kernel...\n'
+    else
+      printf '\n正在安装 BBR v3 内核...\n'
+    fi
+    bash <(curl -fsSL "https://raw.githubusercontent.com/ike-sh/bbrv3-lite/main/net-tcp-tune.sh?$(date +%s)") -i
+
+    if [[ "${NG_LANG}" == "en" ]]; then
+      printf '\nExecuting TCP tuning...\n'
+    else
+      printf '\n正在执行 TCP 调优...\n'
+    fi
+    echo "10" | bash <(curl -fsSL "https://raw.githubusercontent.com/ike-sh/bbrv3-lite/main/net-tcp-tune.sh?$(date +%s)")
+  elif [[ "${install_kernel}" -eq 1 ]]; then
+    if [[ "${NG_LANG}" == "en" ]]; then
+      printf '\nInstalling BBR v3 kernel...\n'
+    else
+      printf '\n正在安装 BBR v3 内核...\n'
+    fi
+    bash <(curl -fsSL "https://raw.githubusercontent.com/ike-sh/bbrv3-lite/main/net-tcp-tune.sh?$(date +%s)") -i
+  elif [[ "${install_tcp}" -eq 1 ]]; then
+    if [[ "${NG_LANG}" == "en" ]]; then
+      printf '\nExecuting TCP tuning...\n'
+    else
+      printf '\n正在执行 TCP 调优...\n'
+    fi
+    echo "10" | bash <(curl -fsSL "https://raw.githubusercontent.com/ike-sh/bbrv3-lite/main/net-tcp-tune.sh?$(date +%s)")
+  else
+    if [[ "${NG_LANG}" == "en" ]]; then
+      printf 'Skipped TCP/BBR optimization.\n'
+    else
+      printf '已跳过 TCP/BBR 优化\n'
+    fi
+  fi
+
+  # ========== Step 4: Report ==========
+  if [[ "${NG_LANG}" == "en" ]]; then
+    ng_print_header "Step 4/4: Generate Report"
+  else
+    ng_print_header "步骤 4/4: 生成开荒报告"
+  fi
+  ng_bootstrap_report
+
+  if [[ "${NG_LANG}" == "en" ]]; then
+    ng_log "INFO" "One-click full flow completed."
+  else
+    ng_log "INFO" "一键全流程完成。"
+  fi
+}
+
 ng_bootstrap_menu() {
   local choice
 
   while true; do
     if [[ "${NG_LANG}" == "en" ]]; then
-      ng_print_title_box "🚀 System Bootstrap" "Server provisioning, monitoring and network tools"
-      ng_print_option "1" "⚡" "Run full bootstrap" "Base packages, timezone, BBR, DNS, swap and SSH hardening"
-      ng_print_option "2" "📦" "Install base packages" "curl, wget and common system/network tools"
-      ng_print_option "3" "🌐" "Enable BBR" "Write sysctl tuning and reload kernel parameters"
-      ng_print_option "4" "🧭" "Configure DNS" "Rewrite /etc/resolv.conf with configured resolvers"
-      ng_print_option "5" "🧠" "Configure swap" "Create /swapfile when no swap exists"
-      ng_print_option "6" "🔐" "Harden SSH" "Disable password login and tighten SSH defaults"
-      ng_print_option "7" "📊" "System monitor" "CPU, memory, disk usage and alerts"
-      ng_print_option "8" "🌐" "Network tools" "Ping, traceroute, DNS lookup, port scan"
-      ng_print_option "9" "📄" "Generate report" "Show system summary report"
-      ng_print_option "10" "🌍" "External scripts" "Quick launch bbrv3-lite or vps-tcp-tune"
+      ng_print_title_box "🚀 System Bootstrap" "Server provisioning and optimization"
+      ng_print_option "1" "⚡" "One-click full flow" "Base packages + Docker + TCP/BBR + Report"
+      ng_print_option "2" "📦" "Install base packages" "curl, socat, wget, sudo, iptables"
+      ng_print_option "3" "🐳" "Install Docker" "Auto-detect region for mirror"
+      ng_print_option "4" "🚀" "TCP/BBR optimization" "bbrv3-lite kernel or TCP tuning"
+      ng_print_option "5" "🌐" "Configure DNS" "Rewrite /etc/resolv.conf"
+      ng_print_option "6" "🧠" "Configure swap" "Create /swapfile"
+      ng_print_option "7" "🔐" "Harden SSH" "Disable password login"
+      ng_print_option "8" "📄" "Generate report" "Show system summary"
+      ng_print_option "9" "🌍" "External scripts" "Quick launch third-party scripts"
       ng_print_option "0" "↩" "Back"
     else
-      ng_print_title_box "🚀 系统开荒" "服务器初始化、监控与网络工具"
-      ng_print_option "1" "⚡" "执行完整开荒" "基础软件、时区、BBR、DNS、swap 与 SSH 加固"
-      ng_print_option "2" "📦" "安装基础软件" "curl、wget 与常用系统/网络工具"
-      ng_print_option "3" "🌐" "启用 BBR" "写入 sysctl 调优并重新加载内核参数"
-      ng_print_option "4" "🧭" "配置 DNS" "按配置重写 /etc/resolv.conf"
-      ng_print_option "5" "🧠" "配置 swap" "在无 swap 时创建 /swapfile"
-      ng_print_option "6" "🔐" "加固 SSH" "禁用密码登录并收紧 SSH 默认项"
-      ng_print_option "7" "📊" "系统监控" "CPU、内存、磁盘使用率与告警"
-      ng_print_option "8" "🌐" "网络工具" "Ping、路由追踪、DNS 查询、端口扫描"
-      ng_print_option "9" "📄" "生成报告" "输出系统摘要报告"
-      ng_print_option "10" "🌍" "第三方脚本" "快捷运行 bbrv3-lite 或 vps-tcp-tune"
+      ng_print_title_box "🚀 系统开荒" "服务器初始化与优化"
+      ng_print_option "1" "⚡" "一键全流程" "基础软件 + Docker + TCP/BBR + 报告"
+      ng_print_option "2" "📦" "基础软件安装" "curl、socat、wget、sudo、iptables"
+      ng_print_option "3" "🐳" "Docker 安装" "自动检测地区使用镜像"
+      ng_print_option "4" "🚀" "TCP/BBR 优化" "bbrv3-lite 内核或 TCP 调优"
+      ng_print_option "5" "🌐" "配置 DNS" "重写 /etc/resolv.conf"
+      ng_print_option "6" "🧠" "配置 swap" "创建 /swapfile"
+      ng_print_option "7" "🔐" "加固 SSH" "禁用密码登录"
+      ng_print_option "8" "📄" "生成报告" "输出系统摘要"
+      ng_print_option "9" "🌍" "第三方脚本" "快捷运行外部脚本"
       ng_print_option "0" "↩" "返回"
     fi
 
@@ -395,12 +577,40 @@ ng_bootstrap_menu() {
     ng_read_line choice || return 130
 
     case "${choice}" in
-      1) ng_bootstrap_full ;;
+      1) ng_bootstrap_oneclick ;;
       2) ng_require_root && ng_install_base_packages ;;
-      3) ng_enable_bbr ;;
-      4) ng_configure_dns ;;
-      5) ng_configure_swap ;;
-      6)
+      3)
+        if ng_prompt_yes_no "$( [[ "${NG_LANG}" == "en" ]] && printf 'Install Docker?' || printf '是否安装 Docker？' )"; then
+          local country
+          country=$(curl -s ipinfo.io/country 2>/dev/null || echo "unknown")
+          if [[ "${country}" == "CN" ]]; then
+            curl -fsSL https://get.docker.com | bash -s docker --mirror Aliyun
+          else
+            curl -fsSL https://get.docker.com | sh
+          fi
+        fi
+        ;;
+      4)
+        if [[ "${NG_LANG}" == "en" ]]; then
+          printf '  [1] Install BBR v3 kernel (requires restart)\n'
+          printf '  [2] TCP tuning only\n'
+          printf '  [3] Skip\n'
+        else
+          printf '  [1] 安装 BBR v3 内核（需要重启）\n'
+          printf '  [2] 仅 TCP 调优\n'
+          printf '  [3] 跳过\n'
+        fi
+        local bbr_choice
+        ng_read_line bbr_choice || return 130
+        case "${bbr_choice}" in
+          1) bash <(curl -fsSL "https://raw.githubusercontent.com/ike-sh/bbrv3-lite/main/net-tcp-tune.sh?$(date +%s)") -i ;;
+          2) echo "10" | bash <(curl -fsSL "https://raw.githubusercontent.com/ike-sh/bbrv3-lite/main/net-tcp-tune.sh?$(date +%s)") ;;
+          *) ;;
+        esac
+        ;;
+      5) ng_configure_dns ;;
+      6) ng_configure_swap ;;
+      7)
         if [[ "${NG_LANG}" == "en" ]]; then
           if ng_prompt_yes_no "This may disable password login. Continue?"; then
             ng_harden_ssh
@@ -411,10 +621,8 @@ ng_bootstrap_menu() {
           fi
         fi
         ;;
-      7) ng_monitor_menu ;;
-      8) ng_network_menu ;;
-      9) ng_bootstrap_report ;;
-      10) ng_network_tune_shortcuts_menu ;;
+      8) ng_bootstrap_report ;;
+      9) ng_network_tune_shortcuts_menu ;;
       0) return 0 ;;
       *) ng_t invalid_option ;;
     esac
