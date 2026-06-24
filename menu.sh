@@ -12,6 +12,8 @@ source "${PROJECT_ROOT}/bootstrap.sh"
 source "${PROJECT_ROOT}/probe.sh"
 # shellcheck source=security.sh
 source "${PROJECT_ROOT}/security.sh"
+# shellcheck source=nodes.sh
+source "${PROJECT_ROOT}/nodes.sh"
 
 ng_init_environment
 
@@ -108,18 +110,18 @@ ng_uninstall() {
 
 show_menu() {
   if [[ "${NG_LANG}" == "en" ]]; then
-    ng_print_option "1" "🚀" "System bootstrap" "Base packages / DNS / swap / BBR / SSH hardening / monitoring / network tools"
+    ng_print_option "1" "🚀" "System bootstrap" "Base packages / Docker / network tuning scripts"
     ng_print_option "2" "🛡" "Security guard" "Auth logs / web attacks / firewall / integrity / rootkit detection"
-    ng_print_option "3" "🛰" "Node management" "Peer probe / local health snapshot / connectivity checks"
+    ng_print_option "3" "🛰" "Node management" "Multi-server management / batch commands / config sync"
     ng_print_option "4" "♻️" "Update" "Download latest source and restart"
     if ng_is_installed; then
       ng_print_option "5" "🗑" "Uninstall" "Remove ServerHarbor from this system"
     fi
     ng_print_option "0" "↩" "Exit"
   else
-    ng_print_option "1" "🚀" "系统开荒" "基础软件 / DNS / swap / BBR / SSH 加固 / 监控 / 网络工具"
+    ng_print_option "1" "🚀" "系统开荒" "基础软件 / Docker / 网络调优脚本"
     ng_print_option "2" "🛡" "安全卫士" "认证日志 / Web 攻击 / 防火墙 / 完整性 / Rootkit 检测"
-    ng_print_option "3" "🛰" "节点管理" "节点探测 / 本机健康快照 / 连通性检查"
+    ng_print_option "3" "🛰" "节点管理" "多服务器管理 / 批量命令 / 配置同步"
     ng_print_option "4" "♻️" "更新" "下载最新源码并重启"
     if ng_is_installed; then
       ng_print_option "5" "🗑" "卸载" "从系统中移除 ServerHarbor"
@@ -144,7 +146,7 @@ main() {
     case "${choice}" in
       1) ng_bootstrap_menu ;;
       2) ng_security_menu ;;
-      3) ng_probe_menu ;;
+      3) ng_node_menu ;;
       4) ng_self_update ;;
       5)
         if ng_is_installed; then
