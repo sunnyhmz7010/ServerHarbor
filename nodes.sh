@@ -34,10 +34,7 @@ ng_generate_join_command() {
   if [[ "${NG_LANG}" == "en" ]]; then
     ng_print_header "Generate Join Command"
     printf 'Run this command on a new server to join this node group:\n\n'
-    printf '%s\n' "$(ng_color "${NG_C_ACCENT}" "curl -fsSL ${join_script} | bash -s -- ${main_host} ${NG_DATA_ROOT}")"
-    printf '\n'
-    printf 'Or with custom alias:\n'
-    printf '%s\n' "$(ng_color "${NG_C_ACCENT}" "curl -fsSL ${join_script} | bash -s -- ${main_host} ${NG_DATA_ROOT} my-server-alias")"
+    printf '%s\n' "$(ng_color "${NG_C_ACCENT}" "curl -fsSL ${join_script} | bash -s -- ${main_host} ${NG_DATA_ROOT} my-server-alias en")"
     printf '\n'
     printf 'The join script will automatically:\n'
     printf '  - Detect if the server is behind NAT\n'
@@ -49,10 +46,7 @@ ng_generate_join_command() {
   else
     ng_print_header "生成加入命令"
     printf '在新服务器上执行此命令加入节点组：\n\n'
-    printf '%s\n' "$(ng_color "${NG_C_ACCENT}" "curl -fsSL ${join_script} | bash -s -- ${main_host} ${NG_DATA_ROOT}")"
-    printf '\n'
-    printf '或使用自定义别名：\n'
-    printf '%s\n' "$(ng_color "${NG_C_ACCENT}" "curl -fsSL ${join_script} | bash -s -- ${main_host} ${NG_DATA_ROOT} my-server-alias")"
+    printf '%s\n' "$(ng_color "${NG_C_ACCENT}" "curl -fsSL ${join_script} | bash -s -- ${main_host} ${NG_DATA_ROOT} my-server-alias zh")"
     printf '\n'
     printf '加入脚本会自动：\n'
     printf '  - 检测服务器是否在 NAT 后面\n'
