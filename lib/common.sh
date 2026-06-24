@@ -399,52 +399,188 @@ ng_install_base_packages() {
   local manager
   manager="$(ng_detect_pkg_manager)"
 
+  # Define package lists for each manager
+  local -a pkg_names=()
+  local -a pkg_descriptions=()
+  
   case "${manager}" in
     apt)
-      apt-get update
-      local apt_output
-      apt_output=$(apt-get install -y curl wget procps iproute2 net-tools openssh-client 2>&1) || true
-      printf '%s\n' "${apt_output}"
-      
-      # Check if apt suggests autoremove
-      if echo "${apt_output}" | grep -q "no longer required"; then
-        local autoremove_packages
-        autoremove_packages=$(apt-get --dry-run autoremove 2>/dev/null | grep "^Remv" | awk '{print $2}' || true)
-        
-        if [[ -n "${autoremove_packages}" ]]; then
-          printf '\n'
-          if [[ "${NG_LANG}" == "en" ]]; then
-            printf 'Apt detected packages that can be auto-removed:\n'
-            echo "${autoremove_packages}" | while IFS= read -r pkg; do
-              printf '  - %s\n' "${pkg}"
-            done
-            printf '\n'
-            if ng_prompt_yes_no "Run apt autoremove to clean up?"; then
-              apt-get autoremove -y
-            fi
-          else
-            printf '检测到可自动删除的软件包：\n'
-            echo "${autoremove_packages}" | while IFS= read -r pkg; do
-              printf '  - %s\n' "${pkg}"
-            done
-            printf '\n'
-            if ng_prompt_yes_no "是否执行 apt autoremove 清理？"; then
-              apt-get autoremove -y
-            fi
-          fi
-        fi
-      fi
+      pkg_names=(curl wget procps iproute2 net-tools openssh-client socat sudo iptables)
+      pkg_descriptions=(
+        "HTTP client and data transfer tool"
+        "Network downloader"
+        "Process management utilities (ps, top, free)"
+        "Network configuration tools (ip, ss)"
+        "Network debugging tools (netstat, ifconfig)"
+        "SSH client for remote access"
+        "Multipurpose relay for bidirectional data"
+        "Execute commands as superuser"
+        "Firewall packet filtering"
+      )
       ;;
-    dnf)
-      dnf install -y curl wget procps-ng iproute net-tools openssh-clients
-      ;;
-    yum)
-      yum install -y curl wget procps-ng iproute net-tools openssh-clients
+    dnf|yum)
+      pkg_names=(curl wget procps-ng iproute net-tools openssh-clients socat sudo iptables)
+      pkg_descriptions=(
+        "HTTP client and data transfer tool"
+        "Network downloader"
+        "Process management utilities (ps, top, free)"
+        "Network configuration tools (ip, ss)"
+        "Network debugging tools (netstat, ifconfig)"
+        "SSH client for remote access"
+        "Multipurpose relay for bidirectional data"
+        "Execute commands as superuser"
+        "Firewall packet filtering"
+      )
       ;;
     *)
       ng_log "WARN" "$(ng_t unsupported_pkg)"
+      return 1
       ;;
   esac
+
+  local pkg_count=${#pkg_names[@]}
+  local -a selected=()
+  for ((i=0; i<pkg_count; i++)); do
+    selected+=(1)  # Default: all selected
+  done
+
+  # Interactive selection loop
+  while true; do
+    if [[ "${NG_LANG}" == "en" ]]; then
+      ng_print_header "Select packages to install"
+      printf 'Toggle packages by entering their number, or confirm:\n\n'
+    else
+      ng_print_header "选择要安装的软件包"
+      printf '输入编号切换选择状态，或确认安装：\n\n'
+    fi
+
+    for ((i=0; i<pkg_count; i++)); do
+      local status_icon
+      if [[ "${selected[i]}" -eq 1 ]]; then
+        status_icon="✓"
+      else
+        status_icon=" "
+      fi
+      printf '  [%s] %-3s %-20s %s\n' "${status_icon}" "$((i+1))" "${pkg_names[i]}" "${pkg_descriptions[i]}"
+    done
+
+    printf '\n'
+    if [[ "${NG_LANG}" == "en" ]]; then
+      printf '  [a] Select all\n'
+      printf '  [n] Deselect all\n'
+      printf '  [y] Confirm and install\n'
+      printf '  [0] Cancel\n'
+    else
+      printf '  [a] 全选\n'
+      printf '  [n] 全不选\n'
+      printf '  [y] 确认安装\n'
+      printf '  [0] 取消\n'
+    fi
+    printf '\n'
+
+    local choice
+    ng_read_line choice || return 130
+
+    case "${choice}" in
+      [0-9])
+        local idx=$((choice - 1))
+        if [[ "${idx}" -ge 0 && "${idx}" -lt "${pkg_count}" ]]; then
+          if [[ "${selected[idx]}" -eq 1 ]]; then
+            selected[idx]=0
+          else
+            selected[idx]=1
+          fi
+        fi
+        ;;
+      a|A)
+        for ((i=0; i<pkg_count; i++)); do
+          selected[i]=1
+        done
+        ;;
+      n|N)
+        for ((i=0; i<pkg_count; i++)); do
+          selected[i]=0
+        done
+        ;;
+      y|Y)
+        # Build package list from selected items
+        local packages_to_install=()
+        for ((i=0; i<pkg_count; i++)); do
+          if [[ "${selected[i]}" -eq 1 ]]; then
+            packages_to_install+=("${pkg_names[i]}")
+          fi
+        done
+
+        if [[ ${#packages_to_install[@]} -eq 0 ]]; then
+          if [[ "${NG_LANG}" == "en" ]]; then
+            printf 'No packages selected.\n'
+          else
+            printf '未选择任何软件包。\n'
+          fi
+          return 0
+        fi
+
+        if [[ "${NG_LANG}" == "en" ]]; then
+          printf '\nInstalling: %s\n\n' "${packages_to_install[*]}"
+        else
+          printf '\n正在安装：%s\n\n' "${packages_to_install[*]}"
+        fi
+
+        case "${manager}" in
+          apt)
+            apt-get update
+            local apt_output
+            apt_output=$(apt-get install -y "${packages_to_install[@]}" 2>&1) || true
+            printf '%s\n' "${apt_output}"
+            
+            # Check if apt suggests autoremove
+            if echo "${apt_output}" | grep -q "no longer required"; then
+              local autoremove_packages
+              autoremove_packages=$(apt-get --dry-run autoremove 2>/dev/null | grep "^Remv" | awk '{print $2}' || true)
+              
+              if [[ -n "${autoremove_packages}" ]]; then
+                printf '\n'
+                if [[ "${NG_LANG}" == "en" ]]; then
+                  printf 'Apt detected packages that can be auto-removed:\n'
+                  echo "${autoremove_packages}" | while IFS= read -r pkg; do
+                    printf '  - %s\n' "${pkg}"
+                  done
+                  printf '\n'
+                  if ng_prompt_yes_no "Run apt autoremove to clean up?"; then
+                    apt-get autoremove -y
+                  fi
+                else
+                  printf '检测到可自动删除的软件包：\n'
+                  echo "${autoremove_packages}" | while IFS= read -r pkg; do
+                    printf '  - %s\n' "${pkg}"
+                  done
+                  printf '\n'
+                  if ng_prompt_yes_no "是否执行 apt autoremove 清理？"; then
+                    apt-get autoremove -y
+                  fi
+                fi
+              fi
+            fi
+            ;;
+          dnf|yum)
+            "${manager}" install -y "${packages_to_install[@]}"
+            ;;
+        esac
+        return 0
+        ;;
+      0)
+        if [[ "${NG_LANG}" == "en" ]]; then
+          printf 'Installation cancelled.\n'
+        else
+          printf '已取消安装。\n'
+        fi
+        return 0
+        ;;
+      *)
+        ng_t invalid_option
+        ;;
+    esac
+  done
 }
 
 ng_read_peers() {
