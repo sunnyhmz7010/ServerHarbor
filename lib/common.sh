@@ -402,7 +402,38 @@ ng_install_base_packages() {
   case "${manager}" in
     apt)
       apt-get update
-      apt-get install -y curl wget procps iproute2 net-tools openssh-client
+      local apt_output
+      apt_output=$(apt-get install -y curl wget procps iproute2 net-tools openssh-client 2>&1) || true
+      printf '%s\n' "${apt_output}"
+      
+      # Check if apt suggests autoremove
+      if echo "${apt_output}" | grep -q "no longer required"; then
+        local autoremove_packages
+        autoremove_packages=$(apt-get --dry-run autoremove 2>/dev/null | grep "^Remv" | awk '{print $2}' || true)
+        
+        if [[ -n "${autoremove_packages}" ]]; then
+          printf '\n'
+          if [[ "${NG_LANG}" == "en" ]]; then
+            printf 'Apt detected packages that can be auto-removed:\n'
+            echo "${autoremove_packages}" | while IFS= read -r pkg; do
+              printf '  - %s\n' "${pkg}"
+            done
+            printf '\n'
+            if ng_prompt_yes_no "Run apt autoremove to clean up?"; then
+              apt-get autoremove -y
+            fi
+          else
+            printf '检测到可自动删除的软件包：\n'
+            echo "${autoremove_packages}" | while IFS= read -r pkg; do
+              printf '  - %s\n' "${pkg}"
+            done
+            printf '\n'
+            if ng_prompt_yes_no "是否执行 apt autoremove 清理？"; then
+              apt-get autoremove -y
+            fi
+          fi
+        fi
+      fi
       ;;
     dnf)
       dnf install -y curl wget procps-ng iproute net-tools openssh-clients
