@@ -480,6 +480,7 @@ ng_bootstrap_oneclick() {
 
   local install_kernel=0
   local install_tcp=0
+  local allow_swap=0
 
   if ng_prompt_yes_no "$( [[ "${NG_LANG}" == "en" ]] && printf 'Install BBR v3 kernel?' || printf '是否安装 BBR v3 内核？' )"; then
     install_kernel=1
@@ -489,35 +490,47 @@ ng_bootstrap_oneclick() {
     install_tcp=1
   fi
 
-  if [[ "${install_kernel}" -eq 1 && "${install_tcp}" -eq 1 ]]; then
+  if [[ "${install_tcp}" -eq 1 ]]; then
     if [[ "${NG_LANG}" == "en" ]]; then
-      printf '\nInstalling BBR v3 kernel...\n'
+      printf '\nNote: bbrv3-lite TCP tuning will automatically configure swap based on memory.\n'
     else
-      printf '\n正在安装 BBR v3 内核...\n'
+      printf '\n注意：bbrv3-lite TCP 调优会自动根据内存配置 swap。\n'
     fi
-    bash <(curl -fsSL "https://raw.githubusercontent.com/ike-sh/bbrv3-lite/main/net-tcp-tune.sh?$(date +%s)") -i
+    if ng_prompt_yes_no "$( [[ "${NG_LANG}" == "en" ]] && printf 'Allow automatic swap configuration?' || printf '是否允许自动配置 swap？' )"; then
+      allow_swap=1
+    fi
+  fi
 
-    if [[ "${NG_LANG}" == "en" ]]; then
-      printf '\nExecuting TCP tuning...\n'
-    else
-      printf '\n正在执行 TCP 调优...\n'
-    fi
-    echo "10" | bash <(curl -fsSL "https://raw.githubusercontent.com/ike-sh/bbrv3-lite/main/net-tcp-tune.sh?$(date +%s)")
-  elif [[ "${install_kernel}" -eq 1 ]]; then
+  if [[ "${install_kernel}" -eq 1 ]]; then
     if [[ "${NG_LANG}" == "en" ]]; then
       printf '\nInstalling BBR v3 kernel...\n'
     else
       printf '\n正在安装 BBR v3 内核...\n'
     fi
     bash <(curl -fsSL "https://raw.githubusercontent.com/ike-sh/bbrv3-lite/main/net-tcp-tune.sh?$(date +%s)") -i
-  elif [[ "${install_tcp}" -eq 1 ]]; then
-    if [[ "${NG_LANG}" == "en" ]]; then
-      printf '\nExecuting TCP tuning...\n'
+  fi
+
+  if [[ "${install_tcp}" -eq 1 ]]; then
+    if [[ "${allow_swap}" -eq 1 ]]; then
+      if [[ "${NG_LANG}" == "en" ]]; then
+        printf '\nExecuting TCP tuning (with swap configuration)...\n'
+      else
+        printf '\n正在执行 TCP 调优（包含 swap 配置）...\n'
+      fi
+      echo "10" | bash <(curl -fsSL "https://raw.githubusercontent.com/ike-sh/bbrv3-lite/main/net-tcp-tune.sh?$(date +%s)")
     else
-      printf '\n正在执行 TCP 调优...\n'
+      if [[ "${NG_LANG}" == "en" ]]; then
+        printf '\nExecuting TCP tuning (without swap configuration)...\n'
+        printf 'Note: Using menu option 3 for TCP-only tuning.\n'
+      else
+        printf '\n正在执行 TCP 调优（不包含 swap 配置）...\n'
+        printf '注意：使用菜单选项 3 进行仅 TCP 调优。\n'
+      fi
+      echo "3" | bash <(curl -fsSL "https://raw.githubusercontent.com/ike-sh/bbrv3-lite/main/net-tcp-tune.sh?$(date +%s)")
     fi
-    echo "10" | bash <(curl -fsSL "https://raw.githubusercontent.com/ike-sh/bbrv3-lite/main/net-tcp-tune.sh?$(date +%s)")
-  else
+  fi
+
+  if [[ "${install_kernel}" -eq 0 && "${install_tcp}" -eq 0 ]]; then
     if [[ "${NG_LANG}" == "en" ]]; then
       printf 'Skipped TCP/BBR optimization.\n'
     else
@@ -604,7 +617,18 @@ ng_bootstrap_menu() {
         ng_read_line bbr_choice || return 130
         case "${bbr_choice}" in
           1) bash <(curl -fsSL "https://raw.githubusercontent.com/ike-sh/bbrv3-lite/main/net-tcp-tune.sh?$(date +%s)") -i ;;
-          2) echo "10" | bash <(curl -fsSL "https://raw.githubusercontent.com/ike-sh/bbrv3-lite/main/net-tcp-tune.sh?$(date +%s)") ;;
+          2)
+            if [[ "${NG_LANG}" == "en" ]]; then
+              printf '\nNote: bbrv3-lite TCP tuning will automatically configure swap based on memory.\n'
+            else
+              printf '\n注意：bbrv3-lite TCP 调优会自动根据内存配置 swap。\n'
+            fi
+            if ng_prompt_yes_no "$( [[ "${NG_LANG}" == "en" ]] && printf 'Allow automatic swap configuration?' || printf '是否允许自动配置 swap？' )"; then
+              echo "10" | bash <(curl -fsSL "https://raw.githubusercontent.com/ike-sh/bbrv3-lite/main/net-tcp-tune.sh?$(date +%s)")
+            else
+              echo "3" | bash <(curl -fsSL "https://raw.githubusercontent.com/ike-sh/bbrv3-lite/main/net-tcp-tune.sh?$(date +%s)")
+            fi
+            ;;
           *) ;;
         esac
         ;;
