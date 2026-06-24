@@ -24,6 +24,102 @@ EOF
   fi
 }
 
+# Generate join command for new nodes
+ng_generate_join_command() {
+  local main_host
+  main_host=$(hostname -I 2>/dev/null | awk '{print $1}' || hostname)
+  
+  local join_script="https://raw.githubusercontent.com/sunnyhmz7010/ServerHarbor/main/scripts/join.sh"
+  
+  if [[ "${NG_LANG}" == "en" ]]; then
+    ng_print_header "Generate Join Command"
+    printf 'Run this command on a new server to join this node group:\n\n'
+    printf '%s\n' "$(ng_color "${NG_C_ACCENT}" "curl -fsSL ${join_script} | bash -s -- ${main_host} ${NG_DATA_ROOT}")"
+    printf '\n'
+    printf 'Or with custom alias:\n'
+    printf '%s\n' "$(ng_color "${NG_C_ACCENT}" "curl -fsSL ${join_script} | bash -s -- ${main_host} ${NG_DATA_ROOT} my-server-alias")"
+    printf '\n'
+    printf 'The new server will:\n'
+    printf '  1. Collect its hostname and IP\n'
+    printf '  2. Register with this server via SSH\n'
+    printf '  3. Appear in the node list automatically\n'
+  else
+    ng_print_header "生成加入命令"
+    printf '在新服务器上执行此命令加入节点组：\n\n'
+    printf '%s\n' "$(ng_color "${NG_C_ACCENT}" "curl -fsSL ${join_script} | bash -s -- ${main_host} ${NG_DATA_ROOT}")"
+    printf '\n'
+    printf '或使用自定义别名：\n'
+    printf '%s\n' "$(ng_color "${NG_C_ACCENT}" "curl -fsSL ${join_script} | bash -s -- ${main_host} ${NG_DATA_ROOT} my-server-alias")"
+    printf '\n'
+    printf '新服务器将：\n'
+    printf '  1. 收集主机名和 IP\n'
+    printf '  2. 通过 SSH 注册到本服务器\n'
+    printf '  3. 自动出现在节点列表中\n'
+  fi
+}
+
+# Register a node from remote (called by join script)
+ng_register_from_remote() {
+  local main_host="$1"
+  local data_root="$2"
+  local alias="${3:-$(hostname)}"
+  local remote_ip="${4:-$(echo $SSH_CLIENT | awk '{print $1}')}"
+  local remote_user="${5:-root}"
+  local remote_port="${6:-22}"
+  
+  local nodes_file="${data_root}/config/servers.json"
+  
+  # Initialize if needed
+  if [[ ! -f "${nodes_file}" ]]; then
+    mkdir -p "$(dirname "${nodes_file}")"
+    cat > "${nodes_file}" <<EOF
+{
+  "defaults": {
+    "ssh": {
+      "user": "root",
+      "port": 22,
+      "key": "~/.ssh/id_ed25519"
+    }
+  },
+  "servers": []
+}
+EOF
+  fi
+  
+  # Check if jq is available
+  if ! command -v jq >/dev/null 2>&1; then
+    echo "ERROR: jq is required. Install it first."
+    return 1
+  fi
+  
+  # Check if node already exists
+  if jq -e ".servers[] | select(.name == \"${alias}\")" "${nodes_file}" >/dev/null 2>&1; then
+    echo "Node '${alias}' already exists."
+    return 0
+  fi
+  
+  # Add node
+  local tmp_file="${nodes_file}.tmp"
+  jq --arg name "${alias}" \
+     --arg host "${remote_ip}" \
+     --arg user "${remote_user}" \
+     --arg port "${remote_port}" \
+     '.servers += [{
+       "name": $name,
+       "host": $host,
+       "ssh": {
+         "user": $user,
+         "port": ($port | tonumber),
+         "auth": "key",
+         "key": "~/.ssh/id_ed25519"
+       },
+       "tags": [],
+       "enabled": true
+     }]' "${nodes_file}" > "${tmp_file}" && mv -f "${tmp_file}" "${nodes_file}"
+  
+  echo "Node '${alias}' (${remote_ip}) registered successfully!"
+}
+
 # Read nodes from JSON file
 ng_read_nodes() {
   ng_init_nodes
@@ -456,6 +552,7 @@ ng_node_menu() {
       ng_print_option "6" "⚡" "Batch execute" "Run command on all nodes"
       ng_print_option "7" "📁" "Sync config" "Sync config file to all nodes"
       ng_print_option "8" "💾" "Backup management" "Backup and restore config/state files"
+      ng_print_option "9" "🔗" "Generate join command" "Generate command for new servers to join"
       ng_print_option "0" "↩" "Back"
     else
       ng_print_title_box "🛰 节点管理" "基于 SSH 的多服务器管理"
@@ -467,6 +564,7 @@ ng_node_menu() {
       ng_print_option "6" "⚡" "批量执行" "在所有节点上执行命令"
       ng_print_option "7" "📁" "配置同步" "将配置文件同步到所有节点"
       ng_print_option "8" "💾" "备份管理" "备份和恢复配置/状态文件"
+      ng_print_option "9" "🔗" "生成加入命令" "生成新服务器加入的命令"
       ng_print_option "0" "↩" "返回"
     fi
 
@@ -596,6 +694,7 @@ ng_node_menu() {
         fi
         ;;
       8) ng_backup_manager ;;
+      9) ng_generate_join_command ;;
       0) return 0 ;;
       *) ng_t invalid_option ;;
     esac
