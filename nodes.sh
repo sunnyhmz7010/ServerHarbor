@@ -39,10 +39,13 @@ ng_generate_join_command() {
     printf 'Or with custom alias:\n'
     printf '%s\n' "$(ng_color "${NG_C_ACCENT}" "curl -fsSL ${join_script} | bash -s -- ${main_host} ${NG_DATA_ROOT} my-server-alias")"
     printf '\n'
-    printf 'The new server will:\n'
-    printf '  1. Collect its hostname and IP\n'
-    printf '  2. Register with this server via SSH\n'
-    printf '  3. Appear in the node list automatically\n'
+    printf 'The join script will automatically:\n'
+    printf '  - Detect if the server is behind NAT\n'
+    printf '  - Ask for public IP if needed\n'
+    printf '  - Register with this server via SSH\n'
+    printf '\n'
+    printf 'Note: The new server needs SSH access to this server.\n'
+    printf 'If the new server is behind NAT, it will ask for the public IP and port.\n'
   else
     ng_print_header "生成加入命令"
     printf '在新服务器上执行此命令加入节点组：\n\n'
@@ -51,10 +54,13 @@ ng_generate_join_command() {
     printf '或使用自定义别名：\n'
     printf '%s\n' "$(ng_color "${NG_C_ACCENT}" "curl -fsSL ${join_script} | bash -s -- ${main_host} ${NG_DATA_ROOT} my-server-alias")"
     printf '\n'
-    printf '新服务器将：\n'
-    printf '  1. 收集主机名和 IP\n'
-    printf '  2. 通过 SSH 注册到本服务器\n'
-    printf '  3. 自动出现在节点列表中\n'
+    printf '加入脚本会自动：\n'
+    printf '  - 检测服务器是否在 NAT 后面\n'
+    printf '  - 如果需要，询问公网 IP\n'
+    printf '  - 通过 SSH 注册到本服务器\n'
+    printf '\n'
+    printf '注意：新服务器需要能通过 SSH 连接到本服务器。\n'
+    printf '如果新服务器在 NAT 后面，脚本会询问公网 IP 和端口。\n'
   fi
 }
 
