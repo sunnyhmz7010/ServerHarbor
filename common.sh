@@ -191,13 +191,6 @@ ng_report_rule() {
   printf '%s\n' '======================================================================'
 }
 
-ng_report_title() {
-  local title="$1"
-  ng_report_rule
-  printf '%s\n' "${title}"
-  ng_report_rule
-}
-
 ng_report_section() {
   local title="$1"
   printf '\n[%s]\n' "${title}"
@@ -654,59 +647,6 @@ ng_validate_integer() {
   local min="${2:-0}"
   local max="${3:-999999}"
   [[ "${value}" =~ ^[0-9]+$ ]] && (( value >= min && value <= max ))
-}
-
-ng_save_config_value() {
-  local key="$1"
-  local value="$2"
-  local file="${3:-${NG_CONFIG_FILE}}"
-  
-  if grep -q "^${key}=" "${file}" 2>/dev/null; then
-    sed -i "s/^${key}=.*/${key}=\"${value}\"/" "${file}" 2>/dev/null || true
-  else
-    echo "${key}=\"${value}\"" >> "${file}" 2>/dev/null || true
-  fi
-}
-
-ng_msg() {
-  local key="$1"
-  case "${key}" in
-    # Common messages
-    error) [[ "${NG_LANG}" == "en" ]] && printf 'ERROR' || printf '错误' ;;
-    warning) [[ "${NG_LANG}" == "en" ]] && printf 'WARNING' || printf '警告' ;;
-    info) [[ "${NG_LANG}" == "en" ]] && printf 'INFO' || printf '信息' ;;
-    success) [[ "${NG_LANG}" == "en" ]] && printf 'Success' || printf '成功' ;;
-    failed) [[ "${NG_LANG}" == "en" ]] && printf 'Failed' || printf '失败' ;;
-    cancelled) [[ "${NG_LANG}" == "en" ]] && printf 'Cancelled' || printf '已取消' ;;
-    saved) [[ "${NG_LANG}" == "en" ]] && printf 'Saved' || printf '已保存' ;;
-    skipped) [[ "${NG_LANG}" == "en" ]] && printf 'Skipped' || printf '已跳过' ;;
-    # Bootstrap messages
-    bootstrap_complete) [[ "${NG_LANG}" == "en" ]] && printf 'Bootstrap completed successfully.' || printf '开荒完成。' ;;
-    bootstrap_errors) [[ "${NG_LANG}" == "en" ]] && printf 'Bootstrap completed with %s error(s).' || printf '开荒完成，但有 %s 个错误。' ;;
-    # Monitor messages
-    cpu_threshold) [[ "${NG_LANG}" == "en" ]] && printf 'CPU threshold (%%)' || printf 'CPU 阈值（%%）' ;;
-    mem_threshold) [[ "${NG_LANG}" == "en" ]] && printf 'Memory threshold (%%)' || printf '内存阈值（%%）' ;;
-    disk_threshold) [[ "${NG_LANG}" == "en" ]] && printf 'Disk threshold (%%)' || printf '磁盘阈值（%%）' ;;
-    invalid_threshold) [[ "${NG_LANG}" == "en" ]] && printf 'Invalid threshold value (must be 0-100)' || printf '无效的阈值（必须为 0-100）' ;;
-    thresholds_saved) [[ "${NG_LANG}" == "en" ]] && printf 'Alert thresholds saved' || printf '告警阈值已保存' ;;
-    # Security messages
-    no_auth_log) [[ "${NG_LANG}" == "en" ]] && printf 'No auth log found' || printf '未找到认证日志' ;;
-    no_failed_logins) [[ "${NG_LANG}" == "en" ]] && printf 'No failed login entries found' || printf '未发现失败登录记录' ;;
-    no_suspicious_requests) [[ "${NG_LANG}" == "en" ]] && printf 'No suspicious requests found' || printf '未发现可疑请求' ;;
-    no_nginx_log) [[ "${NG_LANG}" == "en" ]] && printf 'No nginx access log found' || printf '未找到 nginx 访问日志' ;;
-    # Network messages
-    invalid_port) [[ "${NG_LANG}" == "en" ]] && printf 'Invalid port number' || printf '无效的端口号' ;;
-    port_range_error) [[ "${NG_LANG}" == "en" ]] && printf 'Start port must be less than end port' || printf '起始端口必须小于结束端口' ;;
-    port_range_limit) [[ "${NG_LANG}" == "en" ]] && printf 'Port range too large, limiting to 1024 ports' || printf '端口范围过大，限制为 1024 个端口' ;;
-    no_open_ports) [[ "${NG_LANG}" == "en" ]] && printf 'No open ports found' || printf '未发现开放端口' ;;
-    # Bootstrap messages
-    ssh_hardening_warning) [[ "${NG_LANG}" == "en" ]] && printf 'SSH hardening may disable password login. Continue?' || printf 'SSH 加固可能禁用密码登录，是否继续？' ;;
-    ssh_no_keys_warning) [[ "${NG_LANG}" == "en" ]] && printf 'No SSH authorized_keys found. Disabling password login may lock you out!' || printf '未找到 SSH authorized_keys，禁用密码登录可能导致无法登录！' ;;
-    dns_already_configured) [[ "${NG_LANG}" == "en" ]] && printf 'DNS already configured. Skip.' || printf 'DNS 已配置，跳过。' ;;
-    bbr_already_enabled) [[ "${NG_LANG}" == "en" ]] && printf 'BBR already enabled. Skip.' || printf 'BBR 已启用，跳过。' ;;
-    swap_already_exists) [[ "${NG_LANG}" == "en" ]] && printf 'Swap already exists. Skip creation.' || printf 'Swap 已存在，跳过创建。' ;;
-    *) printf '%s' "${key}" ;;
-  esac
 }
 
 

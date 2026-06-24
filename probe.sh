@@ -99,32 +99,6 @@ ng_probe_all_peers() {
   fi
 }
 
-ng_show_local_status() {
-  if [[ "${NG_LANG}" == "en" ]]; then
-    ng_print_header "Local Health Snapshot"
-    printf 'Host     : %s\n' "${NG_HOSTNAME}"
-    printf 'Uptime   : %s\n' "$(uptime -p 2>/dev/null || uptime)"
-    printf 'Load     : %s\n' "$(ng_system_load)"
-    printf 'Memory   :\n'
-    ng_memory_summary
-    printf '\nDisk     :\n'
-    ng_disk_summary
-    printf '\nPorts    :\n'
-  else
-    ng_print_header "本机健康快照"
-    printf '主机     : %s\n' "${NG_HOSTNAME}"
-    printf '运行时长 : %s\n' "$(uptime -p 2>/dev/null || uptime)"
-    printf '负载     : %s\n' "$(ng_system_load)"
-    printf '内存     :\n'
-    ng_memory_summary
-    printf '\n磁盘     :\n'
-    ng_disk_summary
-    printf '\n端口     :\n'
-  fi
-
-  ss -lntp 2>/dev/null | sed -n '1,20p' || true
-}
-
 ng_local_health() {
   local state_file
   state_file="$(ng_collect_local_probe)"
