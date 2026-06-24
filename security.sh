@@ -609,5 +609,7 @@ ng_security_menu() {
       0) return 0 ;;
       *) ng_t invalid_option ;;
     esac
+    
+    ng_press_enter || return 130
   done
 }
