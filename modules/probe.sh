@@ -168,19 +168,267 @@ ng_local_health() {
   fi
 }
 
+ng_batch_exec() {
+  local command="$1"
+  local output_file="${NG_STATE_DIR}/${NG_HOSTNAME}-batch-exec.state"
+
+  if [[ "${NG_LANG}" == "en" ]]; then
+    ng_print_header "Batch Command Execution"
+    printf 'Command: %s\n\n' "${command}"
+    printf 'Executing on all configured peers...\n'
+  else
+    ng_print_header "批量执行命令"
+    printf '命令: %s\n\n' "${command}"
+    printf '正在所有配置的节点上执行...\n'
+  fi
+
+  {
+    printf 'Host                Status   Output\n'
+    printf '%s\n' '---------------------------------------------------------------------'
+    while IFS=',' read -r peer_alias peer_host; do
+      [[ -n "${peer_alias}" && -n "${peer_host}" ]] || continue
+      
+      local output status
+      output=$(ssh -o ConnectTimeout=5 -o BatchMode=yes "${peer_host}" "${command}" 2>&1) && status="OK" || status="FAIL"
+      
+      printf '%-20s %-8s %s\n' "${peer_alias}" "${status}" "$(echo "${output}" | head -1)"
+    done < <(ng_read_peers)
+  } | tee "${output_file}"
+
+  if [[ "${NG_LANG}" == "en" ]]; then
+    printf '\nResults saved to: %s\n' "${output_file}"
+  else
+    printf '\n结果已保存至: %s\n' "${output_file}"
+  fi
+}
+
+ng_view_logs() {
+  local log_type="$1"
+  local log_file=""
+
+  case "${log_type}" in
+    auth)
+      if [[ -f /var/log/auth.log ]]; then
+        log_file="/var/log/auth.log"
+      elif [[ -f /var/log/secure ]]; then
+        log_file="/var/log/secure"
+      fi
+      ;;
+    syslog)
+      if [[ -f /var/log/syslog ]]; then
+        log_file="/var/log/syslog"
+      elif [[ -f /var/log/messages ]]; then
+        log_file="/var/log/messages"
+      fi
+      ;;
+    dmesg)
+      log_file="dmesg"
+      ;;
+    *)
+      if [[ "${NG_LANG}" == "en" ]]; then
+        ng_log "ERROR" "Unknown log type: ${log_type}"
+      else
+        ng_log "ERROR" "未知日志类型: ${log_type}"
+      fi
+      return 1
+      ;;
+  esac
+
+  if [[ "${log_type}" == "dmesg" ]]; then
+    if [[ "${NG_LANG}" == "en" ]]; then
+      ng_print_header "Kernel Messages (dmesg)"
+    else
+      ng_print_header "内核消息 (dmesg)"
+    fi
+    dmesg | tail -50
+  elif [[ -n "${log_file}" ]]; then
+    if [[ "${NG_LANG}" == "en" ]]; then
+      ng_print_header "Log: ${log_file}"
+      printf 'Showing last 50 lines:\n\n'
+    else
+      ng_print_header "日志: ${log_file}"
+      printf '显示最后 50 行:\n\n'
+    fi
+    tail -50 "${log_file}"
+  else
+    if [[ "${NG_LANG}" == "en" ]]; then
+      ng_log "ERROR" "Log file not found for type: ${log_type}"
+    else
+      ng_log "ERROR" "未找到类型为 ${log_type} 的日志文件"
+    fi
+    return 1
+  fi
+}
+
+ng_sync_config() {
+  local source_file="$1"
+  local remote_path="$2"
+
+  if [[ ! -f "${source_file}" ]]; then
+    if [[ "${NG_LANG}" == "en" ]]; then
+      ng_log "ERROR" "Source file not found: ${source_file}"
+    else
+      ng_log "ERROR" "源文件不存在: ${source_file}"
+    fi
+    return 1
+  fi
+
+  if [[ "${NG_LANG}" == "en" ]]; then
+    ng_print_header "Configuration Sync"
+    printf 'Source: %s\n' "${source_file}"
+    printf 'Target: %s\n\n' "${remote_path}"
+    printf 'Syncing to all configured peers...\n'
+  else
+    ng_print_header "配置文件同步"
+    printf '源文件: %s\n' "${source_file}"
+    printf '目标路径: %s\n\n' "${remote_path}"
+    printf '正在同步到所有配置的节点...\n'
+  fi
+
+  local success=0
+  local failed=0
+
+  while IFS=',' read -r peer_alias peer_host; do
+    [[ -n "${peer_alias}" && -n "${peer_host}" ]] || continue
+    
+    if scp -o ConnectTimeout=5 -o BatchMode=yes "${source_file}" "${peer_host}:${remote_path}" 2>/dev/null; then
+      if [[ "${NG_LANG}" == "en" ]]; then
+        printf '  ✓ %s: synced\n' "${peer_alias}"
+      else
+        printf '  ✓ %s: 同步成功\n' "${peer_alias}"
+      fi
+      ((success++)) || true
+    else
+      if [[ "${NG_LANG}" == "en" ]]; then
+        printf '  ✗ %s: failed\n' "${peer_alias}"
+      else
+        printf '  ✗ %s: 失败\n' "${peer_alias}"
+      fi
+      ((failed++)) || true
+    fi
+  done < <(ng_read_peers)
+
+  if [[ "${NG_LANG}" == "en" ]]; then
+    printf '\nSync completed: %d success, %d failed\n' "${success}" "${failed}"
+  else
+    printf '\n同步完成: %d 成功, %d 失败\n' "${success}" "${failed}"
+  fi
+}
+
+ng_backup_manager() {
+  local backup_dir="${NG_DATA_ROOT}/backups"
+  mkdir -p "${backup_dir}"
+
+  if [[ "${NG_LANG}" == "en" ]]; then
+    ng_print_header "Backup Management"
+    printf 'Backup directory: %s\n\n' "${backup_dir}"
+    printf '  [1] Backup configuration files\n'
+    printf '  [2] Backup state files\n'
+    printf '  [3] List existing backups\n'
+    printf '  [4] Restore from backup\n'
+    printf '  [0] Back\n'
+  else
+    ng_print_header "备份管理"
+    printf '备份目录: %s\n\n' "${backup_dir}"
+    printf '  [1] 备份配置文件\n'
+    printf '  [2] 备份状态文件\n'
+    printf '  [3] 列出现有备份\n'
+    printf '  [4] 从备份恢复\n'
+    printf '  [0] 返回\n'
+  fi
+
+  local choice
+  ng_read_line choice || return 130
+
+  case "${choice}" in
+    1)
+      local backup_file="${backup_dir}/config-$(date '+%Y%m%d-%H%M%S').tar.gz"
+      tar -czf "${backup_file}" -C "${NG_DATA_ROOT}" config 2>/dev/null
+      if [[ "${NG_LANG}" == "en" ]]; then
+        printf 'Configuration backed up to: %s\n' "${backup_file}"
+      else
+        printf '配置已备份至: %s\n' "${backup_file}"
+      fi
+      ;;
+    2)
+      local backup_file="${backup_dir}/state-$(date '+%Y%m%d-%H%M%S').tar.gz"
+      tar -czf "${backup_file}" -C "${NG_DATA_ROOT}" state 2>/dev/null
+      if [[ "${NG_LANG}" == "en" ]]; then
+        printf 'State files backed up to: %s\n' "${backup_file}"
+      else
+        printf '状态文件已备份至: %s\n' "${backup_file}"
+      fi
+      ;;
+    3)
+      if [[ "${NG_LANG}" == "en" ]]; then
+        ng_print_header "Existing Backups"
+        ls -lh "${backup_dir}"/*.tar.gz 2>/dev/null || printf 'No backups found.\n'
+      else
+        ng_print_header "现有备份"
+        ls -lh "${backup_dir}"/*.tar.gz 2>/dev/null || printf '未找到备份文件。\n'
+      fi
+      ;;
+    4)
+      if [[ "${NG_LANG}" == "en" ]]; then
+        printf 'Available backups:\n'
+        ls -1 "${backup_dir}"/*.tar.gz 2>/dev/null || printf 'No backups found.\n'
+        printf '\nEnter backup file path to restore: '
+      else
+        printf '可用备份:\n'
+        ls -1 "${backup_dir}"/*.tar.gz 2>/dev/null || printf '未找到备份文件。\n'
+        printf '\n输入要恢复的备份文件路径: '
+      fi
+      local restore_file
+      ng_read_line restore_file || return 130
+      
+      if [[ -f "${restore_file}" ]]; then
+        if [[ "${NG_LANG}" == "en" ]]; then
+          printf 'Restoring from: %s\n' "${restore_file}"
+        else
+          printf '正在从 %s 恢复\n' "${restore_file}"
+        fi
+        tar -xzf "${restore_file}" -C "${NG_DATA_ROOT}" 2>/dev/null
+        if [[ "${NG_LANG}" == "en" ]]; then
+          printf 'Restore completed.\n'
+        else
+          printf '恢复完成。\n'
+        fi
+      else
+        if [[ "${NG_LANG}" == "en" ]]; then
+          ng_log "ERROR" "Backup file not found: ${restore_file}"
+        else
+          ng_log "ERROR" "备份文件不存在: ${restore_file}"
+        fi
+      fi
+      ;;
+    0) return 0 ;;
+    *)
+      ng_t invalid_option
+      ;;
+  esac
+}
+
 ng_probe_menu() {
   local choice
 
   while true; do
     if [[ "${NG_LANG}" == "en" ]]; then
-      ng_print_title_box "🛰 Node Management" "Peer reachability and local health inspection"
+      ng_print_title_box "🛰 Node Management" "Peer monitoring, batch operations and configuration sync"
       ng_print_option "1" "📡" "Probe all peers" "Check ICMP, SSH port and latency for configured peers"
       ng_print_option "2" "🩺" "Local health status" "Collect and display local system status"
+      ng_print_option "3" "⚡" "Batch execute command" "Run command on all configured peers via SSH"
+      ng_print_option "4" "📋" "View logs" "View system logs (auth/syslog/dmesg)"
+      ng_print_option "5" "📁" "Sync configuration" "Sync config files to all peers (decentralized)"
+      ng_print_option "6" "💾" "Backup management" "Backup and restore config/state files"
       ng_print_option "0" "↩" "Back"
     else
-      ng_print_title_box "🛰 节点管理" "节点连通性检查与本机健康状态采集"
+      ng_print_title_box "🛰 节点管理" "节点监控、批量操作与配置同步"
       ng_print_option "1" "📡" "探测所有节点" "检查已配置节点的 ICMP、SSH 端口和延迟"
       ng_print_option "2" "🩺" "本机健康状态" "采集并展示本机系统状态"
+      ng_print_option "3" "⚡" "批量执行命令" "通过 SSH 在所有节点上执行命令"
+      ng_print_option "4" "📋" "查看日志" "查看系统日志（认证/系统/内核）"
+      ng_print_option "5" "📁" "配置文件同步" "将配置同步到所有节点（去中心化）"
+      ng_print_option "6" "💾" "备份管理" "备份和恢复配置/状态文件"
       ng_print_option "0" "↩" "返回"
     fi
 
@@ -193,8 +441,65 @@ ng_probe_menu() {
     case "${choice}" in
       1) ng_probe_all_peers ;;
       2) ng_local_health ;;
+      3)
+        if [[ "${NG_LANG}" == "en" ]]; then
+          printf 'Enter command to execute: '
+        else
+          printf '输入要执行的命令: '
+        fi
+        local cmd
+        ng_read_line cmd || return 130
+        if [[ -n "${cmd}" ]]; then
+          ng_batch_exec "${cmd}"
+        fi
+        ;;
+      4)
+        if [[ "${NG_LANG}" == "en" ]]; then
+          printf 'Select log type:\n'
+          printf '  [1] Auth log (login attempts)\n'
+          printf '  [2] System log (syslog)\n'
+          printf '  [3] Kernel log (dmesg)\n'
+        else
+          printf '选择日志类型:\n'
+          printf '  [1] 认证日志（登录尝试）\n'
+          printf '  [2] 系统日志（syslog）\n'
+          printf '  [3] 内核日志（dmesg）\n'
+        fi
+        local log_choice
+        ng_read_line log_choice || return 130
+        case "${log_choice}" in
+          1) ng_view_logs "auth" ;;
+          2) ng_view_logs "syslog" ;;
+          3) ng_view_logs "dmesg" ;;
+          *) ng_t invalid_option ;;
+        esac
+        ;;
+      5)
+        if [[ "${NG_LANG}" == "en" ]]; then
+          printf 'Enter source file path: '
+        else
+          printf '输入源文件路径: '
+        fi
+        local src_file
+        ng_read_line src_file || return 130
+        
+        if [[ "${NG_LANG}" == "en" ]]; then
+          printf 'Enter remote target path: '
+        else
+          printf '输入远程目标路径: '
+        fi
+        local remote_path
+        ng_read_line remote_path || return 130
+        
+        if [[ -n "${src_file}" && -n "${remote_path}" ]]; then
+          ng_sync_config "${src_file}" "${remote_path}"
+        fi
+        ;;
+      6) ng_backup_manager ;;
       0) return 0 ;;
       *) ng_t invalid_option ;;
     esac
+    
+    ng_press_enter || return 130
   done
 }

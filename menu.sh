@@ -12,10 +12,6 @@ source "${PROJECT_ROOT}/modules/bootstrap.sh"
 source "${PROJECT_ROOT}/modules/probe.sh"
 # shellcheck source=modules/security.sh
 source "${PROJECT_ROOT}/modules/security.sh"
-# shellcheck source=modules/monitor.sh
-source "${PROJECT_ROOT}/modules/monitor.sh"
-# shellcheck source=modules/network.sh
-source "${PROJECT_ROOT}/modules/network.sh"
 
 ng_init_environment
 
