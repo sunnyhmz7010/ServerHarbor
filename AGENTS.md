@@ -111,7 +111,7 @@ This repository is `ServerHarbor`, a Bash-based Linux multi-server operations to
 ## Development Commands
 
 - Syntax check:
-  - `bash -n menu.sh lib/common.sh modules/*.sh install.sh run.sh uninstall.sh`
+  - `bash -n menu.sh common.sh bootstrap.sh probe.sh security.sh nodes.sh install.sh run.sh uninstall.sh`
 - One-command online run:
   - `bash <(curl -q -fsSL "https://raw.githubusercontent.com/sunnyhmz7010/ServerHarbor/main/run.sh?$(date +%s)")`
 - Install globally:
@@ -127,8 +127,9 @@ This repository is `ServerHarbor`, a Bash-based Linux multi-server operations to
 
 ## Codebase Notes
 
-- Keep module boundaries simple: one operational area per file under `modules/`.
-- Shared defaults and helper functions belong in `lib/common.sh`.
+- Keep module boundaries simple: one operational area per file in root directory.
+- Shared defaults and helper functions belong in `common.sh`.
+- Node management functions belong in `nodes.sh`.
 - Favor readable shell over dense one-liners when a function has side effects.
 - Keep comments sparse and only where the logic is not obvious.
 - Use ASCII in scripts unless a file already needs non-ASCII content.

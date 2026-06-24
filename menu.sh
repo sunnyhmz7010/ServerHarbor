@@ -59,6 +59,10 @@ run_cli_mode() {
       ng_security_report
       exit 0
       ;;
+    --cron-alerts)
+      ng_check_alerts
+      exit $?
+      ;;
     "")
       return 0
       ;;

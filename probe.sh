@@ -60,10 +60,19 @@ ng_probe_all_peers() {
   {
     printf 'Peer Alias       Peer Host                ICMP     SSH Port   Latency\n'
     printf '%s\n' '---------------------------------------------------------------------'
-    while IFS=',' read -r peer_alias peer_host; do
-      [[ -n "${peer_alias}" && -n "${peer_host}" ]] || continue
-      ng_probe_single_peer "${peer_host}" "${peer_alias}"
-    done < <(ng_read_peers)
+    
+    # Read from servers.json if available, fallback to peers.conf
+    if [[ -f "${NG_DATA_ROOT}/config/servers.json" ]] && command -v jq >/dev/null 2>&1; then
+      jq -r '.servers[] | select(.enabled != false) | "\(.name),\(.host)"' "${NG_DATA_ROOT}/config/servers.json" 2>/dev/null | while IFS=',' read -r peer_alias peer_host; do
+        [[ -n "${peer_alias}" && -n "${peer_host}" ]] || continue
+        ng_probe_single_peer "${peer_host}" "${peer_alias}"
+      done
+    else
+      while IFS=',' read -r peer_alias peer_host; do
+        [[ -n "${peer_alias}" && -n "${peer_host}" ]] || continue
+        ng_probe_single_peer "${peer_host}" "${peer_alias}"
+      done < <(ng_read_peers)
+    fi
   } | tee "${output_file}"
 
   # Collect local probe once

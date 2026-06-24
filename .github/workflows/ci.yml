@@ -17,8 +17,7 @@ jobs:
         run: sudo apt-get install -y shellcheck
       
       - name: Run ShellCheck
-        run: |
-          shellcheck -e SC1091,SC2034 menu.sh lib/common.sh modules/*.sh install.sh run.sh uninstall.sh || true
+        run: shellcheck -e SC1091,SC2034 menu.sh common.sh bootstrap.sh probe.sh security.sh nodes.sh install.sh run.sh uninstall.sh || true
   
   syntax-check:
     name: Syntax Check
@@ -29,8 +28,11 @@ jobs:
       - name: Run bash syntax check
         run: |
           bash -n menu.sh
-          bash -n lib/common.sh
-          for f in modules/*.sh; do bash -n "$f"; done
+          bash -n common.sh
+          bash -n bootstrap.sh
+          bash -n probe.sh
+          bash -n security.sh
+          bash -n nodes.sh
           bash -n install.sh
           bash -n run.sh
           bash -n uninstall.sh

@@ -120,10 +120,38 @@ EOF
   echo "Node '${alias}' (${remote_ip}) registered successfully!"
 }
 
+# Ensure jq is installed
+ng_ensure_jq() {
+  if command -v jq >/dev/null 2>&1; then
+    return 0
+  fi
+  
+  if [[ "${NG_LANG}" == "en" ]]; then
+    printf 'jq not found. Installing...\n'
+  else
+    printf '未找到 jq，正在安装...\n'
+  fi
+  
+  if command -v apt-get >/dev/null 2>&1; then
+    apt-get update -qq && apt-get install -y -qq jq
+  elif command -v yum >/dev/null 2>&1; then
+    yum install -y jq
+  elif command -v dnf >/dev/null 2>&1; then
+    dnf install -y jq
+  else
+    if [[ "${NG_LANG}" == "en" ]]; then
+      ng_log "ERROR" "Cannot install jq automatically. Please install it manually."
+    else
+      ng_log "ERROR" "无法自动安装 jq，请手动安装。"
+    fi
+    return 1
+  fi
+}
+
 # Read nodes from JSON file
 ng_read_nodes() {
   ng_init_nodes
-  if command -v jq >/dev/null 2>&1; then
+  if ng_ensure_jq; then
     jq -r '.servers[] | select(.enabled != false) | "\(.name),\(.host),\(.ssh.user // .defaults.ssh.user // "root"),\(.ssh.port // .defaults.ssh.port // 22),\(.ssh.auth // "key"),\(.ssh.key // .defaults.ssh.key // "~/.ssh/id_ed25519")"' "${NG_NODES_FILE}" 2>/dev/null || true
   else
     # Fallback: simple parsing

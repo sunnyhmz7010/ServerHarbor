@@ -649,4 +649,81 @@ ng_validate_integer() {
   [[ "${value}" =~ ^[0-9]+$ ]] && (( value >= min && value <= max ))
 }
 
+# System resource monitoring and alerting
+ng_get_cpu_usage() {
+  top -bn1 2>/dev/null | grep "Cpu(s)" | awk '{print $2}' | cut -d'%' -f1 || echo "0"
+}
+
+ng_get_memory_usage() {
+  free 2>/dev/null | awk '/Mem:/ {printf "%.1f", $3/$2*100}' || echo "0"
+}
+
+ng_get_disk_usage() {
+  df / 2>/dev/null | awk 'NR==2 {print $5}' | cut -d'%' -f1 || echo "0"
+}
+
+ng_check_alerts() {
+  local cpu_usage mem_usage disk_usage
+  local alerts=()
+  
+  cpu_usage=$(ng_get_cpu_usage | cut -d'.' -f1)
+  mem_usage=$(ng_get_memory_usage | cut -d'.' -f1)
+  disk_usage=$(ng_get_disk_usage)
+  
+  # Check CPU
+  if [[ "${cpu_usage}" -gt "${NG_ALERT_CPU_THRESHOLD}" ]]; then
+    alerts+=("CPU: ${cpu_usage}% > ${NG_ALERT_CPU_THRESHOLD}%")
+  fi
+  
+  # Check Memory
+  if [[ "${mem_usage}" -gt "${NG_ALERT_MEM_THRESHOLD}" ]]; then
+    alerts+=("Memory: ${mem_usage}% > ${NG_ALERT_MEM_THRESHOLD}%")
+  fi
+  
+  # Check Disk
+  if [[ "${disk_usage}" -gt "${NG_ALERT_DISK_THRESHOLD}" ]]; then
+    alerts+=("Disk: ${disk_usage}% > ${NG_ALERT_DISK_THRESHOLD}%")
+  fi
+  
+  # Output alerts
+  if [[ "${#alerts[@]}" -gt 0 ]]; then
+    if [[ "${NG_LANG}" == "en" ]]; then
+      printf '⚠️  System Alerts:\n'
+    else
+      printf '⚠️  系统告警:\n'
+    fi
+    for alert in "${alerts[@]}"; do
+      printf '  - %s\n' "${alert}"
+    done
+    return 1
+  fi
+  
+  return 0
+}
+
+ng_show_system_status() {
+  if [[ "${NG_LANG}" == "en" ]]; then
+    ng_print_header "System Status"
+    printf 'CPU Usage:      %s%%\n' "$(ng_get_cpu_usage)"
+    printf 'Memory Usage:   %s%%\n' "$(ng_get_memory_usage)"
+    printf 'Disk Usage:     %s%%\n' "$(ng_get_disk_usage)"
+    printf '\nAlert Thresholds:\n'
+    printf '  CPU:    %s%%\n' "${NG_ALERT_CPU_THRESHOLD}"
+    printf '  Memory: %s%%\n' "${NG_ALERT_MEM_THRESHOLD}"
+    printf '  Disk:   %s%%\n' "${NG_ALERT_DISK_THRESHOLD}"
+  else
+    ng_print_header "系统状态"
+    printf 'CPU 使用率:    %s%%\n' "$(ng_get_cpu_usage)"
+    printf '内存使用率:    %s%%\n' "$(ng_get_memory_usage)"
+    printf '磁盘使用率:    %s%%\n' "$(ng_get_disk_usage)"
+    printf '\n告警阈值:\n'
+    printf '  CPU:    %s%%\n' "${NG_ALERT_CPU_THRESHOLD}"
+    printf '  内存:   %s%%\n' "${NG_ALERT_MEM_THRESHOLD}"
+    printf '  磁盘:   %s%%\n' "${NG_ALERT_DISK_THRESHOLD}"
+  fi
+  
+  printf '\n'
+  ng_check_alerts
+}
+
 

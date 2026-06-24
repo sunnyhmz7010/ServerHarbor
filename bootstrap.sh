@@ -83,6 +83,50 @@ ng_bootstrap_report() {
   fi
 }
 
+ng_setup_cron_jobs() {
+  local menu_path
+  if [[ -f "/opt/serverharbor/app/menu.sh" ]]; then
+    menu_path="/opt/serverharbor/app/menu.sh"
+  else
+    menu_path="${PROJECT_ROOT}/menu.sh"
+  fi
+
+  if [[ "${NG_LANG}" == "en" ]]; then
+    ng_print_header "Setup Cron Jobs"
+    printf 'This will add cron jobs for automated monitoring:\n\n'
+    printf '  - Hourly node probe\n'
+    printf '  - Daily security check (2 AM)\n'
+    printf '  - Hourly system alert check\n\n'
+    printf 'Cron entries:\n'
+    printf '  0 * * * * %s --cron-probe\n' "${menu_path}"
+    printf '  0 2 * * * %s --cron-security\n' "${menu_path}"
+    printf '  0 * * * * %s --cron-alerts\n' "${menu_path}"
+    printf '\n'
+  else
+    ng_print_header "定时任务配置"
+    printf '这将添加自动化监控的定时任务：\n\n'
+    printf '  - 每小时节点探测\n'
+    printf '  - 每天安全检查（凌晨2点）\n'
+    printf '  - 每小时系统告警检查\n\n'
+    printf '定时任务：\n'
+    printf '  0 * * * * %s --cron-probe\n' "${menu_path}"
+    printf '  0 2 * * * %s --cron-security\n' "${menu_path}"
+    printf '  0 * * * * %s --cron-alerts\n' "${menu_path}"
+    printf '\n'
+  fi
+
+  if ng_prompt_yes_no "$( [[ "${NG_LANG}" == "en" ]] && printf 'Add these cron jobs?' || printf '是否添加这些定时任务？' )"; then
+    # Add cron jobs
+    (crontab -l 2>/dev/null | grep -v "ServerHarbor"; echo "# ServerHarbor automated tasks"; echo "0 * * * * ${menu_path} --cron-probe"; echo "0 2 * * * ${menu_path} --cron-security"; echo "0 * * * * ${menu_path} --cron-alerts") | crontab -
+    
+    if [[ "${NG_LANG}" == "en" ]]; then
+      ng_log "INFO" "Cron jobs added successfully."
+    else
+      ng_log "INFO" "定时任务添加成功。"
+    fi
+  fi
+}
+
 ng_bootstrap_menu() {
   local choice
 
@@ -94,7 +138,9 @@ ng_bootstrap_menu() {
       ng_print_option "2" "🐳" "Install Docker" "Auto-detect region for mirror"
       ng_print_option "3" "🚀" "bbrv3-lite" "Lightweight BBR v3 / XanMod / TCP tuning script"
       ng_print_option "4" "⚙️" "vps-tcp-tune" "BBR3+FQ TCP tuning script for VPS optimization"
-      ng_print_option "5" "📄" "Generate report" "Show system summary"
+      ng_print_option "5" "⏰" "Setup cron jobs" "Automated probe and security checks"
+      ng_print_option "6" "📊" "System status" "Check CPU, memory, disk and alerts"
+      ng_print_option "7" "📄" "Generate report" "Show system summary"
       ng_print_option "0" "↩" "Back"
     else
       ng_print_title_box "🚀 系统开荒" "服务器初始化与优化"
@@ -102,7 +148,9 @@ ng_bootstrap_menu() {
       ng_print_option "2" "🐳" "Docker 安装" "自动检测地区使用镜像"
       ng_print_option "3" "🚀" "bbrv3-lite" "轻量级 BBR v3 / XanMod / TCP 网络调优脚本"
       ng_print_option "4" "⚙️" "vps-tcp-tune" "BBR3+FQ TCP 网络调优脚本，一键优化 VPS 网络"
-      ng_print_option "5" "📄" "生成报告" "输出系统摘要"
+      ng_print_option "5" "⏰" "定时任务配置" "自动化探测和安全检查"
+      ng_print_option "6" "📊" "系统状态" "查看 CPU、内存、磁盘和告警"
+      ng_print_option "7" "📄" "生成报告" "输出系统摘要"
       ng_print_option "0" "↩" "返回"
     fi
 
@@ -137,7 +185,9 @@ ng_bootstrap_menu() {
           "https://github.com/Eric86777/vps-tcp-tune" \
           "https://raw.githubusercontent.com/Eric86777/vps-tcp-tune/refs/heads/main/net-tcp-tune.sh"
         ;;
-      5) ng_bootstrap_report ;;
+      5) ng_setup_cron_jobs ;;
+      6) ng_show_system_status ;;
+      7) ng_bootstrap_report ;;
       0) return 0 ;;
       *) ng_t invalid_option ;;
     esac

@@ -253,24 +253,25 @@ config/watch.conf
 ServerHarbor/
 ├─ menu.sh                      # 交互式菜单入口与 CLI 模式
 ├─ common.sh                    # 共享变量、日志、配置加载、通用函数
-├─ bootstrap.sh                 # 系统开荒
-├─ probe.sh                     # 节点管理
-├─ security.sh                  # 安全巡检
+├─ bootstrap.sh                 # 系统开荒（基础软件、Docker、网络调优）
+├─ probe.sh                     # 节点探测与本机健康状态
+├─ security.sh                  # 安全巡检（登录、Web攻击、防火墙、Rootkit）
+├─ nodes.sh                     # 节点管理（JSON配置、SSH连接、批量操作）
+├─ scripts/
+│  └─ join.sh                   # 一键加入脚本（新服务器自动注册）
 ├─ config/
-│  ├─ app.conf                  # 全局运行配置
-│  ├─ peers.conf                # 对等节点配置
+│  ├─ app.conf                  # 全局运行配置（时区、DNS、告警阈值等）
+│  ├─ servers.json.example      # 节点配置示例
+│  ├─ peers.conf                # 旧版节点配置（兼容）
 │  └─ watch.conf                # 完整性监控路径
 ├─ install.sh                   # 安装脚本
 ├─ run.sh                       # 在线运行脚本
 ├─ uninstall.sh                 # 卸载脚本
 ├─ README.md                    # 项目说明
 ├─ AGENTS.md                    # 仓库协作与工程规则
-└─ LICENSE                      # GPL-3.0 许可证
-```
 ├─ SECURITY.md                  # 安全报告策略
 ├─ CODE_OF_CONDUCT.md           # 社区行为准则
-├─ LICENSE                      # GPL-3.0 许可证
-└─ README.md                    # 项目说明
+└─ LICENSE                      # GPL-3.0 许可证
 ```
 
 ## 本地开发
@@ -279,17 +280,26 @@ ServerHarbor/
 
 - Bash
 - Linux 常见系统工具链
+- jq（节点管理功能需要，首次使用时自动安装）
 
 ### 语法检查
 
 ```bash
-bash -n menu.sh common.sh bootstrap.sh probe.sh security.sh install.sh run.sh uninstall.sh
+bash -n menu.sh common.sh bootstrap.sh probe.sh security.sh nodes.sh install.sh run.sh uninstall.sh
 ```
 
 ### 交互运行
 
 ```bash
 ./menu.sh
+```
+
+### CLI 模式
+
+```bash
+./menu.sh --cron-probe      # 定时节点探测
+./menu.sh --cron-security   # 定时安全检查
+./menu.sh --cron-alerts     # 定时告警检查
 ```
 
 ### 卸载
