@@ -474,6 +474,7 @@ ng_install_base_packages() {
 
   # Interactive selection loop
   while true; do
+    clear || true
     if [[ "${NG_LANG}" == "en" ]]; then
       ng_print_title_box "📦 Package Installation" "Select packages to install"
     else
