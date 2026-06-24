@@ -178,15 +178,41 @@ ng_add_node() {
   local key="${6:-~/.ssh/id_ed25519}"
   local tags="${7:-}"
 
+  # Validate inputs
+  if [[ -z "${name}" ]]; then
+    ng_log "ERROR" "Node name is required."
+    return 1
+  fi
+  
+  if [[ -z "${host}" ]]; then
+    ng_log "ERROR" "Host is required."
+    return 1
+  fi
+  
+  # Validate port number
+  if ! [[ "${port}" =~ ^[0-9]+$ ]] || [[ "${port}" -lt 1 ]] || [[ "${port}" -gt 65535 ]]; then
+    if [[ "${NG_LANG}" == "en" ]]; then
+      ng_log "ERROR" "Invalid port number: ${port} (must be 1-65535)"
+    else
+      ng_log "ERROR" "无效端口号: ${port}（必须为 1-65535）"
+    fi
+    return 1
+  fi
+  
+  # Validate auth method
+  if [[ "${auth}" != "key" && "${auth}" != "password" ]]; then
+    if [[ "${NG_LANG}" == "en" ]]; then
+      ng_log "ERROR" "Invalid auth method: ${auth} (must be 'key' or 'password')"
+    else
+      ng_log "ERROR" "无效认证方式: ${auth}（必须为 'key' 或 'password'）"
+    fi
+    return 1
+  fi
+
   ng_init_nodes
 
   # Check if jq is available
-  if ! command -v jq >/dev/null 2>&1; then
-    if [[ "${NG_LANG}" == "en" ]]; then
-      ng_log "ERROR" "jq is required for node management. Install it first."
-    else
-      ng_log "ERROR" "节点管理需要 jq，请先安装。"
-    fi
+  if ! ng_ensure_jq; then
     return 1
   fi
 
@@ -306,27 +332,38 @@ ng_test_node_ssh() {
   local auth="$5"
   local key="$6"
 
-  local ssh_opts="-o ConnectTimeout=5 -o BatchMode=yes -o StrictHostKeyChecking=no -p ${port}"
+  local ssh_opts="-o ConnectTimeout=5 -o BatchMode=yes -o StrictHostKeyChecking=accept-new -p ${port}"
 
   if [[ "${auth}" == "key" ]]; then
     ssh_opts="${ssh_opts} -i ${key}"
   fi
 
-  if ssh ${ssh_opts} "${user}@${host}" "echo 'SSH_OK'" 2>/dev/null | grep -q "SSH_OK"; then
+  local output
+  output=$(ssh ${ssh_opts} "${user}@${host}" "echo 'SSH_OK'" 2>&1) && {
+    echo "OK"
     return 0
-  else
+  } || {
+    # Analyze error
+    if echo "${output}" | grep -qi "connection refused"; then
+      echo "CONN_REFUSED"
+    elif echo "${output}" | grep -qi "connection timed out\|no route to host"; then
+      echo "TIMEOUT"
+    elif echo "${output}" | grep -qi "permission denied"; then
+      echo "AUTH_FAILED"
+    elif echo "${output}" | grep -qi "host key verification failed"; then
+      echo "KEY_MISMATCH"
+    elif echo "${output}" | grep -qi "no such file\|not found"; then
+      echo "KEY_NOT_FOUND"
+    else
+      echo "UNKNOWN"
+    fi
     return 1
-  fi
+  }
 }
 
 # Test all nodes
 ng_test_all_nodes() {
-  if ! command -v jq >/dev/null 2>&1; then
-    if [[ "${NG_LANG}" == "en" ]]; then
-      ng_log "ERROR" "jq is required."
-    else
-      ng_log "ERROR" "需要 jq。"
-    fi
+  if ! ng_ensure_jq; then
     return 1
   fi
 
@@ -343,29 +380,57 @@ ng_test_all_nodes() {
   fi
 
   if [[ "${NG_LANG}" == "en" ]]; then
-    printf '%-20s %-20s %-10s\n' "NODE" "HOST" "STATUS"
-    printf '%s\n' '--------------------------------------------------'
+    printf '%-20s %-20s %-15s %s\n' "NODE" "HOST" "STATUS" "DETAIL"
+    printf '%s\n' '----------------------------------------------------------------------'
   else
-    printf '%-20s %-20s %-10s\n' "节点" "主机" "状态"
-    printf '%s\n' '--------------------------------------------------'
+    printf '%-20s %-20s %-15s %s\n' "节点" "主机" "状态" "详情"
+    printf '%s\n' '----------------------------------------------------------------------'
   fi
 
+  local node_name node_host node_user node_port node_auth node_key
   jq -c '.servers[]' "${NG_NODES_FILE}" 2>/dev/null | while read -r node; do
-    local name host user port auth key
-    name=$(echo "${node}" | jq -r '.name')
-    host=$(echo "${node}" | jq -r '.host')
-    user=$(echo "${node}" | jq -r '.ssh.user // "root"')
-    port=$(echo "${node}" | jq -r '.ssh.port // 22')
-    auth=$(echo "${node}" | jq -r '.ssh.auth // "key"')
-    key=$(echo "${node}" | jq -r '.ssh.key // "~/.ssh/id_ed25519"')
+    node_name=$(echo "${node}" | jq -r '.name')
+    node_host=$(echo "${node}" | jq -r '.host')
+    node_user=$(echo "${node}" | jq -r '.ssh.user // "root"')
+    node_port=$(echo "${node}" | jq -r '.ssh.port // 22')
+    node_auth=$(echo "${node}" | jq -r '.ssh.auth // "key"')
+    node_key=$(echo "${node}" | jq -r '.ssh.key // "~/.ssh/id_ed25519"')
 
-    local status
-    if ng_test_node_ssh "${name}" "${host}" "${user}" "${port}" "${auth}" "${key}"; then
-      status="✓ OK"
-    else
-      status="✗ FAIL"
-    fi
-    printf '%-20s %-20s %-10s\n' "${name}" "${host}" "${status}"
+    local status detail
+    status=$(ng_test_node_ssh "${node_name}" "${node_host}" "${node_user}" "${node_port}" "${node_auth}" "${node_key}") || true
+    
+    case "${status}" in
+      OK)
+        detail="✓ Connected"
+        status="OK"
+        ;;
+      CONN_REFUSED)
+        detail="SSH port closed"
+        status="FAIL"
+        ;;
+      TIMEOUT)
+        detail="Connection timeout"
+        status="FAIL"
+        ;;
+      AUTH_FAILED)
+        detail="Authentication failed"
+        status="FAIL"
+        ;;
+      KEY_MISMATCH)
+        detail="Host key mismatch"
+        status="FAIL"
+        ;;
+      KEY_NOT_FOUND)
+        detail="SSH key not found"
+        status="FAIL"
+        ;;
+      *)
+        detail="Unknown error"
+        status="FAIL"
+        ;;
+    esac
+    
+    printf '%-20s %-20s %-15s %s\n' "${node_name}" "${node_host}" "${status}" "${detail}"
   done
 }
 
@@ -565,6 +630,76 @@ ng_sync_to_all_nodes() {
 }
 
 # Node management menu
+# Deploy SSH keys to all nodes
+ng_deploy_ssh_keys() {
+  if ! ng_ensure_jq; then
+    return 1
+  fi
+
+  local count
+  count=$(jq '.servers | length' "${NG_NODES_FILE}" 2>/dev/null || echo 0)
+
+  if [[ "${count}" -eq 0 ]]; then
+    if [[ "${NG_LANG}" == "en" ]]; then
+      printf 'No nodes configured.\n'
+    else
+      printf '未配置节点。\n'
+    fi
+    return 0
+  fi
+
+  # Check if SSH key exists
+  if [[ ! -f ~/.ssh/id_ed25519 ]] && [[ ! -f ~/.ssh/id_rsa ]]; then
+    if [[ "${NG_LANG}" == "en" ]]; then
+      printf 'No SSH key found. Generating new key...\n'
+    else
+      printf '未找到 SSH 密钥，正在生成...\n'
+    fi
+    ssh-keygen -t ed25519 -f ~/.ssh/id_ed25519 -N "" -q 2>/dev/null || ssh-keygen -t rsa -f ~/.ssh/id_rsa -N "" -q 2>/dev/null
+  fi
+
+  if [[ "${NG_LANG}" == "en" ]]; then
+    printf 'Deploying SSH keys to all nodes...\n\n'
+  else
+    printf '正在部署 SSH 密钥到所有节点...\n\n'
+  fi
+
+  local success=0
+  local failed=0
+
+  jq -c '.servers[]' "${NG_NODES_FILE}" 2>/dev/null | while read -r node; do
+    local node_name node_host node_user node_port
+    node_name=$(echo "${node}" | jq -r '.name')
+    node_host=$(echo "${node}" | jq -r '.host')
+    node_user=$(echo "${node}" | jq -r '.ssh.user // "root"')
+    node_port=$(echo "${node}" | jq -r '.ssh.port // 22')
+
+    printf '  %-20s ' "${node_name}"
+    
+    if ssh-copy-id -o ConnectTimeout=5 -o StrictHostKeyChecking=accept-new -p "${node_port}" "${node_user}@${node_host}" 2>/dev/null; then
+      if [[ "${NG_LANG}" == "en" ]]; then
+        printf '✓ Deployed\n'
+      else
+        printf '✓ 已部署\n'
+      fi
+      ((success++)) || true
+    else
+      if [[ "${NG_LANG}" == "en" ]]; then
+        printf '✗ Failed\n'
+      else
+        printf '✗ 失败\n'
+      fi
+      ((failed++)) || true
+    fi
+  done
+
+  if [[ "${NG_LANG}" == "en" ]]; then
+    printf '\nDeployment completed: %d success, %d failed\n' "${success}" "${failed}"
+  else
+    printf '\n部署完成: %d 成功, %d 失败\n' "${success}" "${failed}"
+  fi
+}
+
 ng_node_menu() {
   local choice
 
@@ -579,7 +714,7 @@ ng_node_menu() {
       ng_print_option "5" "📡" "Probe all nodes" "Check ICMP, SSH, latency and local health"
       ng_print_option "6" "⚡" "Batch execute" "Run command on all nodes"
       ng_print_option "7" "📁" "Sync config" "Sync config file to all nodes"
-      ng_print_option "8" "💾" "Backup management" "Backup and restore config/state files"
+      ng_print_option "8" "🔑" "Deploy SSH keys" "Deploy SSH keys to all nodes"
       ng_print_option "9" "🔗" "Generate join command" "Generate command for new servers to join"
       ng_print_option "0" "↩" "Back"
     else
@@ -591,7 +726,7 @@ ng_node_menu() {
       ng_print_option "5" "📡" "探测所有节点" "检查 ICMP、SSH、延迟和本机健康"
       ng_print_option "6" "⚡" "批量执行" "在所有节点上执行命令"
       ng_print_option "7" "📁" "配置同步" "将配置文件同步到所有节点"
-      ng_print_option "8" "💾" "备份管理" "备份和恢复配置/状态文件"
+      ng_print_option "8" "🔑" "部署 SSH 密钥" "部署 SSH 密钥到所有节点"
       ng_print_option "9" "🔗" "生成加入命令" "生成新服务器加入的命令"
       ng_print_option "0" "↩" "返回"
     fi
@@ -721,8 +856,9 @@ ng_node_menu() {
           ng_sync_to_all_nodes "${src_file}" "${remote_path}"
         fi
         ;;
-      8) ng_backup_manager ;;
-      9) ng_generate_join_command ;;
+      8) ng_deploy_ssh_keys ;;
+      9) ng_backup_manager ;;
+      10) ng_generate_join_command ;;
       0) return 0 ;;
       *) ng_t invalid_option ;;
     esac

@@ -258,6 +258,20 @@ ng_t() {
         generated_at) printf 'Generated at: %s\n' "$2" ;;
         unsupported_pkg) printf 'Unsupported package manager. Skip base package installation.\n' ;;
         menu_hint) printf 'Enter the number directly. Press Ctrl+C to leave the current menu.\n' ;;
+        success) printf 'Success.\n' ;;
+        failed) printf 'Failed.\n' ;;
+        cancelled) printf 'Cancelled.\n' ;;
+        done) printf 'Done.\n' ;;
+        no_nodes) printf 'No nodes configured.\n' ;;
+        node_added) printf 'Node added: %s\n' "$2" ;;
+        node_removed) printf 'Node removed: %s\n' "$2" ;;
+        node_exists) printf 'Node already exists: %s\n' "$2" ;;
+        node_not_found) printf 'Node not found: %s\n' "$2" ;;
+        testing) printf 'Testing...\n' ;;
+        installing) printf 'Installing %s...\n' "$2" ;;
+        config_saved) printf 'Configuration saved.\n' ;;
+        backup_created) printf 'Backup created: %s\n' "$2" ;;
+        restore_completed) printf 'Restore completed.\n' ;;
       esac
       ;;
     *)
@@ -272,6 +286,20 @@ ng_t() {
         generated_at) printf '生成时间：%s\n' "$2" ;;
         unsupported_pkg) printf '暂不支持当前包管理器，已跳过基础软件安装。\n' ;;
         menu_hint) printf '直接输入编号即可，按 Ctrl+C 可离开当前菜单。\n' ;;
+        success) printf '操作成功。\n' ;;
+        failed) printf '操作失败。\n' ;;
+        cancelled) printf '已取消。\n' ;;
+        done) printf '完成。\n' ;;
+        no_nodes) printf '未配置节点。\n' ;;
+        node_added) printf '节点已添加：%s\n' "$2" ;;
+        node_removed) printf '节点已删除：%s\n' "$2" ;;
+        node_exists) printf '节点已存在：%s\n' "$2" ;;
+        node_not_found) printf '节点未找到：%s\n' "$2" ;;
+        testing) printf '测试中...\n' ;;
+        installing) printf '正在安装 %s...\n' "$2" ;;
+        config_saved) printf '配置已保存。\n' ;;
+        backup_created) printf '备份已创建：%s\n' "$2" ;;
+        restore_completed) printf '恢复完成。\n' ;;
       esac
       ;;
   esac
