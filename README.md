@@ -219,11 +219,13 @@ config/watch.conf
 
 ## 功能细节
 
-### 模块化脚本结构
+### 脚本结构
 
 - `menu.sh` 负责菜单与 CLI 入口
-- `lib/common.sh` 负责共享变量、日志与配置加载
-- `modules/` 按功能拆分为开荒、探测、安全、监控、网络模块
+- `common.sh` 负责共享变量、日志与配置加载
+- `bootstrap.sh` 负责系统开荒
+- `probe.sh` 负责节点管理
+- `security.sh` 负责安全巡检
 - 配置与生成物分离，便于展示与维护
 
 ### 报告与状态文件
@@ -250,23 +252,21 @@ config/watch.conf
 ```text
 ServerHarbor/
 ├─ menu.sh                      # 交互式菜单入口与 CLI 模式
-├─ lib/
-│  └─ common.sh                 # 共享变量、日志、配置加载、通用函数
-├─ modules/
-│  ├─ bootstrap.sh              # 新服务器开荒
-│  ├─ probe.sh                  # 节点探测与本机状态采集
-│  ├─ security.sh               # 安全巡检与完整性校验
-│  ├─ monitor.sh                # 系统监控与资源告警
-│  └─ network.sh                # 网络诊断与测试工具
+├─ common.sh                    # 共享变量、日志、配置加载、通用函数
+├─ bootstrap.sh                 # 系统开荒
+├─ probe.sh                     # 节点管理
+├─ security.sh                  # 安全巡检
 ├─ config/
 │  ├─ app.conf                  # 全局运行配置
 │  ├─ peers.conf                # 对等节点配置
 │  └─ watch.conf                # 完整性监控路径
-├─ reports/                     # 巡检、探测、开荒、监控、网络报告
-├─ state/                       # 节点状态和完整性基线
-├─ logs/                        # 运行日志
-├─ .github/ISSUE_TEMPLATE/      # Issue 模板
+├─ install.sh                   # 安装脚本
+├─ run.sh                       # 在线运行脚本
+├─ uninstall.sh                 # 卸载脚本
+├─ README.md                    # 项目说明
 ├─ AGENTS.md                    # 仓库协作与工程规则
+└─ LICENSE                      # GPL-3.0 许可证
+```
 ├─ SECURITY.md                  # 安全报告策略
 ├─ CODE_OF_CONDUCT.md           # 社区行为准则
 ├─ LICENSE                      # GPL-3.0 许可证
@@ -283,7 +283,7 @@ ServerHarbor/
 ### 语法检查
 
 ```bash
-bash -n menu.sh lib/common.sh modules/*.sh install.sh run.sh uninstall.sh
+bash -n menu.sh common.sh bootstrap.sh probe.sh security.sh install.sh run.sh uninstall.sh
 ```
 
 ### 交互运行

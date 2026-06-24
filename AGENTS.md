@@ -74,8 +74,8 @@ This repository is `ServerHarbor`, a Bash-based Linux multi-server operations to
 - Interactive entry point: `menu.sh`
 - One-command runner: `run.sh`
 - Installer and remover: `install.sh`, `uninstall.sh`
-- Shared helpers: `lib/common.sh`
-- Functional modules: `modules/`
+- Shared helpers: `common.sh`
+- Functional scripts: `bootstrap.sh`, `probe.sh`, `security.sh`
 - Runtime config: `config/`
 - Generated state: `state/`
 - Generated reports: `reports/`
