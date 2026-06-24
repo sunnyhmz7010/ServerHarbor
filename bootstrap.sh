@@ -87,6 +87,7 @@ ng_bootstrap_menu() {
   local choice
 
   while true; do
+    clear || true
     if [[ "${NG_LANG}" == "en" ]]; then
       ng_print_title_box "🚀 System Bootstrap" "Server provisioning and optimization"
       ng_print_option "1" "📦" "Install base packages" "curl, socat, wget, sudo, iptables"

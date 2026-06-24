@@ -412,6 +412,7 @@ ng_probe_menu() {
   local choice
 
   while true; do
+    clear || true
     if [[ "${NG_LANG}" == "en" ]]; then
       ng_print_title_box "🛰 Node Management" "Peer monitoring, batch operations and configuration sync"
       ng_print_option "1" "📡" "Probe all peers" "Check ICMP, SSH port and latency for configured peers"

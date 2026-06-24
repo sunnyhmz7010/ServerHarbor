@@ -509,7 +509,15 @@ ng_install_base_packages() {
     ng_read_line choice || return 130
 
     case "${choice}" in
-      [0-9])
+      0)
+        if [[ "${NG_LANG}" == "en" ]]; then
+          printf 'Installation cancelled.\n'
+        else
+          printf '已取消安装。\n'
+        fi
+        return 0
+        ;;
+      [1-9])
         local idx=$((choice - 1))
         if [[ "${idx}" -ge 0 && "${idx}" -lt "${pkg_count}" ]]; then
           if [[ "${selected[idx]}" -eq 1 ]]; then
@@ -593,14 +601,6 @@ ng_install_base_packages() {
             "${manager}" install -y "${packages_to_install[@]}"
             ;;
         esac
-        return 0
-        ;;
-      0)
-        if [[ "${NG_LANG}" == "en" ]]; then
-          printf 'Installation cancelled.\n'
-        else
-          printf '已取消安装。\n'
-        fi
         return 0
         ;;
       *)

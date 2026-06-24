@@ -550,6 +550,7 @@ ng_security_menu() {
   local choice
 
   while true; do
+    clear || true
     if [[ "${NG_LANG}" == "en" ]]; then
       ng_print_title_box "🛡 Security Guard" "Auth logs, web attacks, firewall, integrity and rootkit detection"
       ng_print_option "1" "📄" "Run security report" "Aggregate auth failures, web probes, ports and firewall state"
