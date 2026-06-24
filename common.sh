@@ -405,31 +405,59 @@ ng_install_base_packages() {
   case "${manager}" in
     apt)
       pkg_names=(curl wget procps iproute2 net-tools openssh-client socat sudo iptables)
-      pkg_descriptions=(
-        "HTTP client and data transfer tool"
-        "Network downloader"
-        "Process management utilities (ps, top, free)"
-        "Network configuration tools (ip, ss)"
-        "Network debugging tools (netstat, ifconfig)"
-        "SSH client for remote access"
-        "Multipurpose relay for bidirectional data"
-        "Execute commands as superuser"
-        "Firewall packet filtering"
-      )
+      if [[ "${NG_LANG}" == "en" ]]; then
+        pkg_descriptions=(
+          "HTTP client and data transfer tool"
+          "Network downloader"
+          "Process management utilities (ps, top, free)"
+          "Network configuration tools (ip, ss)"
+          "Network debugging tools (netstat, ifconfig)"
+          "SSH client for remote access"
+          "Multipurpose relay for bidirectional data"
+          "Execute commands as superuser"
+          "Firewall packet filtering"
+        )
+      else
+        pkg_descriptions=(
+          "HTTP 客户端与数据传输工具"
+          "网络下载工具"
+          "进程管理工具（ps、top、free）"
+          "网络配置工具（ip、ss）"
+          "网络调试工具（netstat、ifconfig）"
+          "SSH 客户端，用于远程连接"
+          "多功能双向数据中继工具"
+          "以超级用户权限执行命令"
+          "防火墙包过滤"
+        )
+      fi
       ;;
     dnf|yum)
       pkg_names=(curl wget procps-ng iproute net-tools openssh-clients socat sudo iptables)
-      pkg_descriptions=(
-        "HTTP client and data transfer tool"
-        "Network downloader"
-        "Process management utilities (ps, top, free)"
-        "Network configuration tools (ip, ss)"
-        "Network debugging tools (netstat, ifconfig)"
-        "SSH client for remote access"
-        "Multipurpose relay for bidirectional data"
-        "Execute commands as superuser"
-        "Firewall packet filtering"
-      )
+      if [[ "${NG_LANG}" == "en" ]]; then
+        pkg_descriptions=(
+          "HTTP client and data transfer tool"
+          "Network downloader"
+          "Process management utilities (ps, top, free)"
+          "Network configuration tools (ip, ss)"
+          "Network debugging tools (netstat, ifconfig)"
+          "SSH client for remote access"
+          "Multipurpose relay for bidirectional data"
+          "Execute commands as superuser"
+          "Firewall packet filtering"
+        )
+      else
+        pkg_descriptions=(
+          "HTTP 客户端与数据传输工具"
+          "网络下载工具"
+          "进程管理工具（ps、top、free）"
+          "网络配置工具（ip、ss）"
+          "网络调试工具（netstat、ifconfig）"
+          "SSH 客户端，用于远程连接"
+          "多功能双向数据中继工具"
+          "以超级用户权限执行命令"
+          "防火墙包过滤"
+        )
+      fi
       ;;
     *)
       ng_log "WARN" "$(ng_t unsupported_pkg)"
@@ -439,6 +467,7 @@ ng_install_base_packages() {
 
   local pkg_count=${#pkg_names[@]}
   local -a selected=()
+  local -a pkg_icons=("🌐" "📥" "⚙️" "🔧" "🔌" "🔑" "🔄" "👑" "🛡")
   for ((i=0; i<pkg_count; i++)); do
     selected+=(1)  # Default: all selected
   done
@@ -446,11 +475,9 @@ ng_install_base_packages() {
   # Interactive selection loop
   while true; do
     if [[ "${NG_LANG}" == "en" ]]; then
-      ng_print_header "Select packages to install"
-      printf 'Toggle packages by entering their number, or confirm:\n\n'
+      ng_print_title_box "📦 Package Installation" "Select packages to install"
     else
-      ng_print_header "选择要安装的软件包"
-      printf '输入编号切换选择状态，或确认安装：\n\n'
+      ng_print_title_box "📦 软件包安装" "选择要安装的软件包"
     fi
 
     for ((i=0; i<pkg_count; i++)); do
@@ -460,7 +487,8 @@ ng_install_base_packages() {
       else
         status_icon=" "
       fi
-      printf '  [%s] %-3s %-20s %s\n' "${status_icon}" "$((i+1))" "${pkg_names[i]}" "${pkg_descriptions[i]}"
+      printf '  [%s] %s %s\n' "${status_icon}" "$(ng_color "${NG_C_ACCENT_2}" "${pkg_icons[i]}")" "${pkg_names[i]}"
+      printf '      %s\n' "$(ng_color "${NG_C_DIM}" "${pkg_descriptions[i]}")"
     done
 
     printf '\n'
