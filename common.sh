@@ -244,10 +244,6 @@ ng_print_menu_hint() {
   printf '%s\n' "$(ng_color "${NG_C_DIM}" "$(ng_t menu_hint)")"
 }
 
-ng_report_rule() {
-  printf '%s\n' '======================================================================'
-}
-
 ng_report_section() {
   local title="$1"
   printf '\n[%s]\n' "${title}"
@@ -267,6 +263,15 @@ ng_report_note() {
 ng_report_footer() {
   local width=68
   printf '%s\n' "$(ng_color "${NG_C_PANEL}" "╚$(ng_repeat '═' "${width}")")"
+}
+
+ng_service_state() {
+  local service_name="$1"
+  if command -v systemctl >/dev/null 2>&1; then
+    systemctl is-active "${service_name}" 2>/dev/null || echo "inactive"
+  else
+    echo "unknown"
+  fi
 }
 
 ng_report_header() {
@@ -581,12 +586,12 @@ ng_install_base_packages() {
       printf '  %s %s  %s\n' \
         "$(ng_color "${update_color}" "[${update_icon}]")" \
         "$(ng_color "${NG_C_ACCENT}" "[u]")" \
-        "apt update && apt upgrade (recommended)"
+        "${manager} update && ${manager} upgrade (recommended)"
     else
       printf '  %s %s  %s\n' \
         "$(ng_color "${update_color}" "[${update_icon}]")" \
         "$(ng_color "${NG_C_ACCENT}" "[u]")" \
-        "apt update && apt upgrade（推荐）"
+        "${manager} update && ${manager} upgrade（推荐）"
     fi
     printf '\n'
     
@@ -776,31 +781,6 @@ ng_system_load() {
   uptime 2>/dev/null | awk -F'load average: ' '{print $2}' | tr -d '\r' || echo "unknown"
 }
 
-ng_memory_summary() {
-  free -h 2>/dev/null || true
-}
-
-ng_disk_summary() {
-  df -hT 2>/dev/null || true
-}
-
-ng_service_state() {
-  local service_name="$1"
-  if command -v systemctl >/dev/null 2>&1; then
-    systemctl is-active "${service_name}" 2>/dev/null || echo "inactive"
-  else
-    echo "unknown"
-  fi
-}
-
-ng_validate_integer() {
-  local value="$1"
-  local min="${2:-0}"
-  local max="${3:-999999}"
-  [[ "${value}" =~ ^[0-9]+$ ]] && (( value >= min && value <= max ))
-}
-
-# System resource monitoring and alerting
 ng_get_cpu_usage() {
   if [[ -f /proc/stat ]]; then
     local cpu_line
@@ -832,10 +812,13 @@ ng_get_disk_usage() {
 ng_check_alerts() {
   local cpu_usage mem_usage disk_usage
   local alerts=()
-  
+
   cpu_usage=$(ng_get_cpu_usage | cut -d'.' -f1)
   mem_usage=$(ng_get_memory_usage | cut -d'.' -f1)
   disk_usage=$(ng_get_disk_usage)
+  : "${cpu_usage:=0}"
+  : "${mem_usage:=0}"
+  : "${disk_usage:=0}"
   
   # Check CPU
   if [[ "${cpu_usage}" -gt "${NG_ALERT_CPU_THRESHOLD}" ]]; then

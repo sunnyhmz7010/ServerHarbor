@@ -83,50 +83,6 @@ ng_bootstrap_report() {
   fi
 }
 
-ng_setup_cron_jobs() {
-  local menu_path
-  if [[ -f "/opt/serverharbor/app/menu.sh" ]]; then
-    menu_path="/opt/serverharbor/app/menu.sh"
-  else
-    menu_path="${PROJECT_ROOT}/menu.sh"
-  fi
-
-  if [[ "${NG_LANG}" == "en" ]]; then
-    ng_print_header "Setup Cron Jobs"
-    printf 'This will add cron jobs for automated monitoring:\n\n'
-    printf '  - Hourly node probe\n'
-    printf '  - Daily security check (2 AM)\n'
-    printf '  - Hourly system alert check\n\n'
-    printf 'Cron entries:\n'
-    printf '  0 * * * * %s --cron-probe\n' "${menu_path}"
-    printf '  0 2 * * * %s --cron-security\n' "${menu_path}"
-    printf '  0 * * * * %s --cron-alerts\n' "${menu_path}"
-    printf '\n'
-  else
-    ng_print_header "定时任务配置"
-    printf '这将添加自动化监控的定时任务：\n\n'
-    printf '  - 每小时节点探测\n'
-    printf '  - 每天安全检查（凌晨2点）\n'
-    printf '  - 每小时系统告警检查\n\n'
-    printf '定时任务：\n'
-    printf '  0 * * * * %s --cron-probe\n' "${menu_path}"
-    printf '  0 2 * * * %s --cron-security\n' "${menu_path}"
-    printf '  0 * * * * %s --cron-alerts\n' "${menu_path}"
-    printf '\n'
-  fi
-
-  if ng_prompt_yes_no "$( [[ "${NG_LANG}" == "en" ]] && printf 'Add these cron jobs?' || printf '是否添加这些定时任务？' )"; then
-    # Add cron jobs
-    (crontab -l 2>/dev/null | grep -v "ServerHarbor"; echo "# ServerHarbor automated tasks"; echo "0 * * * * ${menu_path} --cron-probe"; echo "0 2 * * * ${menu_path} --cron-security"; echo "0 */2 * * * ${menu_path} --cron-alerts") | crontab -
-    
-    if [[ "${NG_LANG}" == "en" ]]; then
-      ng_log "INFO" "Cron jobs added successfully."
-    else
-      ng_log "INFO" "定时任务添加成功。"
-    fi
-  fi
-}
-
 ng_bootstrap_menu() {
   local choice
 

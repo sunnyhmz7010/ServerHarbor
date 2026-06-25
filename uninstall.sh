@@ -96,7 +96,12 @@ if [[ "${EUID}" -ne 0 ]]; then
   exit 1
 fi
 
+cleanup() {
+  rm -f "${LOCK_FILE}"
+}
+
 trap handle_interrupt INT
+trap cleanup EXIT
 acquire_lock
 
 if [[ ! -f "${MANIFEST_PATH}" ]]; then
