@@ -40,20 +40,26 @@ NG_C_ERR=""
 NG_C_PANEL=""
 NG_C_PANEL_2=""
 
-ng_migrate_config() {
+ng_trigger_migration() {
   local source_dir=""
-  local target_dir="${NG_DATA_ROOT}"
+  local target_dir="/opt/serverharbor/data"
 
-  # Check if we're in installed mode and online data exists
-  if [[ "${NG_RUNTIME_MODE}" == "installed" ]] && [[ -d "${NG_ONLINE_DATA}" ]]; then
+  if [[ "${NG_RUNTIME_MODE}" == "installed" ]]; then
     source_dir="${NG_ONLINE_DATA}"
+    target_dir="${NG_DATA_ROOT}"
+  else
+    source_dir="${NG_DATA_ROOT}"
   fi
 
-  if [[ -z "${source_dir}" ]]; then
-    return 0
+  if [[ ! -d "${source_dir}" ]]; then
+    if [[ "${NG_LANG}" == "en" ]]; then
+      ng_log "WARN" "No source data found at ${source_dir}"
+    else
+      ng_log "WARN" "未找到源数据目录 ${source_dir}"
+    fi
+    return 1
   fi
 
-  # Check if there's anything meaningful to migrate
   local has_data=0
   [[ -f "${source_dir}/config/servers.json" ]] && has_data=1
   [[ -d "${source_dir}/state" ]] && [[ -n "$(ls -A "${source_dir}/state" 2>/dev/null)" ]] && has_data=1
@@ -61,110 +67,64 @@ ng_migrate_config() {
   [[ -d "${source_dir}/backups" ]] && [[ -n "$(ls -A "${source_dir}/backups" 2>/dev/null)" ]] && has_data=1
 
   if [[ "${has_data}" -eq 0 ]]; then
-    return 0
+    if [[ "${NG_LANG}" == "en" ]]; then
+      ng_log "WARN" "No meaningful data to migrate from ${source_dir}"
+    else
+      ng_log "WARN" "${source_dir} 中没有可迁移的数据"
+    fi
+    return 1
   fi
 
-  # Display migration message
   if [[ "${NG_LANG}" == "en" ]]; then
-    printf '\n%s\n' "$(ng_color "${NG_C_WARN}" "⚠ Migrating data from online to installed version...")"
+    printf '\n  Source: %s\n' "${source_dir}"
+    printf '  Target: %s\n\n' "${target_dir}"
+    ng_prompt_yes_no "Migrate data from source to target?" || return 0
   else
-    printf '\n%s\n' "$(ng_color "${NG_C_WARN}" "⚠ 正在从在线版迁移数据到安装版...")"
+    printf '\n  源目录: %s\n' "${source_dir}"
+    printf '  目标目录: %s\n\n' "${target_dir}"
+    ng_prompt_yes_no "是否将数据从源目录迁移到目标目录？" || return 0
   fi
 
-  # Create target directories
   mkdir -p "${target_dir}/config" "${target_dir}/state" "${target_dir}/logs" "${target_dir}/reports" "${target_dir}/backups"
 
-  # Migrate servers.json (always copy if exists in source)
   if [[ -f "${source_dir}/config/servers.json" ]]; then
     cp -f "${source_dir}/config/servers.json" "${target_dir}/config/servers.json" 2>/dev/null || true
-    if [[ "${NG_LANG}" == "en" ]]; then
-      printf '  %s %s\n' "$(ng_color "${NG_C_OK}" "✓")" "servers.json"
-    else
-      printf '  %s %s\n' "$(ng_color "${NG_C_OK}" "✓")" "servers.json"
-    fi
+    printf '  %s servers.json\n' "$(ng_color "${NG_C_OK}" "✓")"
   fi
-
-  # Migrate state files (copy all, overwrite if newer)
-  if [[ -d "${source_dir}/state" ]] && [[ -n "$(ls -A "${source_dir}/state" 2>/dev/null)" ]]; then
-    cp -rf "${source_dir}/state/"* "${target_dir}/state/" 2>/dev/null || true
-    local state_count
-    state_count=$(ls -1 "${source_dir}/state" 2>/dev/null | wc -l)
-    if [[ "${NG_LANG}" == "en" ]]; then
-      printf '  %s %d state files\n' "$(ng_color "${NG_C_OK}" "✓")" "${state_count}"
-    else
-      printf '  %s %d 个状态文件\n' "$(ng_color "${NG_C_OK}" "✓")" "${state_count}"
-    fi
-  fi
-
-  # Migrate reports (copy all)
-  if [[ -d "${source_dir}/reports" ]] && [[ -n "$(ls -A "${source_dir}/reports" 2>/dev/null)" ]]; then
-    cp -rf "${source_dir}/reports/"* "${target_dir}/reports/" 2>/dev/null || true
-    local report_count
-    report_count=$(ls -1 "${source_dir}/reports" 2>/dev/null | wc -l)
-    if [[ "${NG_LANG}" == "en" ]]; then
-      printf '  %s %d reports\n' "$(ng_color "${NG_C_OK}" "✓")" "${report_count}"
-    else
-      printf '  %s %d 个报告\n' "$(ng_color "${NG_C_OK}" "✓")" "${report_count}"
-    fi
-  fi
-
-  # Migrate backups (copy all)
-  if [[ -d "${source_dir}/backups" ]] && [[ -n "$(ls -A "${source_dir}/backups" 2>/dev/null)" ]]; then
-    cp -rf "${source_dir}/backups/"* "${target_dir}/backups/" 2>/dev/null || true
-    local backup_count
-    backup_count=$(ls -1 "${source_dir}/backups" 2>/dev/null | wc -l)
-    if [[ "${NG_LANG}" == "en" ]]; then
-      printf '  %s %d backups\n' "$(ng_color "${NG_C_OK}" "✓")" "${backup_count}"
-    else
-      printf '  %s %d 个备份\n' "$(ng_color "${NG_C_OK}" "✓")" "${backup_count}"
-    fi
-  fi
-
-  # Migrate custom config files
   if [[ -f "${source_dir}/config/peers.conf" ]]; then
     cp -f "${source_dir}/config/peers.conf" "${target_dir}/config/peers.conf" 2>/dev/null || true
+    printf '  %s peers.conf\n' "$(ng_color "${NG_C_OK}" "✓")"
   fi
   if [[ -f "${source_dir}/config/watch.conf" ]]; then
     cp -f "${source_dir}/config/watch.conf" "${target_dir}/config/watch.conf" 2>/dev/null || true
+    printf '  %s watch.conf\n' "$(ng_color "${NG_C_OK}" "✓")"
+  fi
+
+  if [[ -d "${source_dir}/state" ]] && [[ -n "$(ls -A "${source_dir}/state" 2>/dev/null)" ]]; then
+    cp -rf "${source_dir}/state/"* "${target_dir}/state/" 2>/dev/null || true
+    printf '  %s %d state files\n' "$(ng_color "${NG_C_OK}" "✓")" "$(ls -1 "${source_dir}/state" 2>/dev/null | wc -l)"
+  fi
+  if [[ -d "${source_dir}/reports" ]] && [[ -n "$(ls -A "${source_dir}/reports" 2>/dev/null)" ]]; then
+    cp -rf "${source_dir}/reports/"* "${target_dir}/reports/" 2>/dev/null || true
+    printf '  %s %d reports\n' "$(ng_color "${NG_C_OK}" "✓")" "$(ls -1 "${source_dir}/reports" 2>/dev/null | wc -l)"
+  fi
+  if [[ -d "${source_dir}/backups" ]] && [[ -n "$(ls -A "${source_dir}/backups" 2>/dev/null)" ]]; then
+    cp -rf "${source_dir}/backups/"* "${target_dir}/backups/" 2>/dev/null || true
+    printf '  %s %d backups\n' "$(ng_color "${NG_C_OK}" "✓")" "$(ls -1 "${source_dir}/backups" 2>/dev/null | wc -l)"
   fi
 
   if [[ "${NG_LANG}" == "en" ]]; then
-    printf '%s\n' "$(ng_color "${NG_C_OK}" "✓ Migration completed!")"
+    printf '\n%s\n' "$(ng_color "${NG_C_OK}" "✓ Migration completed!")"
   else
-    printf '%s\n' "$(ng_color "${NG_C_OK}" "✓ 数据迁移完成！")"
+    printf '\n%s\n' "$(ng_color "${NG_C_OK}" "✓ 数据迁移完成！")"
   fi
-  
-  # Log the migration
+
   ng_log "INFO" "Data migration completed from ${source_dir} to ${target_dir}"
-}
-
-# Manual migration trigger
-ng_trigger_migration() {
-  if [[ "${NG_RUNTIME_MODE}" != "installed" ]]; then
-    if [[ "${NG_LANG}" == "en" ]]; then
-      ng_log "WARN" "Migration only available in installed mode"
-    else
-      ng_log "WARN" "迁移仅在安装模式下可用"
-    fi
-    return 1
-  fi
-
-  if [[ ! -d "${NG_ONLINE_DATA}" ]]; then
-    if [[ "${NG_LANG}" == "en" ]]; then
-      ng_log "WARN" "No online data found at ${NG_ONLINE_DATA}"
-    else
-      ng_log "WARN" "未找到在线版数据 ${NG_ONLINE_DATA}"
-    fi
-    return 1
-  fi
-
-  ng_migrate_config
 }
 
 ng_init_environment() {
   mkdir -p "${NG_CONFIG_DIR}" "${NG_LOG_DIR}" "${NG_REPORT_DIR}" "${NG_STATE_DIR}" "${NG_TMP_DIR}"
 
-  ng_migrate_config
   ng_init_theme
   ng_seed_default_configs
 
