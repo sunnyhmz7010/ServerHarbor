@@ -113,7 +113,7 @@ ng_uninstall() {
 show_menu() {
   if [[ "${NG_LANG}" == "en" ]]; then
     ng_print_option "1" "🚀" "System bootstrap" "Base packages / Docker / network tuning scripts"
-    ng_print_option "2" "🛡" "Security guard" "Auth logs / web attacks / firewall / integrity / rootkit detection"
+    ng_print_option "2" "🛡" "Security guard" "Auth logs / web attacks / firewall / integrity / security score"
     ng_print_option "3" "🛰" "Node management" "Multi-server management / batch commands / config sync"
     ng_print_option "4" "♻️" "Update" "Download latest source and restart"
     if ng_is_installed; then
@@ -122,7 +122,7 @@ show_menu() {
     ng_print_option "0" "↩" "Exit"
   else
     ng_print_option "1" "🚀" "系统开荒" "基础软件 / Docker / 网络调优脚本"
-    ng_print_option "2" "🛡" "安全卫士" "认证日志 / Web 攻击 / 防火墙 / 完整性 / Rootkit 检测"
+    ng_print_option "2" "🛡" "安全卫士" "认证日志 / Web 攻击 / 防火墙 / 完整性 / 安全评分"
     ng_print_option "3" "🛰" "节点管理" "多服务器管理 / 批量命令 / 配置同步"
     ng_print_option "4" "♻️" "更新" "下载最新源码并重启"
     if ng_is_installed; then

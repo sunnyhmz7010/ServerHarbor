@@ -221,15 +221,6 @@ is_managed_install() {
   [[ -f "${MANIFEST_PATH}" ]]
 }
 
-show_existing_install_summary() {
-  t already
-  t install_root
-  t app_root
-  t data_root
-  t shortcut
-  t rerun_update
-}
-
 validate_existing_install_root() {
   if [[ -e "${INSTALL_ROOT}" && ! -d "${INSTALL_ROOT}" ]]; then
     t refuse_not_dir >&2

@@ -210,10 +210,10 @@ ng_integrity_verify() {
   fi
 
   while IFS= read -r line; do
-    if echo "${line}" | grep -q "FAILED"; then
+    if [[ "${line}" == *"FAILED"* ]]; then
       printf '%s %s\n' "$(ng_color "${NG_C_ERR}" "✗")" "${line}"
       ((changes++)) || true
-    elif echo "${line}" | grep -q "OK"; then
+    elif [[ "${line}" == *"OK"* ]]; then
       printf '%s %s\n' "$(ng_color "${NG_C_OK}" "✓")" "${line}"
     else
       printf '%s\n' "${line}"
@@ -241,124 +241,84 @@ ng_security_report() {
     ng_report_meta "Generated At" "$(ng_timestamp)"
     ng_report_meta "Host" "${NG_HOSTNAME}"
     ng_report_section_start "Failed Login Sources"
-    local auth_log=""
-    [[ -f /var/log/auth.log ]] && auth_log="/var/log/auth.log"
-    [[ -f /var/log/secure ]] && auth_log="/var/log/secure"
-    if [[ -n "${auth_log}" ]]; then
-      ng_report_kv_styled "Auth Log" "${auth_log}"
-      local login_output
-      login_output="$(grep -Ei 'Failed password' "${auth_log}" 2>/dev/null | grep -Eo '([0-9]{1,3}\.){3}[0-9]{1,3}' | sort | uniq -c | sort -nr | head -5)" || true
-      if [[ -n "${login_output}" ]]; then
-        echo "${login_output}" | while IFS= read -r line; do
-          ng_report_line "  ${line}"
-        done
-      else
-        ng_report_line "  No failed login entries found."
-      fi
-    else
-      ng_report_line "  No auth log found."
-    fi
-    ng_report_section_start "Suspicious Web Requests"
-    local access_log="/var/log/nginx/access.log"
-    if [[ -f "${access_log}" ]]; then
-      local web_output
-      web_output="$(grep -Ei 'wp-admin|phpmyadmin|\.env|select.+from|union.+select' "${access_log}" 2>/dev/null | awk '{print $1}' | sort | uniq -c | sort -nr | head -5)" || true
-      if [[ -n "${web_output}" ]]; then
-        echo "${web_output}" | while IFS= read -r line; do
-          ng_report_line "  ${line}"
-        done
-      else
-        ng_report_line "  No suspicious requests found."
-      fi
-    else
-      ng_report_line "  No nginx access log found."
-    fi
-    ng_report_section_start "Listening Ports"
-    ss -lntp 2>/dev/null | sed -n '1,15p' | while IFS= read -r line; do
-      ng_report_line "  ${line}"
-    done || true
-    ng_report_section_start "Firewall"
-    if command -v ufw >/dev/null 2>&1; then
-      ng_report_kv_styled "Backend" "ufw"
-      ufw status verbose 2>/dev/null | while IFS= read -r line; do
-        ng_report_line "  ${line}"
-      done || true
-    elif command -v firewall-cmd >/dev/null 2>&1; then
-      ng_report_kv_styled "Backend" "firewalld"
-      firewall-cmd --list-all 2>/dev/null | while IFS= read -r line; do
-        ng_report_line "  ${line}"
-      done || true
-    elif command -v iptables >/dev/null 2>&1; then
-      ng_report_kv_styled "Backend" "iptables"
-      iptables -L -n --line-numbers 2>/dev/null | sed -n '1,15p' | while IFS= read -r line; do
-        ng_report_line "  ${line}"
-      done || true
-    else
-      ng_report_line "  No firewall tool found."
-    fi
-    ng_report_footer
   else
     ng_report_header "🛡 ServerHarbor 安全巡检报告"
     ng_report_meta "生成时间" "$(ng_timestamp)"
     ng_report_meta "主机" "${NG_HOSTNAME}"
     ng_report_section_start "失败登录来源"
-    local auth_log=""
-    [[ -f /var/log/auth.log ]] && auth_log="/var/log/auth.log"
-    [[ -f /var/log/secure ]] && auth_log="/var/log/secure"
-    if [[ -n "${auth_log}" ]]; then
-      ng_report_kv_styled "日志文件" "${auth_log}"
-      local login_output
-      login_output="$(grep -Ei 'Failed password' "${auth_log}" 2>/dev/null | grep -Eo '([0-9]{1,3}\.){3}[0-9]{1,3}' | sort | uniq -c | sort -nr | head -5)" || true
-      if [[ -n "${login_output}" ]]; then
-        echo "${login_output}" | while IFS= read -r line; do
-          ng_report_line "  ${line}"
-        done
-      else
-        ng_report_line "  未发现失败登录记录。"
-      fi
+  fi
+
+  local auth_log=""
+  [[ -f /var/log/auth.log ]] && auth_log="/var/log/auth.log"
+  [[ -f /var/log/secure ]] && auth_log="/var/log/secure"
+  if [[ -n "${auth_log}" ]]; then
+    ng_report_kv_styled "$([[ "${NG_LANG}" == "en" ]] && echo "Auth Log" || echo "日志文件")" "${auth_log}"
+    local login_output
+    login_output="$(grep -Ei 'Failed password' "${auth_log}" 2>/dev/null | grep -Eo '([0-9]{1,3}\.){3}[0-9]{1,3}' | sort | uniq -c | sort -nr | head -5)" || true
+    if [[ -n "${login_output}" ]]; then
+      printf '%s\n' "${login_output}" | while IFS= read -r line; do
+        ng_report_line "  ${line}"
+      done
     else
-      ng_report_line "  未找到认证日志文件。"
+      ng_report_line "  $([[ "${NG_LANG}" == "en" ]] && echo "No failed login entries found." || echo "未发现失败登录记录。")"
     fi
+  else
+    ng_report_line "  $([[ "${NG_LANG}" == "en" ]] && echo "No auth log found." || echo "未找到认证日志文件。")"
+  fi
+
+  if [[ "${NG_LANG}" == "en" ]]; then
+    ng_report_section_start "Suspicious Web Requests"
+  else
     ng_report_section_start "可疑 Web 请求"
-    local access_log="/var/log/nginx/access.log"
-    if [[ -f "${access_log}" ]]; then
-      local web_output
-      web_output="$(grep -Ei 'wp-admin|phpmyadmin|\.env|select.+from|union.+select' "${access_log}" 2>/dev/null | awk '{print $1}' | sort | uniq -c | sort -nr | head -5)" || true
-      if [[ -n "${web_output}" ]]; then
-        echo "${web_output}" | while IFS= read -r line; do
-          ng_report_line "  ${line}"
-        done
-      else
-        ng_report_line "  未发现可疑请求特征。"
-      fi
+  fi
+  local access_log="/var/log/nginx/access.log"
+  if [[ -f "${access_log}" ]]; then
+    local web_output
+    web_output="$(grep -Ei 'wp-admin|phpmyadmin|\.env|select.+from|union.+select' "${access_log}" 2>/dev/null | awk '{print $1}' | sort | uniq -c | sort -nr | head -5)" || true
+    if [[ -n "${web_output}" ]]; then
+      printf '%s\n' "${web_output}" | while IFS= read -r line; do
+        ng_report_line "  ${line}"
+      done
     else
-      ng_report_line "  未找到 nginx 访问日志。"
+      ng_report_line "  $([[ "${NG_LANG}" == "en" ]] && echo "No suspicious requests found." || echo "未发现可疑请求特征。")"
     fi
+  else
+    ng_report_line "  $([[ "${NG_LANG}" == "en" ]] && echo "No nginx access log found." || echo "未找到 nginx 访问日志。")"
+  fi
+
+  if [[ "${NG_LANG}" == "en" ]]; then
+    ng_report_section_start "Listening Ports"
+  else
     ng_report_section_start "监听端口"
-    ss -lntp 2>/dev/null | sed -n '1,15p' | while IFS= read -r line; do
+  fi
+  ss -lntp 2>/dev/null | sed -n '1,15p' | while IFS= read -r line; do
+    ng_report_line "  ${line}"
+  done || true
+
+  if [[ "${NG_LANG}" == "en" ]]; then
+    ng_report_section_start "Firewall"
+  else
+    ng_report_section_start "防火墙"
+  fi
+  if command -v ufw >/dev/null 2>&1; then
+    ng_report_kv_styled "$([[ "${NG_LANG}" == "en" ]] && echo "Backend" || echo "后端")" "ufw"
+    ufw status verbose 2>/dev/null | while IFS= read -r line; do
       ng_report_line "  ${line}"
     done || true
-    ng_report_section_start "防火墙"
-    if command -v ufw >/dev/null 2>&1; then
-      ng_report_kv_styled "后端" "ufw"
-      ufw status verbose 2>/dev/null | while IFS= read -r line; do
-        ng_report_line "  ${line}"
-      done || true
-    elif command -v firewall-cmd >/dev/null 2>&1; then
-      ng_report_kv_styled "后端" "firewalld"
-      firewall-cmd --list-all 2>/dev/null | while IFS= read -r line; do
-        ng_report_line "  ${line}"
-      done || true
-    elif command -v iptables >/dev/null 2>&1; then
-      ng_report_kv_styled "后端" "iptables"
-      iptables -L -n --line-numbers 2>/dev/null | sed -n '1,15p' | while IFS= read -r line; do
-        ng_report_line "  ${line}"
-      done || true
-    else
-      ng_report_line "  未找到防火墙工具。"
-    fi
-    ng_report_footer
+  elif command -v firewall-cmd >/dev/null 2>&1; then
+    ng_report_kv_styled "$([[ "${NG_LANG}" == "en" ]] && echo "Backend" || echo "后端")" "firewalld"
+    firewall-cmd --list-all 2>/dev/null | while IFS= read -r line; do
+      ng_report_line "  ${line}"
+    done || true
+  elif command -v iptables >/dev/null 2>&1; then
+    ng_report_kv_styled "$([[ "${NG_LANG}" == "en" ]] && echo "Backend" || echo "后端")" "iptables"
+    iptables -L -n --line-numbers 2>/dev/null | sed -n '1,15p' | while IFS= read -r line; do
+      ng_report_line "  ${line}"
+    done || true
+  else
+    ng_report_line "  $([[ "${NG_LANG}" == "en" ]] && echo "No firewall tool found." || echo "未找到防火墙工具。")"
   fi
+  ng_report_footer
 }
 
 ng_manage_watch_paths() {

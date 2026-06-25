@@ -138,10 +138,6 @@ ng_init_environment() {
     fi
   fi
 
-  : "${NG_TIMEZONE:=Asia/Shanghai}"
-  : "${NG_DNS_PRIMARY:=1.1.1.1}"
-  : "${NG_DNS_SECONDARY:=8.8.8.8}"
-  : "${NG_SWAP_SIZE_MB:=1024}"
   : "${NG_PROBE_TIMEOUT:=2}"
   : "${NG_ALERT_CPU_THRESHOLD:=80}"
   : "${NG_ALERT_MEM_THRESHOLD:=80}"
@@ -332,8 +328,6 @@ ng_t() {
         testing) printf 'Testing...\n' ;;
         installing) printf 'Installing %s...\n' "$2" ;;
         config_saved) printf 'Configuration saved.\n' ;;
-        backup_created) printf 'Backup created: %s\n' "$2" ;;
-        restore_completed) printf 'Restore completed.\n' ;;
       esac
       ;;
     *)
@@ -360,8 +354,6 @@ ng_t() {
         testing) printf '测试中...\n' ;;
         installing) printf '正在安装 %s...\n' "$2" ;;
         config_saved) printf '配置已保存。\n' ;;
-        backup_created) printf '备份已创建：%s\n' "$2" ;;
-        restore_completed) printf '恢复完成。\n' ;;
       esac
       ;;
   esac
@@ -758,7 +750,7 @@ ng_install_base_packages() {
 
 ng_read_peers() {
   [[ -f "${NG_PEERS_FILE}" ]] || return 0
-  grep -Ev '^\s*#|^\s*$' "${NG_PEERS_FILE}"
+  grep -Ev '^\s*#|^\s*$' "${NG_PEERS_FILE}" || true
 }
 
 ng_peer_count() {
