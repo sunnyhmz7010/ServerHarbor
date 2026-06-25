@@ -857,8 +857,7 @@ ng_node_menu() {
         fi
         ;;
       8) ng_deploy_ssh_keys ;;
-      9) ng_backup_manager ;;
-      10) ng_generate_join_command ;;
+      9) ng_generate_join_command ;;
       0) return 0 ;;
       *) ng_t invalid_option ;;
     esac
