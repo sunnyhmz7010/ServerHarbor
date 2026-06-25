@@ -64,10 +64,11 @@ ng_migrate_config() {
     return 0
   fi
 
+  # Log migration start
   if [[ "${NG_LANG}" == "en" ]]; then
-    printf 'Migrating data from %s to %s\n' "${source_dir}" "${target_dir}"
+    ng_log "INFO" "Migrating data from ${source_dir} to ${target_dir}"
   else
-    printf '正在迁移数据从 %s 到 %s\n' "${source_dir}" "${target_dir}"
+    ng_log "INFO" "正在迁移数据从 ${source_dir} 到 ${target_dir}"
   fi
 
   # Create target directories
@@ -77,9 +78,9 @@ ng_migrate_config() {
   if [[ -f "${source_dir}/config/servers.json" ]]; then
     cp -f "${source_dir}/config/servers.json" "${target_dir}/config/servers.json" 2>/dev/null || true
     if [[ "${NG_LANG}" == "en" ]]; then
-      printf '  ✓ Migrated servers.json\n'
+      ng_log "INFO" "Migrated servers.json"
     else
-      printf '  ✓ 迁移 servers.json\n'
+      ng_log "INFO" "迁移 servers.json"
     fi
   fi
 
@@ -89,9 +90,9 @@ ng_migrate_config() {
     local state_count
     state_count=$(ls -1 "${source_dir}/state" 2>/dev/null | wc -l)
     if [[ "${NG_LANG}" == "en" ]]; then
-      printf '  ✓ Migrated %d state files\n' "${state_count}"
+      ng_log "INFO" "Migrated ${state_count} state files"
     else
-      printf '  ✓ 迁移 %d 个状态文件\n' "${state_count}"
+      ng_log "INFO" "迁移 ${state_count} 个状态文件"
     fi
   fi
 
@@ -101,9 +102,9 @@ ng_migrate_config() {
     local report_count
     report_count=$(ls -1 "${source_dir}/reports" 2>/dev/null | wc -l)
     if [[ "${NG_LANG}" == "en" ]]; then
-      printf '  ✓ Migrated %d reports\n' "${report_count}"
+      ng_log "INFO" "Migrated ${report_count} reports"
     else
-      printf '  ✓ 迁移 %d 个报告\n' "${report_count}"
+      ng_log "INFO" "迁移 ${report_count} 个报告"
     fi
   fi
 
@@ -113,9 +114,9 @@ ng_migrate_config() {
     local backup_count
     backup_count=$(ls -1 "${source_dir}/backups" 2>/dev/null | wc -l)
     if [[ "${NG_LANG}" == "en" ]]; then
-      printf '  ✓ Migrated %d backups\n' "${backup_count}"
+      ng_log "INFO" "Migrated ${backup_count} backups"
     else
-      printf '  ✓ 迁移 %d 个备份\n' "${backup_count}"
+      ng_log "INFO" "迁移 ${backup_count} 个备份"
     fi
   fi
 
@@ -128,10 +129,33 @@ ng_migrate_config() {
   fi
 
   if [[ "${NG_LANG}" == "en" ]]; then
-    printf 'Migration completed.\n'
+    ng_log "INFO" "Data migration completed"
   else
-    printf '数据迁移完成。\n'
+    ng_log "INFO" "数据迁移完成"
   fi
+}
+
+# Manual migration trigger
+ng_trigger_migration() {
+  if [[ "${NG_RUNTIME_MODE}" != "installed" ]]; then
+    if [[ "${NG_LANG}" == "en" ]]; then
+      ng_log "WARN" "Migration only available in installed mode"
+    else
+      ng_log "WARN" "迁移仅在安装模式下可用"
+    fi
+    return 1
+  fi
+
+  if [[ ! -d "${NG_ONLINE_DATA}" ]]; then
+    if [[ "${NG_LANG}" == "en" ]]; then
+      ng_log "WARN" "No online data found at ${NG_ONLINE_DATA}"
+    else
+      ng_log "WARN" "未找到在线版数据 ${NG_ONLINE_DATA}"
+    fi
+    return 1
+  fi
+
+  ng_migrate_config
 }
 
 ng_init_environment() {
