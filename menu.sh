@@ -8,8 +8,6 @@ PROJECT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 source "${PROJECT_ROOT}/common.sh"
 # shellcheck source=bootstrap.sh
 source "${PROJECT_ROOT}/bootstrap.sh"
-# shellcheck source=probe.sh
-source "${PROJECT_ROOT}/probe.sh"
 # shellcheck source=security.sh
 source "${PROJECT_ROOT}/security.sh"
 # shellcheck source=nodes.sh
