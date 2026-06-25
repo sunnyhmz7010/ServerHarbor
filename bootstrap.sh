@@ -117,7 +117,7 @@ ng_setup_cron_jobs() {
 
   if ng_prompt_yes_no "$( [[ "${NG_LANG}" == "en" ]] && printf 'Add these cron jobs?' || printf '是否添加这些定时任务？' )"; then
     # Add cron jobs
-    (crontab -l 2>/dev/null | grep -v "ServerHarbor"; echo "# ServerHarbor automated tasks"; echo "0 * * * * ${menu_path} --cron-probe"; echo "0 2 * * * ${menu_path} --cron-security"; echo "0 * * * * ${menu_path} --cron-alerts") | crontab -
+    (crontab -l 2>/dev/null | grep -v "ServerHarbor"; echo "# ServerHarbor automated tasks"; echo "0 * * * * ${menu_path} --cron-probe"; echo "0 2 * * * ${menu_path} --cron-security"; echo "0 */2 * * * ${menu_path} --cron-alerts") | crontab -
     
     if [[ "${NG_LANG}" == "en" ]]; then
       ng_log "INFO" "Cron jobs added successfully."

@@ -22,6 +22,8 @@ These rules are written as the shared baseline for this project family.
 - For searches, prefer `rg`.
 - Use `apply_patch` for manual edits when the environment is stable.
 - Do not run destructive git commands unless explicitly requested.
+- Keep the public README style aligned with sibling repositories: use emoji-prefixed section headers, `---` dividers after the intro block, centered footer with `Built with ❤️ by Sunny`, and the same badge/link layout. Only the content differs, not the visual structure.
+- Issue templates must be bilingual (Chinese/English) following the pattern in start-your-python: field labels use `English / 中文` format, placeholders provide both languages, and the checklist uses bilingual option text.
 
 ### Validation And Hygiene
 
@@ -31,11 +33,13 @@ These rules are written as the shared baseline for this project family.
 - If newly learned guidance appears reusable across repositories, ask whether to scan sibling `AGENTS.md` files, apply the shared rule, and push those updates.
 - For GitHub-hosted repositories, maintain the baseline repository-governance files consistently across projects unless the user explicitly asks for divergence. This baseline includes `LICENSE`, `CODE_OF_CONDUCT.md`, `SECURITY.md`, issue templates, and similar repo-health/community files.
 - "Consistently" does not mean every line must be identical. Keep the structure, tone, and policy baseline aligned, but make the necessary project-specific substitutions for repository name, product name, links, platform fields, and repo-specific facts.
+- This repository does not use GitHub Actions. Do not add CI/CD workflow files under `.github/workflows/` unless explicitly requested.
 
 ### Security And Review
 
 - Review code with a bug-risk mindset first. Prioritize functional regressions, security issues, breaking changes, and missing tests before style or cleanup suggestions.
 - Avoid hardcoding secrets, API tokens, passwords, or private host credentials in repository files.
+- SSH connections to managed nodes must use `StrictHostKeyChecking=accept-new`, never `StrictHostKeyChecking=no`. Quote all variable expansions in SSH and SCP option strings to prevent word splitting.
 - Any function that edits `/etc`, firewall rules, SSH settings, swap, or cron state must either require explicit user choice from the interactive menu or clearly document the side effect.
 - Prefer no-side-effect inspections before enforcement changes when checking security posture.
 - For peer synchronization, commit only operational state and non-sensitive reports. Do not commit private keys, host inventories with credentials, or confidential logs.
@@ -75,7 +79,7 @@ This repository is `ServerHarbor`, a Bash-based Linux multi-server operations to
 - One-command runner: `run.sh`
 - Installer and remover: `install.sh`, `uninstall.sh`
 - Shared helpers: `common.sh`
-- Functional scripts: `bootstrap.sh`, `probe.sh`, `security.sh`
+- Functional scripts: `bootstrap.sh`, `nodes.sh`, `security.sh`
 - Runtime config: `config/`
 - Generated state: `state/`
 - Generated reports: `reports/`
@@ -89,6 +93,7 @@ This repository is `ServerHarbor`, a Bash-based Linux multi-server operations to
 - Document the Linux target clearly; do not imply Windows-native execution support beyond editing or Git management.
 - Keep examples copyable and based on plain `bash` commands.
 - If bootstrap, security, probe, or peer config behavior changes, update the README in the same task.
+- README emoji convention: `✨` for motivation, `🚀` for core capabilities, `⚡` for quick start, `📖` for usage, `🧠` for details, `🧱` for tech stack, `🗂️` for project structure, `👨‍💻` for local development, `🔐` for security, `📄` for license, `⭐` for star history. Sub-headers under each section also use emoji prefixes.
 
 ## Product Constraints
 
@@ -100,9 +105,9 @@ This repository is `ServerHarbor`, a Bash-based Linux multi-server operations to
 ## Runtime Model
 
 - `menu.sh` is the interactive user entry point.
-- Supported CLI entry points are `menu.sh --cron-probe` and `menu.sh --cron-security`.
+- Supported CLI entry points are `menu.sh --cron-probe`, `menu.sh --cron-security`, and `menu.sh --cron-alerts`.
 - Bootstrap and hardening functions may require root privileges.
-- Peer monitoring is file-driven through `config/peers.conf`.
+- Peer monitoring is file-driven through `config/servers.json` (preferred) with fallback to `config/peers.conf` (legacy CSV format).
 - Integrity scanning is path-driven through `config/watch.conf`.
 - Managed code and mutable user data must stay decoupled. Installer updates may replace `/opt/serverharbor/app`, but must preserve user config and runtime data under `/opt/serverharbor/data`.
 - Before any installer package operation or filesystem write, the script must print the intended actions and require explicit user confirmation.
@@ -111,7 +116,7 @@ This repository is `ServerHarbor`, a Bash-based Linux multi-server operations to
 ## Development Commands
 
 - Syntax check:
-  - `bash -n menu.sh common.sh bootstrap.sh probe.sh security.sh nodes.sh install.sh run.sh uninstall.sh`
+  - `bash -n menu.sh common.sh bootstrap.sh security.sh nodes.sh install.sh run.sh uninstall.sh`
 - One-command online run:
   - `bash <(curl -q -fsSL "https://raw.githubusercontent.com/sunnyhmz7010/ServerHarbor/main/run.sh?$(date +%s)")`
 - Install globally:
@@ -130,6 +135,7 @@ This repository is `ServerHarbor`, a Bash-based Linux multi-server operations to
 - Keep module boundaries simple: one operational area per file in root directory.
 - Shared defaults and helper functions belong in `common.sh`.
 - Node management functions belong in `nodes.sh`.
+- Prefer a flat directory structure. Avoid second-level subdirectories unless the volume of files genuinely requires grouping. Merge related shell functions into the same file rather than splitting across many small files.
 - Favor readable shell over dense one-liners when a function has side effects.
 - Keep comments sparse and only where the logic is not obvious.
 - Use ASCII in scripts unless a file already needs non-ASCII content.
@@ -155,6 +161,12 @@ This repository is `ServerHarbor`, a Bash-based Linux multi-server operations to
 - `exec bash "$0"` will fail after the fd closes.
 - To restart, either re-download the script or save it to a temp file first.
 - Note: This issue has been resolved in run.sh by re-downloading from GitHub on refresh.
+
+### PCRE and grep portability
+
+- Do not use `grep -P` (Perl-compatible regex). It is not available on all Linux distributions (e.g., Alpine, minimal installs).
+- Use `grep -E` (extended regex) or `grep -F` (fixed string) instead.
+- When parsing CPU or memory from system tools, prefer reading `/proc/stat` or `/proc/meminfo` over `top` or `vmstat`, which have inconsistent output formats across distributions.
 
 ## Repository Release Conventions
 

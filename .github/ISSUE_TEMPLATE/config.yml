@@ -1,5 +1,5 @@
-blank_issues_enabled: false
+blank_issues_enabled: true
 contact_links:
-  - name: Security report
-    url: https://github.com/sunnyhmz7010/ServerHarbor/security/policy
-    about: Please use the private vulnerability reporting process for security issues.
+  - name: Security Report / 安全漏洞反馈
+    url: https://github.com/sunnyhmz7010/ServerHarbor/blob/main/SECURITY.md
+    about: Please report security vulnerabilities privately by following the security policy. / 安全问题请按安全策略私下反馈。

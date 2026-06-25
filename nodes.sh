@@ -2,10 +2,8 @@
 
 set -euo pipefail
 
-# Node configuration file path
 NG_NODES_FILE="${NG_DATA_ROOT}/config/servers.json"
 
-# Initialize nodes file if it doesn't exist
 ng_init_nodes() {
   if [[ ! -f "${NG_NODES_FILE}" ]]; then
     mkdir -p "$(dirname "${NG_NODES_FILE}")"
@@ -24,114 +22,17 @@ EOF
   fi
 }
 
-# Generate join command for new nodes
-ng_generate_join_command() {
-  local main_host
-  main_host=$(hostname -I 2>/dev/null | awk '{print $1}' || hostname)
-  
-  local join_script="https://raw.githubusercontent.com/sunnyhmz7010/ServerHarbor/main/scripts/join.sh"
-  
-  if [[ "${NG_LANG}" == "en" ]]; then
-    ng_print_header "Generate Join Command"
-    printf 'Run this command on a new server to join this node group:\n\n'
-    printf '%s\n' "$(ng_color "${NG_C_ACCENT}" "curl -fsSL ${join_script} | bash -s -- ${main_host} ${NG_DATA_ROOT} my-server-alias en")"
-    printf '\n'
-    printf 'The join script will automatically:\n'
-    printf '  - Detect if the server is behind NAT\n'
-    printf '  - Ask for public IP if needed\n'
-    printf '  - Register with this server via SSH\n'
-    printf '\n'
-    printf 'Note: The new server needs SSH access to this server.\n'
-    printf 'If the new server is behind NAT, it will ask for the public IP and port.\n'
-  else
-    ng_print_header "生成加入命令"
-    printf '在新服务器上执行此命令加入节点组：\n\n'
-    printf '%s\n' "$(ng_color "${NG_C_ACCENT}" "curl -fsSL ${join_script} | bash -s -- ${main_host} ${NG_DATA_ROOT} my-server-alias zh")"
-    printf '\n'
-    printf '加入脚本会自动：\n'
-    printf '  - 检测服务器是否在 NAT 后面\n'
-    printf '  - 如果需要，询问公网 IP\n'
-    printf '  - 通过 SSH 注册到本服务器\n'
-    printf '\n'
-    printf '注意：新服务器需要能通过 SSH 连接到本服务器。\n'
-    printf '如果新服务器在 NAT 后面，脚本会询问公网 IP 和端口。\n'
-  fi
-}
-
-# Register a node from remote (called by join script)
-ng_register_from_remote() {
-  local main_host="$1"
-  local data_root="$2"
-  local alias="${3:-$(hostname)}"
-  local remote_ip="${4:-$(echo $SSH_CLIENT | awk '{print $1}')}"
-  local remote_user="${5:-root}"
-  local remote_port="${6:-22}"
-  
-  local nodes_file="${data_root}/config/servers.json"
-  
-  # Initialize if needed
-  if [[ ! -f "${nodes_file}" ]]; then
-    mkdir -p "$(dirname "${nodes_file}")"
-    cat > "${nodes_file}" <<EOF
-{
-  "defaults": {
-    "ssh": {
-      "user": "root",
-      "port": 22,
-      "key": "~/.ssh/id_ed25519"
-    }
-  },
-  "servers": []
-}
-EOF
-  fi
-  
-  # Check if jq is available
-  if ! command -v jq >/dev/null 2>&1; then
-    echo "ERROR: jq is required. Install it first."
-    return 1
-  fi
-  
-  # Check if node already exists
-  if jq -e ".servers[] | select(.name == \"${alias}\")" "${nodes_file}" >/dev/null 2>&1; then
-    echo "Node '${alias}' already exists."
-    return 0
-  fi
-  
-  # Add node
-  local tmp_file="${nodes_file}.tmp"
-  jq --arg name "${alias}" \
-     --arg host "${remote_ip}" \
-     --arg user "${remote_user}" \
-     --arg port "${remote_port}" \
-     '.servers += [{
-       "name": $name,
-       "host": $host,
-       "ssh": {
-         "user": $user,
-         "port": ($port | tonumber),
-         "auth": "key",
-         "key": "~/.ssh/id_ed25519"
-       },
-       "tags": [],
-       "enabled": true
-     }]' "${nodes_file}" > "${tmp_file}" && mv -f "${tmp_file}" "${nodes_file}"
-  
-  echo "Node '${alias}' (${remote_ip}) registered successfully!"
-}
-
-# Ensure jq is installed
 ng_ensure_jq() {
   if command -v jq >/dev/null 2>&1; then
     return 0
   fi
-  
+
   if [[ "${NG_LANG}" == "en" ]]; then
     printf 'jq not found. Installing...\n'
   else
     printf '未找到 jq，正在安装...\n'
   fi
-  
+
   if command -v apt-get >/dev/null 2>&1; then
     apt-get update -qq && apt-get install -y -qq jq
   elif command -v yum >/dev/null 2>&1; then
@@ -148,18 +49,20 @@ ng_ensure_jq() {
   fi
 }
 
-# Read nodes from JSON file
 ng_read_nodes() {
   ng_init_nodes
   if ng_ensure_jq; then
-    jq -r '.servers[] | select(.enabled != false) | "\(.name),\(.host),\(.ssh.user // .defaults.ssh.user // "root"),\(.ssh.port // .defaults.ssh.port // 22),\(.ssh.auth // "key"),\(.ssh.key // .defaults.ssh.key // "~/.ssh/id_ed25519")"' "${NG_NODES_FILE}" 2>/dev/null || true
+    jq -r '.servers[] | select(.enabled != false) | "\(.name),\(.host),\(.ssh.user // "root"),\(.ssh.port // 22),\(.ssh.auth // "key"),\(.ssh.key // "~/.ssh/id_ed25519")"' "${NG_NODES_FILE}" 2>/dev/null || true
   else
-    # Fallback: simple parsing
-    grep -o '"name": *"[^"]*"' "${NG_NODES_FILE}" 2>/dev/null | cut -d'"' -f4 || true
+    if [[ "${NG_LANG}" == "en" ]]; then
+      ng_log "WARN" "jq not available, falling back to peers.conf"
+    else
+      ng_log "WARN" "jq 不可用，回退到 peers.conf"
+    fi
+    ng_read_peers
   fi
 }
 
-# Get node count
 ng_node_count() {
   if command -v jq >/dev/null 2>&1; then
     jq '[.servers[] | select(.enabled != false)] | length' "${NG_NODES_FILE}" 2>/dev/null || echo 0
@@ -168,7 +71,6 @@ ng_node_count() {
   fi
 }
 
-# Add a node
 ng_add_node() {
   local name="$1"
   local host="$2"
@@ -178,18 +80,16 @@ ng_add_node() {
   local key="${6:-~/.ssh/id_ed25519}"
   local tags="${7:-}"
 
-  # Validate inputs
   if [[ -z "${name}" ]]; then
     ng_log "ERROR" "Node name is required."
     return 1
   fi
-  
+
   if [[ -z "${host}" ]]; then
     ng_log "ERROR" "Host is required."
     return 1
   fi
-  
-  # Validate port number
+
   if ! [[ "${port}" =~ ^[0-9]+$ ]] || [[ "${port}" -lt 1 ]] || [[ "${port}" -gt 65535 ]]; then
     if [[ "${NG_LANG}" == "en" ]]; then
       ng_log "ERROR" "Invalid port number: ${port} (must be 1-65535)"
@@ -198,8 +98,7 @@ ng_add_node() {
     fi
     return 1
   fi
-  
-  # Validate auth method
+
   if [[ "${auth}" != "key" && "${auth}" != "password" ]]; then
     if [[ "${NG_LANG}" == "en" ]]; then
       ng_log "ERROR" "Invalid auth method: ${auth} (must be 'key' or 'password')"
@@ -211,12 +110,10 @@ ng_add_node() {
 
   ng_init_nodes
 
-  # Check if jq is available
   if ! ng_ensure_jq; then
     return 1
   fi
 
-  # Check if node already exists
   if jq -e ".servers[] | select(.name == \"${name}\")" "${NG_NODES_FILE}" >/dev/null 2>&1; then
     if [[ "${NG_LANG}" == "en" ]]; then
       ng_log "WARN" "Node '${name}' already exists. Use edit to modify."
@@ -226,7 +123,6 @@ ng_add_node() {
     return 1
   fi
 
-  # Add node to JSON
   local tmp_file="${NG_NODES_FILE}.tmp"
   jq --arg name "${name}" \
      --arg host "${host}" \
@@ -255,7 +151,6 @@ ng_add_node() {
   fi
 }
 
-# Remove a node
 ng_remove_node() {
   local name="$1"
 
@@ -287,7 +182,6 @@ ng_remove_node() {
   fi
 }
 
-# List all nodes
 ng_list_nodes() {
   if ! command -v jq >/dev/null 2>&1; then
     if [[ "${NG_LANG}" == "en" ]]; then
@@ -323,7 +217,6 @@ ng_list_nodes() {
   done
 }
 
-# Test SSH connection to a node
 ng_test_node_ssh() {
   local name="$1"
   local host="$2"
@@ -332,18 +225,17 @@ ng_test_node_ssh() {
   local auth="$5"
   local key="$6"
 
-  local ssh_opts="-o ConnectTimeout=5 -o BatchMode=yes -o StrictHostKeyChecking=accept-new -p ${port}"
+  local -a ssh_opts=(-o ConnectTimeout=5 -o BatchMode=yes -o StrictHostKeyChecking=accept-new -p "${port}")
 
   if [[ "${auth}" == "key" ]]; then
-    ssh_opts="${ssh_opts} -i ${key}"
+    ssh_opts+=(-i "${key}")
   fi
 
   local output
-  output=$(ssh ${ssh_opts} "${user}@${host}" "echo 'SSH_OK'" 2>&1) && {
+  output=$(ssh "${ssh_opts[@]}" "${user}@${host}" "echo 'SSH_OK'" 2>&1) && {
     echo "OK"
     return 0
   } || {
-    # Analyze error
     if echo "${output}" | grep -qi "connection refused"; then
       echo "CONN_REFUSED"
     elif echo "${output}" | grep -qi "connection timed out\|no route to host"; then
@@ -361,7 +253,6 @@ ng_test_node_ssh() {
   }
 }
 
-# Test all nodes
 ng_test_all_nodes() {
   if ! ng_ensure_jq; then
     return 1
@@ -398,7 +289,7 @@ ng_test_all_nodes() {
 
     local status detail
     status=$(ng_test_node_ssh "${node_name}" "${node_host}" "${node_user}" "${node_port}" "${node_auth}" "${node_key}") || true
-    
+
     case "${status}" in
       OK)
         detail="✓ Connected"
@@ -429,12 +320,11 @@ ng_test_all_nodes() {
         status="FAIL"
         ;;
     esac
-    
+
     printf '%-20s %-20s %-15s %s\n' "${node_name}" "${node_host}" "${status}" "${detail}"
   done
 }
 
-# Run command on a single node
 ng_run_on_node() {
   local name="$1"
   local command="$2"
@@ -467,15 +357,14 @@ ng_run_on_node() {
   auth=$(echo "${node}" | jq -r '.ssh.auth // "key"')
   key=$(echo "${node}" | jq -r '.ssh.key // "~/.ssh/id_ed25519"')
 
-  local ssh_opts="-o ConnectTimeout=10 -o StrictHostKeyChecking=no -p ${port}"
+  local -a ssh_opts=(-o ConnectTimeout=10 -o StrictHostKeyChecking=accept-new -p "${port}")
   if [[ "${auth}" == "key" ]]; then
-    ssh_opts="${ssh_opts} -i ${key}"
+    ssh_opts+=(-i "${key}")
   fi
 
-  ssh ${ssh_opts} "${user}@${host}" "${command}" 2>&1
+  ssh "${ssh_opts[@]}" "${user}@${host}" "${command}" 2>&1
 }
 
-# Run command on all nodes
 ng_run_on_all_nodes() {
   local command="$1"
   local output_file="${NG_STATE_DIR}/${NG_HOSTNAME}-batch-exec.state"
@@ -523,13 +412,13 @@ ng_run_on_all_nodes() {
       auth=$(echo "${node}" | jq -r '.ssh.auth // "key"')
       key=$(echo "${node}" | jq -r '.ssh.key // "~/.ssh/id_ed25519"')
 
-      local ssh_opts="-o ConnectTimeout=10 -o StrictHostKeyChecking=no -p ${port}"
+      local -a ssh_opts=(-o ConnectTimeout=10 -o StrictHostKeyChecking=accept-new -p "${port}")
       if [[ "${auth}" == "key" ]]; then
-        ssh_opts="${ssh_opts} -i ${key}"
+        ssh_opts+=(-i "${key}")
       fi
 
       local output status
-      output=$(ssh ${ssh_opts} "${user}@${host}" "${command}" 2>&1) && status="OK" || status="FAIL"
+      output=$(ssh "${ssh_opts[@]}" "${user}@${host}" "${command}" 2>&1) && status="OK" || status="FAIL"
       printf '%-20s %-10s %s\n' "${name}" "${status}" "$(echo "${output}" | head -1)"
     done
   } | tee "${output_file}"
@@ -541,7 +430,6 @@ ng_run_on_all_nodes() {
   fi
 }
 
-# Sync config to all nodes
 ng_sync_to_all_nodes() {
   local source_file="$1"
   local remote_path="$2"
@@ -600,12 +488,12 @@ ng_sync_to_all_nodes() {
     auth=$(echo "${node}" | jq -r '.ssh.auth // "key"')
     key=$(echo "${node}" | jq -r '.ssh.key // "~/.ssh/id_ed25519"')
 
-    local scp_opts="-o ConnectTimeout=5 -o StrictHostKeyChecking=no -P ${port}"
+    local -a scp_opts=(-o ConnectTimeout=5 -o StrictHostKeyChecking=accept-new -P "${port}")
     if [[ "${auth}" == "key" ]]; then
-      scp_opts="${scp_opts} -i ${key}"
+      scp_opts+=(-i "${key}")
     fi
 
-    if scp ${scp_opts} "${source_file}" "${user}@${host}:${remote_path}" 2>/dev/null; then
+    if scp "${scp_opts[@]}" "${source_file}" "${user}@${host}:${remote_path}" 2>/dev/null; then
       if [[ "${NG_LANG}" == "en" ]]; then
         printf '  ✓ %s: synced\n' "${name}"
       else
@@ -629,8 +517,6 @@ ng_sync_to_all_nodes() {
   fi
 }
 
-# Node management menu
-# Deploy SSH keys to all nodes
 ng_deploy_ssh_keys() {
   if ! ng_ensure_jq; then
     return 1
@@ -648,7 +534,6 @@ ng_deploy_ssh_keys() {
     return 0
   fi
 
-  # Check if SSH key exists
   if [[ ! -f ~/.ssh/id_ed25519 ]] && [[ ! -f ~/.ssh/id_rsa ]]; then
     if [[ "${NG_LANG}" == "en" ]]; then
       printf 'No SSH key found. Generating new key...\n'
@@ -675,7 +560,7 @@ ng_deploy_ssh_keys() {
     node_port=$(echo "${node}" | jq -r '.ssh.port // 22')
 
     printf '  %-20s ' "${node_name}"
-    
+
     if ssh-copy-id -o ConnectTimeout=5 -o StrictHostKeyChecking=accept-new -p "${node_port}" "${node_user}@${node_host}" 2>/dev/null; then
       if [[ "${NG_LANG}" == "en" ]]; then
         printf '✓ Deployed\n'
@@ -698,6 +583,533 @@ ng_deploy_ssh_keys() {
   else
     printf '\n部署完成: %d 成功, %d 失败\n' "${success}" "${failed}"
   fi
+}
+
+ng_generate_join_command() {
+  local main_host
+  main_host=$(hostname -I 2>/dev/null | awk '{print $1}' || hostname)
+
+  local join_script="https://raw.githubusercontent.com/sunnyhmz7010/ServerHarbor/main/scripts/join.sh"
+
+  if [[ "${NG_LANG}" == "en" ]]; then
+    ng_print_header "Generate Join Command"
+    printf 'Run this command on a new server to join this node group:\n\n'
+    printf '%s\n' "$(ng_color "${NG_C_ACCENT}" "curl -fsSL ${join_script} | bash -s -- ${main_host} ${NG_DATA_ROOT} my-server-alias en")"
+    printf '\n'
+    printf 'The join script will automatically:\n'
+    printf '  - Detect if the server is behind NAT\n'
+    printf '  - Ask for public IP if needed\n'
+    printf '  - Register with this server via SSH\n'
+    printf '\n'
+    printf 'Note: The new server needs SSH access to this server.\n'
+  else
+    ng_print_header "生成加入命令"
+    printf '在新服务器上执行此命令加入节点组：\n\n'
+    printf '%s\n' "$(ng_color "${NG_C_ACCENT}" "curl -fsSL ${join_script} | bash -s -- ${main_host} ${NG_DATA_ROOT} my-server-alias zh")"
+    printf '\n'
+    printf '加入脚本会自动：\n'
+    printf '  - 检测服务器是否在 NAT 后面\n'
+    printf '  - 如果需要，询问公网 IP\n'
+    printf '  - 通过 SSH 注册到本服务器\n'
+    printf '\n'
+    printf '注意：新服务器需要能通过 SSH 连接到本服务器。\n'
+  fi
+}
+
+ng_register_from_remote() {
+  local main_host="$1"
+  local data_root="$2"
+  local alias="${3:-$(hostname)}"
+  local remote_ip="${4:-${SSH_CLIENT%% *}}"
+  local remote_user="${5:-root}"
+  local remote_port="${6:-22}"
+
+  local nodes_file="${data_root}/config/servers.json"
+
+  if [[ ! -f "${nodes_file}" ]]; then
+    mkdir -p "$(dirname "${nodes_file}")"
+    cat > "${nodes_file}" <<EOF
+{
+  "defaults": {
+    "ssh": {
+      "user": "root",
+      "port": 22,
+      "key": "~/.ssh/id_ed25519"
+    }
+  },
+  "servers": []
+}
+EOF
+  fi
+
+  if ! command -v jq >/dev/null 2>&1; then
+    echo "ERROR: jq is required. Install it first."
+    return 1
+  fi
+
+  if jq -e ".servers[] | select(.name == \"${alias}\")" "${nodes_file}" >/dev/null 2>&1; then
+    echo "Node '${alias}' already exists."
+    return 0
+  fi
+
+  local tmp_file="${nodes_file}.tmp"
+  jq --arg name "${alias}" \
+     --arg host "${remote_ip}" \
+     --arg user "${remote_user}" \
+     --arg port "${remote_port}" \
+     '.servers += [{
+       "name": $name,
+       "host": $host,
+       "ssh": {
+         "user": $user,
+         "port": ($port | tonumber),
+         "auth": "key",
+         "key": "~/.ssh/id_ed25519"
+       },
+       "tags": [],
+       "enabled": true
+     }]' "${nodes_file}" > "${tmp_file}" && mv -f "${tmp_file}" "${nodes_file}"
+
+  echo "Node '${alias}' (${remote_ip}) registered successfully!"
+}
+
+ng_join_node() {
+  local main_host="${1:-}"
+  local data_root="${2:-${NG_DATA_ROOT}}"
+  local alias="${3:-$(hostname)}"
+  local lang="${4:-${NG_LANG}}"
+
+  if [[ -z "${main_host}" ]]; then
+    if [[ "${lang}" == "en" ]]; then
+      ng_log "ERROR" "Main server host is required."
+    else
+      ng_log "ERROR" "需要主服务器地址。"
+    fi
+    return 1
+  fi
+
+  if [[ "${lang}" == "en" ]]; then
+    ng_print_header "Node Join"
+    printf 'Main server: %s\n' "${main_host}"
+    printf 'Data root: %s\n' "${data_root}"
+    printf 'Alias: %s\n\n' "${alias}"
+  else
+    ng_print_header "节点加入"
+    printf '主服务器: %s\n' "${main_host}"
+    printf '数据目录: %s\n' "${data_root}"
+    printf '别名: %s\n\n' "${alias}"
+  fi
+
+  if ! ng_ensure_jq; then
+    return 1
+  fi
+
+  local local_ip public_ip behind_nat=0
+  local_ip=$(hostname -I 2>/dev/null | awk '{print $1}' || echo "unknown")
+
+  if command -v curl >/dev/null 2>&1; then
+    public_ip=$(curl -s --connect-timeout 5 https://api.ipify.org 2>/dev/null || echo "")
+  fi
+
+  if [[ -n "${public_ip}" ]] && [[ "${public_ip}" != "${local_ip}" ]]; then
+    behind_nat=1
+  fi
+
+  if [[ "${lang}" == "en" ]]; then
+    printf 'Local IP: %s\n' "${local_ip}"
+    [[ -n "${public_ip}" ]] && printf 'Public IP: %s\n' "${public_ip}"
+  else
+    printf '本地 IP: %s\n' "${local_ip}"
+    [[ -n "${public_ip}" ]] && printf '公网 IP: %s\n' "${public_ip}"
+  fi
+
+  local register_ip="${public_ip:-${local_ip}}"
+  if [[ "${behind_nat}" -eq 0 ]]; then
+    register_ip="${local_ip}"
+  fi
+
+  if [[ "${behind_nat}" -eq 1 ]]; then
+    if [[ "${lang}" == "en" ]]; then
+      printf '\n⚠️  Detected NAT environment (public IP differs from local IP)\n'
+      printf 'The main server needs to reach this server via SSH.\n'
+      printf 'Enter public IP (default: %s): ' "${public_ip}"
+    else
+      printf '\n⚠️  检测到 NAT 环境（公网 IP 与本地 IP 不同）\n'
+      printf '主服务器需要通过 SSH 访问此服务器。\n'
+      printf '输入公网 IP（默认: %s）: ' "${public_ip}"
+    fi
+    local input_ip
+    ng_read_line input_ip || return 130
+    register_ip="${input_ip:-${public_ip}}"
+  fi
+
+  local remote_script
+  remote_script=$(cat <<REMOTE_EOF
+#!/bin/bash
+DATA_ROOT="\$1"
+ALIAS="\$2"
+REGISTER_IP="\$3"
+
+NODES_FILE="\${DATA_ROOT}/config/servers.json"
+
+if [[ ! -f "\${NODES_FILE}" ]]; then
+  mkdir -p "\$(dirname "\${NODES_FILE}")"
+  cat > "\${NODES_FILE}" <<EOF
+{
+  "defaults": { "ssh": { "user": "root", "port": 22, "key": "~/.ssh/id_ed25519" } },
+  "servers": []
+}
+EOF
+fi
+
+if jq -e ".servers[] | select(.name == \\\"\${ALIAS}\\\")" "\${NODES_FILE}" >/dev/null 2>&1; then
+  echo "EXISTS:\${ALIAS}"
+  exit 0
+fi
+
+TMP_FILE="\${NODES_FILE}.tmp"
+jq --arg name "\${ALIAS}" \\
+   --arg host "\${REGISTER_IP}" \\
+   '.servers += [{ "name": \$name, "host": \$host, "ssh": { "user": "root", "port": 22, "auth": "key", "key": "~/.ssh/id_ed25519" }, "tags": [], "enabled": true }]' "\${NODES_FILE}" > "\${TMP_FILE}" && mv -f "\${TMP_FILE}" "\${NODES_FILE}"
+
+echo "OK:\${ALIAS}:\${REGISTER_IP}"
+REMOTE_EOF
+  )
+
+  if [[ "${lang}" == "en" ]]; then
+    printf 'Registering with main server...\n'
+  else
+    printf '正在注册到主服务器...\n'
+  fi
+
+  local remote_output
+  remote_output=$(ssh -o ConnectTimeout=5 -o StrictHostKeyChecking=accept-new "${main_host}" "bash -s -- '${data_root}' '${alias}' '${register_ip}'" <<< "${remote_script}" 2>/dev/null) || true
+
+  if echo "${remote_output}" | grep -q "^OK:"; then
+    if [[ "${lang}" == "en" ]]; then
+      printf '✓ Successfully registered with %s\n' "${main_host}"
+      printf '  Node "%s" (%s) is now part of the node group.\n' "${alias}" "${register_ip}"
+    else
+      printf '✓ 成功注册到 %s\n' "${main_host}"
+      printf '  节点 "%s" (%s) 已加入节点组。\n' "${alias}" "${register_ip}"
+    fi
+  elif echo "${remote_output}" | grep -q "^EXISTS:"; then
+    if [[ "${lang}" == "en" ]]; then
+      printf 'Node "%s" already exists.\n' "${alias}"
+    else
+      printf '节点 "%s" 已存在。\n' "${alias}"
+    fi
+  else
+    if [[ "${lang}" == "en" ]]; then
+      printf '✗ Failed to register via SSH.\n\n'
+      printf 'Manual registration:\n'
+      printf '  1. Copy this info to the main server:\n'
+      printf '     Name: %s\n     Host: %s\n' "${alias}" "${register_ip}"
+      printf '  2. Add via menu: [3] Node Management → [2] Add node\n'
+    else
+      printf '✗ 通过 SSH 注册失败。\n\n'
+      printf '手动注册:\n'
+      printf '  1. 将此信息复制到主服务器:\n'
+      printf '     名称: %s\n     主机: %s\n' "${alias}" "${register_ip}"
+      printf '  2. 通过菜单添加: [3] 节点管理 → [2] 添加节点\n'
+    fi
+  fi
+}
+
+ng_collect_local_probe() {
+  local state_file="${NG_STATE_DIR}/${NG_HOSTNAME}-local.state"
+  local tmp_file="${state_file}.tmp"
+
+  {
+    printf 'timestamp=%s\n' "$(date '+%s')"
+    printf 'host=%s\n' "${NG_HOSTNAME}"
+    printf 'uptime=%s\n' "$(uptime -p 2>/dev/null || uptime)"
+    printf 'load=%s\n' "$(ng_system_load)"
+    printf 'disk_root=%s\n' "$(df -h / 2>/dev/null | awk 'NR==2 {print $5}' || echo unknown)"
+    printf 'mem_used=%s\n' "$(free -m 2>/dev/null | awk '/Mem:/ {printf "%s/%sMB", $3, $2}' || echo unknown)"
+    printf 'ssh=%s\n' "$(ng_service_state sshd)"
+  } > "${tmp_file}"
+
+  if mv -f "${tmp_file}" "${state_file}" 2>/dev/null; then
+    printf '%s\n' "${state_file}"
+  else
+    rm -f "${tmp_file}" 2>/dev/null
+    ng_log "ERROR" "Failed to write state file"
+    return 1
+  fi
+}
+
+ng_probe_single_peer() {
+  local peer_host="$1"
+  local peer_alias="$2"
+  local ping_result ssh_result latency
+  local ping_output
+
+  ping_output="$(ping -c 1 -W "${NG_PROBE_TIMEOUT}" "${peer_host}" 2>/dev/null)" || true
+
+  if [[ -n "${ping_output}" ]] && echo "${ping_output}" | grep -q "bytes from"; then
+    ping_result="up"
+    latency="$(echo "${ping_output}" | awk -F'time=' 'END {print $2}' | awk '{print $1}' || echo n/a)"
+  else
+    ping_result="down"
+    latency="timeout"
+  fi
+
+  if nc -z -w "${NG_PROBE_TIMEOUT}" "${peer_host}" 22 2>/dev/null; then
+    ssh_result="open"
+  elif timeout "${NG_PROBE_TIMEOUT}" bash -c "cat < /dev/null > /dev/tcp/${peer_host}/22" >/dev/null 2>&1; then
+    ssh_result="open"
+  else
+    ssh_result="closed"
+  fi
+
+  printf '%-16s %-24s %-8s %-10s %s\n' "${peer_alias}" "${peer_host}" "${ping_result}" "${ssh_result}" "${latency}"
+}
+
+ng_probe_all_peers() {
+  local output_file="${NG_STATE_DIR}/${NG_HOSTNAME}-peers.state"
+
+  {
+    printf 'Peer Alias       Peer Host                ICMP     SSH Port   Latency\n'
+    printf '%s\n' '---------------------------------------------------------------------'
+
+    if [[ -f "${NG_DATA_ROOT}/config/servers.json" ]] && command -v jq >/dev/null 2>&1; then
+      jq -r '.servers[] | select(.enabled != false) | "\(.name),\(.host)"' "${NG_DATA_ROOT}/config/servers.json" 2>/dev/null | while IFS=',' read -r peer_alias peer_host; do
+        [[ -n "${peer_alias}" && -n "${peer_host}" ]] || continue
+        ng_probe_single_peer "${peer_host}" "${peer_alias}"
+      done
+    else
+      while IFS=',' read -r peer_alias peer_host; do
+        [[ -n "${peer_alias}" && -n "${peer_host}" ]] || continue
+        ng_probe_single_peer "${peer_host}" "${peer_alias}"
+      done < <(ng_read_peers)
+    fi
+  } | tee "${output_file}"
+
+  local state_file
+  state_file="$(ng_collect_local_probe)"
+
+  if [[ "${NG_LANG}" == "en" ]]; then
+    ng_report_header "🛰 ServerHarbor Probe Report"
+    ng_report_meta "Generated At" "$(ng_timestamp)"
+    ng_report_meta "Host" "${NG_HOSTNAME}"
+    ng_report_section_start "Peer Matrix"
+    while IFS= read -r line; do
+      ng_report_line "  ${line}"
+    done < "${output_file}"
+    ng_report_section_start "Local Snapshot"
+    while IFS= read -r line; do
+      ng_report_line "  ${line}"
+    done < "${state_file}"
+    ng_report_footer
+  else
+    ng_report_header "🛰 ServerHarbor 节点探测报告"
+    ng_report_meta "生成时间" "$(ng_timestamp)"
+    ng_report_meta "主机" "${NG_HOSTNAME}"
+    ng_report_section_start "节点矩阵"
+    while IFS= read -r line; do
+      ng_report_line "  ${line}"
+    done < "${output_file}"
+    ng_report_section_start "本机快照"
+    while IFS= read -r line; do
+      ng_report_line "  ${line}"
+    done < "${state_file}"
+    ng_report_footer
+  fi
+}
+
+ng_local_health() {
+  local state_file
+  state_file="$(ng_collect_local_probe)"
+
+  if [[ "${NG_LANG}" == "en" ]]; then
+    ng_report_header "Local Health Status"
+    ng_report_meta "Hostname" "${NG_HOSTNAME}"
+    ng_report_meta "Collected At" "$(ng_timestamp)"
+    ng_report_section_start "System Info"
+    ng_report_kv_styled "Uptime" "$(uptime -p 2>/dev/null || uptime)"
+    ng_report_kv_styled "System Load" "$(ng_system_load)"
+    ng_report_section_start "Resource Usage"
+    ng_report_kv_styled "Memory" "$(free -m 2>/dev/null | awk '/Mem:/ {printf "%s/%sMB (%.1f%%)", $3, $2, $3/$2*100}' || echo unknown)"
+    ng_report_kv_styled "Disk /" "$(df -h / 2>/dev/null | awk 'NR==2 {print $3"/"$2" ("$5")"}' || echo unknown)"
+    ng_report_section_start "Network Ports"
+    ng_report_line "Listening ports:"
+    ss -lntp 2>/dev/null | sed -n '1,15p' | while IFS= read -r line; do
+      ng_report_line "  ${line}"
+    done
+    ng_report_footer
+    printf '\n'
+    printf 'State saved to: %s\n' "${state_file}"
+  else
+    ng_report_header "本机健康状态"
+    ng_report_meta "主机名" "${NG_HOSTNAME}"
+    ng_report_meta "采集时间" "$(ng_timestamp)"
+    ng_report_section_start "系统信息"
+    ng_report_kv_styled "运行时长" "$(uptime -p 2>/dev/null || uptime)"
+    ng_report_kv_styled "系统负载" "$(ng_system_load)"
+    ng_report_section_start "资源使用"
+    ng_report_kv_styled "内存" "$(free -m 2>/dev/null | awk '/Mem:/ {printf "%s/%sMB (%.1f%%)", $3, $2, $3/$2*100}' || echo unknown)"
+    ng_report_kv_styled "磁盘 /" "$(df -h / 2>/dev/null | awk 'NR==2 {print $3"/"$2" ("$5")"}' || echo unknown)"
+    ng_report_section_start "网络端口"
+    ng_report_line "监听端口:"
+    ss -lntp 2>/dev/null | sed -n '1,15p' | while IFS= read -r line; do
+      ng_report_line "  ${line}"
+    done
+    ng_report_footer
+    printf '\n'
+    printf '状态已保存至: %s\n' "${state_file}"
+  fi
+}
+
+ng_view_logs() {
+  local log_type="$1"
+  local log_file=""
+
+  case "${log_type}" in
+    auth)
+      if [[ -f /var/log/auth.log ]]; then
+        log_file="/var/log/auth.log"
+      elif [[ -f /var/log/secure ]]; then
+        log_file="/var/log/secure"
+      fi
+      ;;
+    syslog)
+      if [[ -f /var/log/syslog ]]; then
+        log_file="/var/log/syslog"
+      elif [[ -f /var/log/messages ]]; then
+        log_file="/var/log/messages"
+      fi
+      ;;
+    dmesg)
+      log_file="dmesg"
+      ;;
+    *)
+      if [[ "${NG_LANG}" == "en" ]]; then
+        ng_log "ERROR" "Unknown log type: ${log_type}"
+      else
+        ng_log "ERROR" "未知日志类型: ${log_type}"
+      fi
+      return 1
+      ;;
+  esac
+
+  if [[ "${log_type}" == "dmesg" ]]; then
+    if [[ "${NG_LANG}" == "en" ]]; then
+      ng_print_header "Kernel Messages (dmesg)"
+    else
+      ng_print_header "内核消息 (dmesg)"
+    fi
+    dmesg | tail -50
+  elif [[ -n "${log_file}" ]]; then
+    if [[ "${NG_LANG}" == "en" ]]; then
+      ng_print_header "Log: ${log_file}"
+      printf 'Showing last 50 lines:\n\n'
+    else
+      ng_print_header "日志: ${log_file}"
+      printf '显示最后 50 行:\n\n'
+    fi
+    tail -50 "${log_file}"
+  else
+    if [[ "${NG_LANG}" == "en" ]]; then
+      ng_log "ERROR" "Log file not found for type: ${log_type}"
+    else
+      ng_log "ERROR" "未找到类型为 ${log_type} 的日志文件"
+    fi
+    return 1
+  fi
+}
+
+ng_backup_manager() {
+  local backup_dir="${NG_DATA_ROOT}/backups"
+  mkdir -p "${backup_dir}"
+
+  if [[ "${NG_LANG}" == "en" ]]; then
+    ng_print_header "Backup Management"
+    printf 'Backup directory: %s\n\n' "${backup_dir}"
+    printf '  [1] Backup configuration files\n'
+    printf '  [2] Backup state files\n'
+    printf '  [3] List existing backups\n'
+    printf '  [4] Restore from backup\n'
+    printf '  [0] Back\n'
+  else
+    ng_print_header "备份管理"
+    printf '备份目录: %s\n\n' "${backup_dir}"
+    printf '  [1] 备份配置文件\n'
+    printf '  [2] 备份状态文件\n'
+    printf '  [3] 列出现有备份\n'
+    printf '  [4] 从备份恢复\n'
+    printf '  [0] 返回\n'
+  fi
+
+  local choice
+  ng_read_line choice || return 130
+
+  case "${choice}" in
+    1)
+      local backup_file="${backup_dir}/config-$(date '+%Y%m%d-%H%M%S').tar.gz"
+      tar -czf "${backup_file}" -C "${NG_DATA_ROOT}" config 2>/dev/null
+      if [[ "${NG_LANG}" == "en" ]]; then
+        printf 'Configuration backed up to: %s\n' "${backup_file}"
+      else
+        printf '配置已备份至: %s\n' "${backup_file}"
+      fi
+      ;;
+    2)
+      local backup_file="${backup_dir}/state-$(date '+%Y%m%d-%H%M%S').tar.gz"
+      tar -czf "${backup_file}" -C "${NG_DATA_ROOT}" state 2>/dev/null
+      if [[ "${NG_LANG}" == "en" ]]; then
+        printf 'State files backed up to: %s\n' "${backup_file}"
+      else
+        printf '状态文件已备份至: %s\n' "${backup_file}"
+      fi
+      ;;
+    3)
+      if [[ "${NG_LANG}" == "en" ]]; then
+        ng_print_header "Existing Backups"
+        ls -lh "${backup_dir}"/*.tar.gz 2>/dev/null || printf 'No backups found.\n'
+      else
+        ng_print_header "现有备份"
+        ls -lh "${backup_dir}"/*.tar.gz 2>/dev/null || printf '未找到备份文件。\n'
+      fi
+      ;;
+    4)
+      if [[ "${NG_LANG}" == "en" ]]; then
+        printf 'Available backups:\n'
+        ls -1 "${backup_dir}"/*.tar.gz 2>/dev/null || printf 'No backups found.\n'
+        printf '\nEnter backup file path to restore: '
+      else
+        printf '可用备份:\n'
+        ls -1 "${backup_dir}"/*.tar.gz 2>/dev/null || printf '未找到备份文件。\n'
+        printf '\n输入要恢复的备份文件路径: '
+      fi
+      local restore_file
+      ng_read_line restore_file || return 130
+
+      if [[ -f "${restore_file}" ]]; then
+        if [[ "${NG_LANG}" == "en" ]]; then
+          printf 'Restoring from: %s\n' "${restore_file}"
+        else
+          printf '正在从 %s 恢复\n' "${restore_file}"
+        fi
+        tar -xzf "${restore_file}" -C "${NG_DATA_ROOT}" 2>/dev/null
+        if [[ "${NG_LANG}" == "en" ]]; then
+          printf 'Restore completed.\n'
+        else
+          printf '恢复完成。\n'
+        fi
+      else
+        if [[ "${NG_LANG}" == "en" ]]; then
+          ng_log "ERROR" "Backup file not found: ${restore_file}"
+        else
+          ng_log "ERROR" "备份文件不存在: ${restore_file}"
+        fi
+      fi
+      ;;
+    0) return 0 ;;
+    *)
+      ng_t invalid_option
+      ;;
+  esac
 }
 
 ng_node_menu() {

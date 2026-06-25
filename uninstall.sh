@@ -79,7 +79,7 @@ confirm() {
   esac
 }
 
-LOCK_FILE="/tmp/.serverharbor-install.lock"
+LOCK_FILE="/var/lock/serverharbor.lock"
 
 acquire_lock() {
   # Create lock file atomically to avoid symlink attacks

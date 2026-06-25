@@ -292,15 +292,6 @@ download_and_extract() {
   printf '%s\n' "${extracted_root}"
 }
 
-install_repo() {
-  local extracted_root
-
-  extracted_root="$(download_and_extract)"
-  rm -rf "${APP_ROOT}"
-  mkdir -p "${INSTALL_ROOT}"
-  cp -R "${extracted_root}" "${APP_ROOT}"
-}
-
 calc_tree_hash() {
   local target_dir="$1"
 
@@ -343,7 +334,7 @@ seed_data_root() {
   done
 }
 
-LOCK_FILE="/tmp/.serverharbor-install.lock"
+LOCK_FILE="/var/lock/serverharbor.lock"
 
 acquire_lock() {
   # Create lock file atomically to avoid symlink attacks

@@ -64,11 +64,11 @@ ng_migrate_config() {
     return 0
   fi
 
-  # Log migration start
+  # Display migration message
   if [[ "${NG_LANG}" == "en" ]]; then
-    ng_log "INFO" "Migrating data from ${source_dir} to ${target_dir}"
+    printf '\n%s\n' "$(ng_color "${NG_C_WARN}" "⚠ Migrating data from online to installed version...")"
   else
-    ng_log "INFO" "正在迁移数据从 ${source_dir} 到 ${target_dir}"
+    printf '\n%s\n' "$(ng_color "${NG_C_WARN}" "⚠ 正在从在线版迁移数据到安装版...")"
   fi
 
   # Create target directories
@@ -78,9 +78,9 @@ ng_migrate_config() {
   if [[ -f "${source_dir}/config/servers.json" ]]; then
     cp -f "${source_dir}/config/servers.json" "${target_dir}/config/servers.json" 2>/dev/null || true
     if [[ "${NG_LANG}" == "en" ]]; then
-      ng_log "INFO" "Migrated servers.json"
+      printf '  %s %s\n' "$(ng_color "${NG_C_OK}" "✓")" "servers.json"
     else
-      ng_log "INFO" "迁移 servers.json"
+      printf '  %s %s\n' "$(ng_color "${NG_C_OK}" "✓")" "servers.json"
     fi
   fi
 
@@ -90,9 +90,9 @@ ng_migrate_config() {
     local state_count
     state_count=$(ls -1 "${source_dir}/state" 2>/dev/null | wc -l)
     if [[ "${NG_LANG}" == "en" ]]; then
-      ng_log "INFO" "Migrated ${state_count} state files"
+      printf '  %s %d state files\n' "$(ng_color "${NG_C_OK}" "✓")" "${state_count}"
     else
-      ng_log "INFO" "迁移 ${state_count} 个状态文件"
+      printf '  %s %d 个状态文件\n' "$(ng_color "${NG_C_OK}" "✓")" "${state_count}"
     fi
   fi
 
@@ -102,9 +102,9 @@ ng_migrate_config() {
     local report_count
     report_count=$(ls -1 "${source_dir}/reports" 2>/dev/null | wc -l)
     if [[ "${NG_LANG}" == "en" ]]; then
-      ng_log "INFO" "Migrated ${report_count} reports"
+      printf '  %s %d reports\n' "$(ng_color "${NG_C_OK}" "✓")" "${report_count}"
     else
-      ng_log "INFO" "迁移 ${report_count} 个报告"
+      printf '  %s %d 个报告\n' "$(ng_color "${NG_C_OK}" "✓")" "${report_count}"
     fi
   fi
 
@@ -114,13 +114,13 @@ ng_migrate_config() {
     local backup_count
     backup_count=$(ls -1 "${source_dir}/backups" 2>/dev/null | wc -l)
     if [[ "${NG_LANG}" == "en" ]]; then
-      ng_log "INFO" "Migrated ${backup_count} backups"
+      printf '  %s %d backups\n' "$(ng_color "${NG_C_OK}" "✓")" "${backup_count}"
     else
-      ng_log "INFO" "迁移 ${backup_count} 个备份"
+      printf '  %s %d 个备份\n' "$(ng_color "${NG_C_OK}" "✓")" "${backup_count}"
     fi
   fi
 
-  # Migrate custom config files (not defaults)
+  # Migrate custom config files
   if [[ -f "${source_dir}/config/peers.conf" ]]; then
     cp -f "${source_dir}/config/peers.conf" "${target_dir}/config/peers.conf" 2>/dev/null || true
   fi
@@ -129,10 +129,13 @@ ng_migrate_config() {
   fi
 
   if [[ "${NG_LANG}" == "en" ]]; then
-    ng_log "INFO" "Data migration completed"
+    printf '%s\n' "$(ng_color "${NG_C_OK}" "✓ Migration completed!")"
   else
-    ng_log "INFO" "数据迁移完成"
+    printf '%s\n' "$(ng_color "${NG_C_OK}" "✓ 数据迁移完成！")"
   fi
+  
+  # Log the migration
+  ng_log "INFO" "Data migration completed from ${source_dir} to ${target_dir}"
 }
 
 # Manual migration trigger
@@ -167,7 +170,7 @@ ng_init_environment() {
 
   if [[ -f "${NG_CONFIG_FILE}" ]]; then
     # Basic config file validation - only allow KEY=VALUE patterns
-    if grep -qPv '^\s*(#|$|[A-Z_]+=)' "${NG_CONFIG_FILE}" 2>/dev/null; then
+    if grep -qEv '^\s*(#|$|[A-Z_]+=)' "${NG_CONFIG_FILE}" 2>/dev/null; then
       ng_log "WARN" "Config file contains unexpected syntax. Using defaults."
     else
       # shellcheck disable=SC1090
@@ -737,8 +740,10 @@ ng_install_base_packages() {
               else
                 printf '正在执行 apt update 和 upgrade...\n'
               fi
+              set +e
               apt-get update
               apt-get upgrade -y
+              set -e
             fi
             local apt_output
             apt_output=$(apt-get install -y "${packages_to_install[@]}" 2>&1) || true
@@ -837,7 +842,23 @@ ng_validate_integer() {
 
 # System resource monitoring and alerting
 ng_get_cpu_usage() {
-  top -bn1 2>/dev/null | grep "Cpu(s)" | awk '{print $2}' | cut -d'%' -f1 || echo "0"
+  if [[ -f /proc/stat ]]; then
+    local cpu_line
+    cpu_line=$(head -1 /proc/stat)
+    local user nice system idle iowait irq softirq
+    read -r _ user nice system idle iowait irq softirq _ <<< "${cpu_line}"
+    local total=$((user + nice + system + idle + iowait + irq + softirq))
+    local busy=$((user + nice + system + irq + softirq))
+    if [[ "${total}" -gt 0 ]]; then
+      awk "BEGIN {printf \"%.1f\", ${busy}/${total}*100}"
+    else
+      printf '0.0'
+    fi
+  else
+    set +e
+    top -bn1 2>/dev/null | grep "Cpu(s)" | awk '{print $2}' | cut -d'%' -f1
+    set -e
+  fi
 }
 
 ng_get_memory_usage() {

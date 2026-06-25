@@ -130,7 +130,15 @@ ng_simple_firewall_hardening() {
     firewall-cmd --permanent --add-service=ssh
     firewall-cmd --reload
   elif command -v iptables >/dev/null 2>&1; then
-    # Basic iptables hardening
+    local backup_file="/tmp/iptables-backup-$(date '+%s').rules"
+    iptables-save > "${backup_file}" 2>/dev/null || true
+    if [[ "${NG_LANG}" == "en" ]]; then
+      ng_log "INFO" "Backed up current iptables rules to ${backup_file}"
+    else
+      ng_log "INFO" "已备份当前 iptables 规则到 ${backup_file}"
+    fi
+
+    set +e
     iptables -F
     iptables -P INPUT DROP
     iptables -P FORWARD DROP
@@ -138,7 +146,19 @@ ng_simple_firewall_hardening() {
     iptables -A INPUT -i lo -j ACCEPT
     iptables -A INPUT -m state --state ESTABLISHED,RELATED -j ACCEPT
     iptables -A INPUT -p tcp --dport 22 -j ACCEPT
-    # Save rules if iptables-save is available
+    local rc=$?
+    set -e
+
+    if [[ "${rc}" -ne 0 ]]; then
+      if [[ "${NG_LANG}" == "en" ]]; then
+        ng_log "ERROR" "iptables rule application failed. Restoring backup..."
+      else
+        ng_log "ERROR" "iptables 规则应用失败，正在恢复备份..."
+      fi
+      iptables-restore < "${backup_file}" 2>/dev/null || true
+      return 1
+    fi
+
     if command -v iptables-save >/dev/null 2>&1; then
       iptables-save > /etc/iptables/rules.v4 2>/dev/null || true
     fi
@@ -234,7 +254,7 @@ ng_integrity_verify() {
   fi
 
   local changes=0
-  
+
   if [[ "${NG_LANG}" == "en" ]]; then
     ng_print_header "Integrity Verification"
     printf 'Checking files against baseline...\n\n'
@@ -242,13 +262,8 @@ ng_integrity_verify() {
     ng_print_header "完整性校验"
     printf '正在检查文件与基线的一致性...\n\n'
   fi
-  
-  # Run sha256sum check and capture output
-  local output
-  output=$(cd / && sha256sum -c "${NG_INTEGRITY_DB}" 2>&1) || true
-  
-  # Show results
-  echo "${output}" | while IFS= read -r line; do
+
+  while IFS= read -r line; do
     if echo "${line}" | grep -q "FAILED"; then
       printf '%s %s\n' "$(ng_color "${NG_C_ERR}" "✗")" "${line}"
       ((changes++)) || true
@@ -257,8 +272,8 @@ ng_integrity_verify() {
     else
       printf '%s\n' "${line}"
     fi
-  done
-  
+  done < <(cd / && sha256sum -c "${NG_INTEGRITY_DB}" 2>&1 || true)
+
   if [[ "${changes}" -gt 0 ]]; then
     if [[ "${NG_LANG}" == "en" ]]; then
       printf '\n⚠️  %d file(s) have changed since baseline.\n' "${changes}"
@@ -769,8 +784,6 @@ ng_security_menu() {
       6) ng_integrity_verify ;;
       7) ng_manage_watch_paths ;;
       8) ng_security_score ;;
-      0) return 0 ;;
-      *) ng_t invalid_option ;;
       0) return 0 ;;
       *) ng_t invalid_option ;;
     esac
