@@ -138,9 +138,8 @@ ng_bootstrap_menu() {
       ng_print_option "2" "🐳" "Install Docker" "Auto-detect region for mirror"
       ng_print_option "3" "🚀" "bbrv3-lite" "Lightweight BBR v3 / XanMod / TCP tuning script"
       ng_print_option "4" "⚙️" "vps-tcp-tune" "BBR3+FQ TCP tuning script for VPS optimization"
-      ng_print_option "5" "⏰" "Setup cron jobs" "Automated probe and security checks"
-      ng_print_option "6" "📊" "System status" "Check CPU, memory, disk and alerts"
-      ng_print_option "7" "📄" "Generate report" "Show system summary"
+      ng_print_option "5" "📊" "System status" "Check CPU, memory, disk and alerts"
+      ng_print_option "6" "📄" "Generate report" "Show system summary"
       ng_print_option "0" "↩" "Back"
     else
       ng_print_title_box "🚀 系统开荒" "服务器初始化与优化"
@@ -148,9 +147,8 @@ ng_bootstrap_menu() {
       ng_print_option "2" "🐳" "Docker 安装" "自动检测地区使用镜像"
       ng_print_option "3" "🚀" "bbrv3-lite" "轻量级 BBR v3 / XanMod / TCP 网络调优脚本"
       ng_print_option "4" "⚙️" "vps-tcp-tune" "BBR3+FQ TCP 网络调优脚本，一键优化 VPS 网络"
-      ng_print_option "5" "⏰" "定时任务配置" "自动化探测和安全检查"
-      ng_print_option "6" "📊" "系统状态" "查看 CPU、内存、磁盘和告警"
-      ng_print_option "7" "📄" "生成报告" "输出系统摘要"
+      ng_print_option "5" "📊" "系统状态" "查看 CPU、内存、磁盘和告警"
+      ng_print_option "6" "📄" "生成报告" "输出系统摘要"
       ng_print_option "0" "↩" "返回"
     fi
 
@@ -185,9 +183,8 @@ ng_bootstrap_menu() {
           "https://github.com/Eric86777/vps-tcp-tune" \
           "https://raw.githubusercontent.com/Eric86777/vps-tcp-tune/refs/heads/main/net-tcp-tune.sh"
         ;;
-      5) ng_setup_cron_jobs ;;
-      6) ng_show_system_status ;;
-      7) ng_bootstrap_report ;;
+      5) ng_show_system_status ;;
+      6) ng_bootstrap_report ;;
       0) return 0 ;;
       *) ng_t invalid_option ;;
     esac

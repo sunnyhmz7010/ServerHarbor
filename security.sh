@@ -731,7 +731,7 @@ ng_security_menu() {
   while true; do
     clear || true
     if [[ "${NG_LANG}" == "en" ]]; then
-      ng_print_title_box "🛡 Security Guard" "Auth logs, web attacks, firewall, integrity and rootkit detection"
+      ng_print_title_box "🛡 Security Guard" "Auth logs, web attacks, firewall and integrity monitoring"
       ng_print_option "1" "📄" "Run security report" "Aggregate auth failures, web probes, ports and firewall state"
       ng_print_option "2" "🔍" "Show failed login statistics" "Count recent failed login source IPs"
       ng_print_option "3" "🌐" "Show suspicious web requests" "Inspect nginx access log for common attack patterns"
@@ -739,13 +739,10 @@ ng_security_menu() {
       ng_print_option "5" "🧬" "Create integrity baseline" "Hash all files under configured watch paths"
       ng_print_option "6" "✅" "Verify integrity baseline" "Check current files against stored hashes"
       ng_print_option "7" "📂" "Manage watch paths" "Add/remove paths for integrity monitoring"
-      ng_print_option "8" "🔒" "Apply simple firewall hardening" "Allow SSH and enable default deny for incoming traffic"
-      ng_print_option "9" "🦠" "Rootkit detection" "Check for common rootkits and suspicious files"
-      ng_print_option "10" "🚪" "Port security scan" "Scan for open ports and potential risks"
-      ng_print_option "11" "📊" "Security score" "Calculate system security score"
+      ng_print_option "8" "📊" "Security score" "Calculate system security score"
       ng_print_option "0" "↩" "Back"
     else
-      ng_print_title_box "🛡 安全卫士" "认证日志、Web 攻击、防火墙、完整性与 Rootkit 检测"
+      ng_print_title_box "🛡 安全卫士" "认证日志、Web 攻击、防火墙与完整性监控"
       ng_print_option "1" "📄" "生成安全报告" "汇总认证失败、Web 探测、端口与防火墙状态"
       ng_print_option "2" "🔍" "查看失败登录统计" "统计近期失败登录来源 IP"
       ng_print_option "3" "🌐" "查看可疑 Web 请求" "检查 nginx 访问日志中的常见攻击特征"
@@ -753,10 +750,7 @@ ng_security_menu() {
       ng_print_option "5" "🧬" "生成完整性基线" "对监控路径下文件生成哈希清单"
       ng_print_option "6" "✅" "校验完整性基线" "按已有哈希清单检查当前文件"
       ng_print_option "7" "📂" "管理监控路径" "添加/删除完整性监控的路径"
-      ng_print_option "8" "🔒" "应用简单防火墙加固" "放行 SSH，并默认拒绝新入站连接"
-      ng_print_option "9" "🦠" "Rootkit 检测" "检查常见 rootkit 和可疑文件"
-      ng_print_option "10" "🚪" "端口安全扫描" "扫描开放端口和潜在风险"
-      ng_print_option "11" "📊" "安全评分" "计算系统安全评分"
+      ng_print_option "8" "📊" "安全评分" "计算系统安全评分"
       ng_print_option "0" "↩" "返回"
     fi
 
@@ -774,20 +768,9 @@ ng_security_menu() {
       5) ng_integrity_create_baseline ;;
       6) ng_integrity_verify ;;
       7) ng_manage_watch_paths ;;
-      8)
-        if [[ "${NG_LANG}" == "en" ]]; then
-          if ng_prompt_yes_no "Apply simple firewall hardening now?"; then
-            ng_simple_firewall_hardening
-          fi
-        else
-          if ng_prompt_yes_no "是否立即应用简单防火墙加固？"; then
-            ng_simple_firewall_hardening
-          fi
-        fi
-        ;;
-      9) ng_rootkit_check ;;
-      10) ng_port_security_scan ;;
-      11) ng_security_score ;;
+      8) ng_security_score ;;
+      0) return 0 ;;
+      *) ng_t invalid_option ;;
       0) return 0 ;;
       *) ng_t invalid_option ;;
     esac
