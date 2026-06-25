@@ -531,6 +531,128 @@ ng_port_security_scan() {
   fi
 }
 
+ng_manage_watch_paths() {
+  local choice
+
+  while true; do
+    clear || true
+    if [[ "${NG_LANG}" == "en" ]]; then
+      ng_print_title_box "📂 Integrity Watch Paths" "Manage paths for file integrity monitoring"
+      printf '\nCurrent watch paths:\n'
+    else
+      ng_print_title_box "📂 完整性监控路径" "管理文件完整性监控的路径"
+      printf '\n当前监控路径：\n'
+    fi
+
+    if [[ -f "${NG_WATCH_FILE}" ]]; then
+      local line_num=1
+      while IFS= read -r path; do
+        [[ -n "${path}" && "${path}" != \#* ]] || continue
+        printf '  [%d] %s\n' "${line_num}" "${path}"
+        ((line_num++)) || true
+      done < "${NG_WATCH_FILE}"
+    else
+      if [[ "${NG_LANG}" == "en" ]]; then
+        printf '  (No paths configured)\n'
+      else
+        printf '  （未配置路径）\n'
+      fi
+    fi
+
+    printf '\n'
+    if [[ "${NG_LANG}" == "en" ]]; then
+      printf '  [1] Add path\n'
+      printf '  [2] Remove path\n'
+      printf '  [3] Reset to defaults\n'
+      printf '  [0] Back\n'
+    else
+      printf '  [1] 添加路径\n'
+      printf '  [2] 删除路径\n'
+      printf '  [3] 恢复默认\n'
+      printf '  [0] 返回\n'
+    fi
+
+    printf '\n'
+    ng_t select
+    ng_read_line choice || return 130
+
+    case "${choice}" in
+      1)
+        local new_path
+        if [[ "${NG_LANG}" == "en" ]]; then
+          printf 'Enter path to monitor (file or directory): '
+        else
+          printf '输入要监控的路径（文件或目录）：'
+        fi
+        ng_read_line new_path || return 130
+
+        if [[ -n "${new_path}" ]]; then
+          if [[ -e "${new_path}" ]]; then
+            # Create watch file if it doesn't exist
+            if [[ ! -f "${NG_WATCH_FILE}" ]]; then
+              printf '# One path per line for integrity scan\n' > "${NG_WATCH_FILE}"
+            fi
+            echo "${new_path}" >> "${NG_WATCH_FILE}"
+            if [[ "${NG_LANG}" == "en" ]]; then
+              printf 'Path added: %s\n' "${new_path}"
+            else
+              printf '路径已添加：%s\n' "${new_path}"
+            fi
+          else
+            if [[ "${NG_LANG}" == "en" ]]; then
+              printf 'Path does not exist: %s\n' "${new_path}"
+            else
+              printf '路径不存在：%s\n' "${new_path}"
+            fi
+          fi
+        fi
+        ;;
+      2)
+        if [[ ! -f "${NG_WATCH_FILE}" ]] || [[ -z "$(grep -Ev '^\s*#|^\s*$' "${NG_WATCH_FILE}" 2>/dev/null)" ]]; then
+          if [[ "${NG_LANG}" == "en" ]]; then
+            printf 'No paths to remove.\n'
+          else
+            printf '没有可删除的路径。\n'
+          fi
+        else
+          if [[ "${NG_LANG}" == "en" ]]; then
+            printf 'Enter line number to remove: '
+          else
+            printf '输入要删除的行号：'
+          fi
+          local line_num
+          ng_read_line line_num || return 130
+          if [[ "${line_num}" =~ ^[0-9]+$ ]]; then
+            sed -i "${line_num}d" "${NG_WATCH_FILE}"
+            if [[ "${NG_LANG}" == "en" ]]; then
+              printf 'Path removed.\n'
+            else
+              printf '路径已删除。\n'
+            fi
+          fi
+        fi
+        ;;
+      3)
+        cat > "${NG_WATCH_FILE}" <<'EOF'
+# One path per line for integrity scan
+/etc
+/var/www
+/root
+EOF
+        if [[ "${NG_LANG}" == "en" ]]; then
+          printf 'Reset to default paths.\n'
+        else
+          printf '已恢复默认路径。\n'
+        fi
+        ;;
+      0) return 0 ;;
+      *) ng_t invalid_option ;;
+    esac
+
+    ng_press_enter || return 130
+  done
+}
+
 ng_security_score() {
   local score=100
   local issues=()
@@ -616,10 +738,11 @@ ng_security_menu() {
       ng_print_option "4" "🔥" "Show firewall summary" "Display ufw, firewalld or iptables state"
       ng_print_option "5" "🧬" "Create integrity baseline" "Hash all files under configured watch paths"
       ng_print_option "6" "✅" "Verify integrity baseline" "Check current files against stored hashes"
-      ng_print_option "7" "🔒" "Apply simple firewall hardening" "Allow SSH and enable default deny for incoming traffic"
-      ng_print_option "8" "🦠" "Rootkit detection" "Check for common rootkits and suspicious files"
-      ng_print_option "9" "🚪" "Port security scan" "Scan for open ports and potential risks"
-      ng_print_option "10" "📊" "Security score" "Calculate system security score"
+      ng_print_option "7" "📂" "Manage watch paths" "Add/remove paths for integrity monitoring"
+      ng_print_option "8" "🔒" "Apply simple firewall hardening" "Allow SSH and enable default deny for incoming traffic"
+      ng_print_option "9" "🦠" "Rootkit detection" "Check for common rootkits and suspicious files"
+      ng_print_option "10" "🚪" "Port security scan" "Scan for open ports and potential risks"
+      ng_print_option "11" "📊" "Security score" "Calculate system security score"
       ng_print_option "0" "↩" "Back"
     else
       ng_print_title_box "🛡 安全卫士" "认证日志、Web 攻击、防火墙、完整性与 Rootkit 检测"
@@ -629,10 +752,11 @@ ng_security_menu() {
       ng_print_option "4" "🔥" "查看防火墙状态" "显示 ufw、firewalld 或 iptables 状态"
       ng_print_option "5" "🧬" "生成完整性基线" "对监控路径下文件生成哈希清单"
       ng_print_option "6" "✅" "校验完整性基线" "按已有哈希清单检查当前文件"
-      ng_print_option "7" "🔒" "应用简单防火墙加固" "放行 SSH，并默认拒绝新入站连接"
-      ng_print_option "8" "🦠" "Rootkit 检测" "检查常见 rootkit 和可疑文件"
-      ng_print_option "9" "🚪" "端口安全扫描" "扫描开放端口和潜在风险"
-      ng_print_option "10" "📊" "安全评分" "计算系统安全评分"
+      ng_print_option "7" "📂" "管理监控路径" "添加/删除完整性监控的路径"
+      ng_print_option "8" "🔒" "应用简单防火墙加固" "放行 SSH，并默认拒绝新入站连接"
+      ng_print_option "9" "🦠" "Rootkit 检测" "检查常见 rootkit 和可疑文件"
+      ng_print_option "10" "🚪" "端口安全扫描" "扫描开放端口和潜在风险"
+      ng_print_option "11" "📊" "安全评分" "计算系统安全评分"
       ng_print_option "0" "↩" "返回"
     fi
 
@@ -649,7 +773,8 @@ ng_security_menu() {
       4) ng_firewall_summary ;;
       5) ng_integrity_create_baseline ;;
       6) ng_integrity_verify ;;
-      7)
+      7) ng_manage_watch_paths ;;
+      8)
         if [[ "${NG_LANG}" == "en" ]]; then
           if ng_prompt_yes_no "Apply simple firewall hardening now?"; then
             ng_simple_firewall_hardening
@@ -660,9 +785,9 @@ ng_security_menu() {
           fi
         fi
         ;;
-      8) ng_rootkit_check ;;
-      9) ng_port_security_scan ;;
-      10) ng_security_score ;;
+      9) ng_rootkit_check ;;
+      10) ng_port_security_scan ;;
+      11) ng_security_score ;;
       0) return 0 ;;
       *) ng_t invalid_option ;;
     esac
