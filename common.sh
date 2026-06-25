@@ -44,7 +44,8 @@ ng_migrate_config() {
   local source_dir=""
   local target_dir="${NG_DATA_ROOT}"
 
-  if [[ "${NG_RUNTIME_MODE}" == "installed" ]] && [[ -d "${NG_ONLINE_DATA}/config" ]]; then
+  # Check if we're in installed mode and online data exists
+  if [[ "${NG_RUNTIME_MODE}" == "installed" ]] && [[ -d "${NG_ONLINE_DATA}" ]]; then
     source_dir="${NG_ONLINE_DATA}"
   fi
 
@@ -52,15 +53,56 @@ ng_migrate_config() {
     return 0
   fi
 
-  if [[ ! -f "${target_dir}/config/app.conf" ]] && [[ -f "${source_dir}/config/app.conf" ]]; then
-    if [[ "${NG_LANG}" == "en" ]]; then
-      printf 'Migrating config from %s to %s\n' "${source_dir}" "${target_dir}"
-    else
-      printf '正在迁移配置文件从 %s 到 %s\n' "${source_dir}" "${target_dir}"
-    fi
-    mkdir -p "${target_dir}/config" "${target_dir}/state"
+  # Check if there's anything to migrate
+  local has_data=0
+  [[ -d "${source_dir}/config" ]] && has_data=1
+  [[ -d "${source_dir}/state" ]] && has_data=1
+  [[ -f "${source_dir}/config/servers.json" ]] && has_data=1
+
+  if [[ "${has_data}" -eq 0 ]]; then
+    return 0
+  fi
+
+  # Check if target already has data
+  if [[ -d "${target_dir}/config" ]] && [[ -f "${target_dir}/config/app.conf" ]]; then
+    return 0
+  fi
+
+  if [[ "${NG_LANG}" == "en" ]]; then
+    printf 'Migrating data from %s to %s\n' "${source_dir}" "${target_dir}"
+  else
+    printf '正在迁移数据从 %s 到 %s\n' "${source_dir}" "${target_dir}"
+  fi
+
+  # Create target directories
+  mkdir -p "${target_dir}/config" "${target_dir}/state" "${target_dir}/logs" "${target_dir}/reports"
+
+  # Migrate config files
+  if [[ -d "${source_dir}/config" ]]; then
     cp -n "${source_dir}/config/"*.conf "${target_dir}/config/" 2>/dev/null || true
+    # Migrate servers.json if it exists
+    [[ -f "${source_dir}/config/servers.json" ]] && cp -n "${source_dir}/config/servers.json" "${target_dir}/config/" 2>/dev/null || true
+  fi
+
+  # Migrate state files
+  if [[ -d "${source_dir}/state" ]]; then
     cp -n "${source_dir}/state/"* "${target_dir}/state/" 2>/dev/null || true
+  fi
+
+  # Migrate reports
+  if [[ -d "${source_dir}/reports" ]]; then
+    cp -n "${source_dir}/reports/"* "${target_dir}/reports/" 2>/dev/null || true
+  fi
+
+  # Migrate backups
+  if [[ -d "${source_dir}/backups" ]]; then
+    cp -n "${source_dir}/backups/"* "${target_dir}/backups/" 2>/dev/null || true
+  fi
+
+  if [[ "${NG_LANG}" == "en" ]]; then
+    printf 'Migration completed.\n'
+  else
+    printf '数据迁移完成。\n'
   fi
 }
 
@@ -154,7 +196,7 @@ ng_print_option() {
   local label="$3"
   local description="${4:-}"
 
-  printf '  %s %s %s\n' \
+  printf '  %s %s  %s\n' \
     "$(ng_color "${NG_C_ACCENT}" "[${key}]")" \
     "$(ng_color "${NG_C_ACCENT_2}" "${icon}")" \
     "${label}"
@@ -502,24 +544,40 @@ ng_install_base_packages() {
       ng_print_title_box "📦 软件包安装" "选择要安装的软件包"
     fi
 
+    printf '\n'
     for ((i=0; i<pkg_count; i++)); do
-      local status_icon
+      local status_icon status_color
       if [[ "${selected[i]}" -eq 1 ]]; then
         status_icon="✓"
+        status_color="${NG_C_OK}"
       else
-        status_icon=" "
+        status_icon="✗"
+        status_color="${NG_C_DIM}"
       fi
-      printf '  [%s] %s %-3s %s\n' "${status_icon}" "$(ng_color "${NG_C_ACCENT_2}" "${pkg_icons[i]}")" "$((i+1))" "${pkg_names[i]}"
-      printf '          %s\n' "$(ng_color "${NG_C_DIM}" "${pkg_descriptions[i]}")"
+      printf '  %s %-3s %s %s\n' \
+        "$(ng_color "${status_color}" "[${status_icon}]")" \
+        "$(ng_color "${NG_C_ACCENT}" "$((i+1))")" \
+        "$(ng_color "${NG_C_ACCENT_2}" "${pkg_icons[i]}")" \
+        "${pkg_names[i]}"
+      printf '        %s\n' "$(ng_color "${NG_C_DIM}" "${pkg_descriptions[i]}")"
     done
 
     printf '\n'
+    printf '%s\n' "$(ng_color "${NG_C_PANEL_2}" "$(ng_repeat '─' 68)")"
     if [[ "${NG_LANG}" == "en" ]]; then
-      printf '  Enter number to toggle, or:\n'
-      printf '  [a] Select all  [n] Deselect all  [y] Confirm  [0] Cancel\n'
+      printf '  %s %s  %s %s  %s %s\n' \
+        "$(ng_color "${NG_C_ACCENT}" "[a]")" "Select all" \
+        "$(ng_color "${NG_C_ACCENT}" "[n]")" "Deselect all" \
+        "$(ng_color "${NG_C_ACCENT}" "[y]")" "Confirm"
+      printf '  %s %s\n' \
+        "$(ng_color "${NG_C_ACCENT}" "[0]")" "Cancel"
     else
-      printf '  输入编号切换选择状态，或：\n'
-      printf '  [a] 全选  [n] 全不选  [y] 确认安装  [0] 取消\n'
+      printf '  %s %s  %s %s  %s %s\n' \
+        "$(ng_color "${NG_C_ACCENT}" "[a]")" "全选" \
+        "$(ng_color "${NG_C_ACCENT}" "[n]")" "全不选" \
+        "$(ng_color "${NG_C_ACCENT}" "[y]")" "确认安装"
+      printf '  %s %s\n' \
+        "$(ng_color "${NG_C_ACCENT}" "[0]")" "取消"
     fi
     printf '\n'
 
