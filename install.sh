@@ -334,6 +334,92 @@ seed_data_root() {
   done
 }
 
+migrate_online_data() {
+  local online_dir="${XDG_CONFIG_HOME:-${HOME}/.config}/serverharbor"
+
+  if [[ ! -d "${online_dir}" ]]; then
+    return 0
+  fi
+
+  local has_data=0
+  [[ -f "${online_dir}/config/servers.json" ]] && has_data=1
+  [[ -d "${online_dir}/state" ]] && [[ -n "$(ls -A "${online_dir}/state" 2>/dev/null)" ]] && has_data=1
+  [[ -d "${online_dir}/reports" ]] && [[ -n "$(ls -A "${online_dir}/reports" 2>/dev/null)" ]] && has_data=1
+  [[ -d "${online_dir}/backups" ]] && [[ -n "$(ls -A "${online_dir}/backups" 2>/dev/null)" ]] && has_data=1
+
+  if [[ "${has_data}" -eq 0 ]]; then
+    return 0
+  fi
+
+  printf '\n'
+  if [[ "${LANGUAGE}" == "en" ]]; then
+    printf 'Online version data detected at:\n'
+    printf '  %s\n' "${online_dir}"
+    printf '\nThis data can be migrated to the installed location:\n'
+    printf '  %s\n' "${DATA_ROOT}"
+    printf '\nOptions:\n'
+    printf '  [y] Migrate data to installed version\n'
+    printf '  [n] Skip, keep data in online directory\n'
+    printf 'Choose [Y/n]: '
+  else
+    printf '检测到在线版数据目录：\n'
+    printf '  %s\n' "${online_dir}"
+    printf '\n可将数据迁移到安装版目录：\n'
+    printf '  %s\n' "${DATA_ROOT}"
+    printf '\n选项：\n'
+    printf '  [y] 迁移数据到安装版\n'
+    printf '  [n] 跳过，数据保留在在线版目录\n'
+    printf '请选择 [Y/n]: '
+  fi
+
+  local answer
+  if ! IFS= read -r answer < /dev/tty; then
+    return 0
+  fi
+  if [[ -n "${answer}" && ! "${answer}" =~ ^[Yy]([Ee][Ss])?$ ]]; then
+    return 0
+  fi
+
+  if [[ "${LANGUAGE}" == "en" ]]; then
+    printf '\nMigrating data...\n'
+  else
+    printf '\n正在迁移数据...\n'
+  fi
+
+  mkdir -p "${DATA_ROOT}/config" "${DATA_ROOT}/state" "${DATA_ROOT}/reports" "${DATA_ROOT}/backups"
+
+  if [[ -f "${online_dir}/config/servers.json" ]]; then
+    cp -f "${online_dir}/config/servers.json" "${DATA_ROOT}/config/servers.json" 2>/dev/null || true
+    printf '  ✓ servers.json\n'
+  fi
+  if [[ -f "${online_dir}/config/peers.conf" ]]; then
+    cp -f "${online_dir}/config/peers.conf" "${DATA_ROOT}/config/peers.conf" 2>/dev/null || true
+    printf '  ✓ peers.conf\n'
+  fi
+  if [[ -f "${online_dir}/config/watch.conf" ]]; then
+    cp -f "${online_dir}/config/watch.conf" "${DATA_ROOT}/config/watch.conf" 2>/dev/null || true
+    printf '  ✓ watch.conf\n'
+  fi
+  if [[ -d "${online_dir}/state" ]] && [[ -n "$(ls -A "${online_dir}/state" 2>/dev/null)" ]]; then
+    cp -rf "${online_dir}/state/"* "${DATA_ROOT}/state/" 2>/dev/null || true
+    printf '  ✓ %d state files\n' "$(ls -1 "${online_dir}/state" 2>/dev/null | wc -l)"
+  fi
+  if [[ -d "${online_dir}/reports" ]] && [[ -n "$(ls -A "${online_dir}/reports" 2>/dev/null)" ]]; then
+    cp -rf "${online_dir}/reports/"* "${DATA_ROOT}/reports/" 2>/dev/null || true
+    printf '  ✓ %d reports\n' "$(ls -1 "${online_dir}/reports" 2>/dev/null | wc -l)"
+  fi
+  if [[ -d "${online_dir}/backups" ]] && [[ -n "$(ls -A "${online_dir}/backups" 2>/dev/null)" ]]; then
+    cp -rf "${online_dir}/backups/"* "${DATA_ROOT}/backups/" 2>/dev/null || true
+    printf '  ✓ %d backups\n' "$(ls -1 "${online_dir}/backups" 2>/dev/null | wc -l)"
+  fi
+
+  if [[ "${LANGUAGE}" == "en" ]]; then
+    printf '\n✓ Migration completed!\n'
+  else
+    printf '\n✓ 数据迁移完成！\n'
+  fi
+}
+
 LOCK_FILE="/var/lock/serverharbor.lock"
 
 acquire_lock() {
@@ -407,6 +493,9 @@ main() {
   cp -R "${extracted_root}" "${APP_ROOT}"
   chmod +x "${APP_ROOT}/menu.sh" "${APP_ROOT}/run.sh" "${APP_ROOT}/install.sh" "${APP_ROOT}/uninstall.sh"
   seed_data_root
+  if [[ "${already_installed}" -eq 0 ]]; then
+    migrate_online_data
+  fi
   write_manifest
   install_launcher
   rm -f "${ARCHIVE_PATH}"
