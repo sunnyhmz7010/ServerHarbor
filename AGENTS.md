@@ -43,6 +43,8 @@ These rules are written as the shared baseline for this project family.
 - Any function that edits `/etc`, firewall rules, SSH settings, swap, or cron state must either require explicit user choice from the interactive menu or clearly document the side effect.
 - Prefer no-side-effect inspections before enforcement changes when checking security posture.
 - For peer synchronization, commit only operational state and non-sensitive reports. Do not commit private keys, host inventories with credentials, or confidential logs.
+- When passing user-controlled input to `jq`, always use `--arg` parameterization (e.g., `jq --arg name "$name" '.servers[] | select(.name == $name)'`). Never interpolate variables directly into jq filter strings.
+- Password input must use `read -rs` (silent mode) to prevent terminal echo.
 
 ### Dependency And Upgrade Rules
 
@@ -59,6 +61,18 @@ These rules are written as the shared baseline for this project family.
 ## Repository-Specific Rules
 
 This repository is `ServerHarbor`, a Bash-based Linux multi-server operations toolkit.
+
+### Menu Structure (as of v1.0.1)
+
+Main menu:
+- `[1]` System bootstrap — base packages, Docker, network tuning, system status, report, data migration
+- `[2]` Security — security report, failed logins, web requests, firewall, integrity baseline/verify, watch paths, security score
+- `[3]` Node management — list, add, remove, test SSH, probe, batch execute, sync config, deploy SSH keys
+- `[4]` Update
+- `[5]` Uninstall (installed mode only)
+- `[0]` Exit
+
+CLI modes: `--cron-probe`, `--cron-security`, `--cron-alerts`
 
 ## Project Summary
 
@@ -101,6 +115,7 @@ This repository is `ServerHarbor`, a Bash-based Linux multi-server operations to
 - Do not introduce centralized service discovery, consensus, or automatic failover without explicit user request.
 - Keep the design lightweight and script-first.
 - Prefer configuration through plain text files under `config/`.
+- Do not define config variables in `common.sh` or `app.conf` unless they are actively read by at least one function. Orphaned config variables (defined but never read) must be removed.
 
 ## Runtime Model
 
@@ -112,6 +127,8 @@ This repository is `ServerHarbor`, a Bash-based Linux multi-server operations to
 - Managed code and mutable user data must stay decoupled. Installer updates may replace `/opt/serverharbor/app`, but must preserve user config and runtime data under `/opt/serverharbor/data`.
 - Before any installer package operation or filesystem write, the script must print the intended actions and require explicit user confirmation.
 - Generated reports and state files may be retained locally for inspection, but logs should stay ignored unless requested otherwise.
+- The bootstrap menu includes a data migration option (`[7]`) that copies data from the online runtime directory (`~/.config/serverharbor`) to the installed directory (`/opt/serverharbor/data`). This works in both online and installed modes.
+- The installer (`install.sh`) detects existing online data after a fresh install and offers to migrate it to the installed location.
 
 ## Development Commands
 
@@ -136,6 +153,11 @@ This repository is `ServerHarbor`, a Bash-based Linux multi-server operations to
 - Shared defaults and helper functions belong in `common.sh`.
 - Node management functions belong in `nodes.sh`.
 - Prefer a flat directory structure. Avoid second-level subdirectories unless the volume of files genuinely requires grouping. Merge related shell functions into the same file rather than splitting across many small files.
+- Every function must have a corresponding menu entry or CLI entry point. If a function is not reachable from any menu option or CLI flag, it is dead code and must be deleted. Do not keep "potential" or "future" functions without a wired entry point.
+- Do not add features that are not reflected in the menu UI. If a feature is removed from the menu, its implementation function must also be removed.
+- README, CHANGELOG, and menu descriptions must exactly match the actual available features. Never advertise a feature in docs or UI text that does not exist in the code.
+- `ng_security_report()` must not duplicate logic from individual scan functions. Keep report generation DRY by reusing existing helpers.
+- `install.sh` and `run.sh` are standalone entry-point scripts (not sourced from `menu.sh`). Some code duplication across them is architecturally unavoidable (e.g., `detect_pkg_manager`, `require_cmd`, `acquire_lock`). Do not try to consolidate these into `common.sh`.
 - Favor readable shell over dense one-liners when a function has side effects.
 - Keep comments sparse and only where the logic is not obvious.
 - Use ASCII in scripts unless a file already needs non-ASCII content.
@@ -159,8 +181,21 @@ This repository is `ServerHarbor`, a Bash-based Linux multi-server operations to
 
 - When a script runs via `bash <(curl ...)`, `$0` is a temporary fd like `/dev/fd/63`.
 - `exec bash "$0"` will fail after the fd closes.
-- To restart, either re-download the script or save it to a temp file first.
-- Note: This issue has been resolved in run.sh by re-downloading from GitHub on refresh.
+- To restart, download the script to a temp file first, then `exec bash "${tmpfile}"`.
+- The run.sh refresh mechanism uses this pattern: download to temp file, then `exec bash`.
+
+### Subshell variable scoping with pipes
+
+- Pipes create subshells in Bash. Variables modified inside `while read` loops on the right side of a pipe are lost when the subshell exits.
+- Wrong: `jq ... | while read -r node; do ((count++)); done` — `count` is always 0 after the loop.
+- Right: `while read -r node; do ((count++)); done < <(jq ...)` — process substitution keeps the loop in the current shell.
+- This applies to: success/failure counters, accumulated results, and any variable that must survive the loop.
+
+### Echo vs printf for variable output
+
+- Do not use `echo "${variable}" | grep ...` when the variable might contain escape sequences like `-n`, `-e`, or `\t`.
+- Prefer `[[ "${variable}" == *"pattern"* ]]` for simple substring checks (no pipe needed).
+- If a pipe is required, use `printf '%s\n' "${variable}" | grep ...` instead of `echo`.
 
 ### PCRE and grep portability
 
