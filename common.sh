@@ -640,6 +640,7 @@ ng_install_base_packages() {
         case "${manager}" in
           apt)
             apt-get update
+            apt-get upgrade -y
             local apt_output
             apt_output=$(apt-get install -y "${packages_to_install[@]}" 2>&1) || true
             printf '%s\n' "${apt_output}"
