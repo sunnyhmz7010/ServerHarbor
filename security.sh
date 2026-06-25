@@ -164,43 +164,62 @@ ng_integrity_create_baseline() {
     return 1
   }
 
+  if [[ "${NG_LANG}" == "en" ]]; then
+    ng_print_header "Creating Integrity Baseline"
+    printf 'Scanning paths defined in: %s\n\n' "${NG_WATCH_FILE}"
+  else
+    ng_print_header "创建完整性基线"
+    printf '扫描路径配置：%s\n\n' "${NG_WATCH_FILE}"
+  fi
+
   : > "${baseline_file}"
+  local total_files=0
   local skipped_paths=0
+  
   while IFS= read -r watch_path; do
     [[ -n "${watch_path}" && "${watch_path}" != \#* ]] || continue
     if [[ -e "${watch_path}" ]]; then
       if [[ -r "${watch_path}" ]]; then
+        local file_count
+        file_count=$(find "${watch_path}" -type f 2>/dev/null | wc -l)
         find "${watch_path}" -type f -exec sha256sum {} \; >> "${baseline_file}" 2>/dev/null || true
+        if [[ "${NG_LANG}" == "en" ]]; then
+          printf '  ✓ %s (%d files)\n' "${watch_path}" "${file_count}"
+        else
+          printf '  ✓ %s（%d 个文件）\n' "${watch_path}" "${file_count}"
+        fi
+        total_files=$((total_files + file_count))
       else
         if [[ "${NG_LANG}" == "en" ]]; then
-          printf 'Warning: Path not readable, skipping: %s\n' "${watch_path}"
+          printf '  ✗ %s (not readable)\n' "${watch_path}"
         else
-          printf '警告：路径不可读，跳过：%s\n' "${watch_path}"
+          printf '  ✗ %s（不可读）\n' "${watch_path}"
         fi
         ((skipped_paths++)) || true
       fi
     else
       if [[ "${NG_LANG}" == "en" ]]; then
-        printf 'Warning: Path not found, skipping: %s\n' "${watch_path}"
+        printf '  ✗ %s (not found)\n' "${watch_path}"
       else
-        printf '警告：路径不存在，跳过：%s\n' "${watch_path}"
+        printf '  ✗ %s（不存在）\n' "${watch_path}"
       fi
       ((skipped_paths++)) || true
     fi
   done < "${NG_WATCH_FILE}"
   
-  if [[ "${skipped_paths}" -gt 0 ]]; then
-    if [[ "${NG_LANG}" == "en" ]]; then
-      printf 'Skipped %d path(s) due to access issues.\n' "${skipped_paths}"
-    else
-      printf '跳过了 %d 个无法访问的路径。\n' "${skipped_paths}"
-    fi
-  fi
-
+  printf '\n'
   if [[ "${NG_LANG}" == "en" ]]; then
-    printf 'Integrity baseline written to %s\n' "${baseline_file}"
+    printf 'Total files indexed: %d\n' "${total_files}"
+    printf 'Baseline saved to: %s\n' "${baseline_file}"
+    if [[ "${skipped_paths}" -gt 0 ]]; then
+      printf 'Skipped paths: %d\n' "${skipped_paths}"
+    fi
   else
-    printf '完整性基线已写入：%s\n' "${baseline_file}"
+    printf '已索引文件数：%d\n' "${total_files}"
+    printf '基线保存至：%s\n' "${baseline_file}"
+    if [[ "${skipped_paths}" -gt 0 ]]; then
+      printf '跳过路径：%d\n' "${skipped_paths}"
+    fi
   fi
 }
 
@@ -214,7 +233,45 @@ ng_integrity_verify() {
     return 1
   fi
 
-  (cd / && sha256sum -c "${NG_INTEGRITY_DB}") 2>/dev/null || true
+  local changes=0
+  
+  if [[ "${NG_LANG}" == "en" ]]; then
+    ng_print_header "Integrity Verification"
+    printf 'Checking files against baseline...\n\n'
+  else
+    ng_print_header "完整性校验"
+    printf '正在检查文件与基线的一致性...\n\n'
+  fi
+  
+  # Run sha256sum check and capture output
+  local output
+  output=$(cd / && sha256sum -c "${NG_INTEGRITY_DB}" 2>&1) || true
+  
+  # Show results
+  echo "${output}" | while IFS= read -r line; do
+    if echo "${line}" | grep -q "FAILED"; then
+      printf '%s %s\n' "$(ng_color "${NG_C_ERR}" "✗")" "${line}"
+      ((changes++)) || true
+    elif echo "${line}" | grep -q "OK"; then
+      printf '%s %s\n' "$(ng_color "${NG_C_OK}" "✓")" "${line}"
+    else
+      printf '%s\n' "${line}"
+    fi
+  done
+  
+  if [[ "${changes}" -gt 0 ]]; then
+    if [[ "${NG_LANG}" == "en" ]]; then
+      printf '\n⚠️  %d file(s) have changed since baseline.\n' "${changes}"
+    else
+      printf '\n⚠️  有 %d 个文件自基线以来发生了变化。\n' "${changes}"
+    fi
+  else
+    if [[ "${NG_LANG}" == "en" ]]; then
+      printf '\n✓ All files match the baseline.\n'
+    else
+      printf '\n✓ 所有文件与基线一致。\n'
+    fi
+  fi
 }
 
 ng_security_report() {
