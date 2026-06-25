@@ -531,9 +531,16 @@ ng_install_base_packages() {
   local pkg_count=${#pkg_names[@]}
   local -a selected=()
   local -a pkg_icons=("🌐" "📥" "⚙️" "🔧" "🔌" "🔑" "🔄" "👑" "🛡")
+  
+  # Default selection: 1,2,7,8,9 (curl, wget, socat, sudo, iptables)
   for ((i=0; i<pkg_count; i++)); do
-    selected+=(1)  # Default: all selected
+    case $((i+1)) in
+      1|2|7|8|9) selected+=(1) ;;
+      *) selected+=(0) ;;
+    esac
   done
+  
+  local do_update=1  # Default: run apt update/upgrade
 
   # Interactive selection loop
   while true; do
@@ -545,6 +552,30 @@ ng_install_base_packages() {
     fi
 
     printf '\n'
+    
+    # Show update option
+    local update_icon update_color
+    if [[ "${do_update}" -eq 1 ]]; then
+      update_icon="✓"
+      update_color="${NG_C_OK}"
+    else
+      update_icon="✗"
+      update_color="${NG_C_DIM}"
+    fi
+    if [[ "${NG_LANG}" == "en" ]]; then
+      printf '  %s %s  %s\n' \
+        "$(ng_color "${update_color}" "[${update_icon}]")" \
+        "$(ng_color "${NG_C_ACCENT}" "[u]")" \
+        "apt update && apt upgrade (recommended)"
+    else
+      printf '  %s %s  %s\n' \
+        "$(ng_color "${update_color}" "[${update_icon}]")" \
+        "$(ng_color "${NG_C_ACCENT}" "[u]")" \
+        "apt update && apt upgrade（推荐）"
+    fi
+    printf '\n'
+    
+    # Show packages
     for ((i=0; i<pkg_count; i++)); do
       local status_icon status_color
       if [[ "${selected[i]}" -eq 1 ]]; then
@@ -565,19 +596,21 @@ ng_install_base_packages() {
     printf '\n'
     printf '%s\n' "$(ng_color "${NG_C_PANEL_2}" "$(ng_repeat '─' 68)")"
     if [[ "${NG_LANG}" == "en" ]]; then
-      printf '  %s %s  %s %s  %s %s\n' \
-        "$(ng_color "${NG_C_ACCENT}" "[a]")" "Select all" \
-        "$(ng_color "${NG_C_ACCENT}" "[n]")" "Deselect all" \
-        "$(ng_color "${NG_C_ACCENT}" "[y]")" "Confirm"
-      printf '  %s %s\n' \
-        "$(ng_color "${NG_C_ACCENT}" "[0]")" "Cancel"
+      printf '  %s Toggle  %s Select all  %s Deselect all\n' \
+        "$(ng_color "${NG_C_DIM}" "1-9")" \
+        "$(ng_color "${NG_C_DIM}" "a")" \
+        "$(ng_color "${NG_C_DIM}" "n")"
+      printf '  %s Confirm  %s Cancel\n' \
+        "$(ng_color "${NG_C_ACCENT}" "y")" \
+        "$(ng_color "${NG_C_ACCENT}" "0")"
     else
-      printf '  %s %s  %s %s  %s %s\n' \
-        "$(ng_color "${NG_C_ACCENT}" "[a]")" "全选" \
-        "$(ng_color "${NG_C_ACCENT}" "[n]")" "全不选" \
-        "$(ng_color "${NG_C_ACCENT}" "[y]")" "确认安装"
-      printf '  %s %s\n' \
-        "$(ng_color "${NG_C_ACCENT}" "[0]")" "取消"
+      printf '  %s 切换选择  %s 全选  %s 全不选\n' \
+        "$(ng_color "${NG_C_DIM}" "1-9")" \
+        "$(ng_color "${NG_C_DIM}" "a")" \
+        "$(ng_color "${NG_C_DIM}" "n")"
+      printf '  %s 确认安装  %s 取消\n' \
+        "$(ng_color "${NG_C_ACCENT}" "y")" \
+        "$(ng_color "${NG_C_ACCENT}" "0")"
     fi
     printf '\n'
 
@@ -592,6 +625,13 @@ ng_install_base_packages() {
           printf '已取消安装。\n'
         fi
         return 0
+        ;;
+      u|U)
+        if [[ "${do_update}" -eq 1 ]]; then
+          do_update=0
+        else
+          do_update=1
+        fi
         ;;
       [1-9])
         local idx=$((choice - 1))
@@ -639,8 +679,15 @@ ng_install_base_packages() {
 
         case "${manager}" in
           apt)
-            apt-get update
-            apt-get upgrade -y
+            if [[ "${do_update}" -eq 1 ]]; then
+              if [[ "${NG_LANG}" == "en" ]]; then
+                printf 'Running apt update and upgrade...\n'
+              else
+                printf '正在执行 apt update 和 upgrade...\n'
+              fi
+              apt-get update
+              apt-get upgrade -y
+            fi
             local apt_output
             apt_output=$(apt-get install -y "${packages_to_install[@]}" 2>&1) || true
             printf '%s\n' "${apt_output}"
