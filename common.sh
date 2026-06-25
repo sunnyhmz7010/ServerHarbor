@@ -53,18 +53,14 @@ ng_migrate_config() {
     return 0
   fi
 
-  # Check if there's anything to migrate
+  # Check if there's anything meaningful to migrate
   local has_data=0
-  [[ -d "${source_dir}/config" ]] && has_data=1
-  [[ -d "${source_dir}/state" ]] && has_data=1
   [[ -f "${source_dir}/config/servers.json" ]] && has_data=1
+  [[ -d "${source_dir}/state" ]] && [[ -n "$(ls -A "${source_dir}/state" 2>/dev/null)" ]] && has_data=1
+  [[ -d "${source_dir}/reports" ]] && [[ -n "$(ls -A "${source_dir}/reports" 2>/dev/null)" ]] && has_data=1
+  [[ -d "${source_dir}/backups" ]] && [[ -n "$(ls -A "${source_dir}/backups" 2>/dev/null)" ]] && has_data=1
 
   if [[ "${has_data}" -eq 0 ]]; then
-    return 0
-  fi
-
-  # Check if target already has data
-  if [[ -d "${target_dir}/config" ]] && [[ -f "${target_dir}/config/app.conf" ]]; then
     return 0
   fi
 
@@ -75,28 +71,60 @@ ng_migrate_config() {
   fi
 
   # Create target directories
-  mkdir -p "${target_dir}/config" "${target_dir}/state" "${target_dir}/logs" "${target_dir}/reports"
+  mkdir -p "${target_dir}/config" "${target_dir}/state" "${target_dir}/logs" "${target_dir}/reports" "${target_dir}/backups"
 
-  # Migrate config files
-  if [[ -d "${source_dir}/config" ]]; then
-    cp -n "${source_dir}/config/"*.conf "${target_dir}/config/" 2>/dev/null || true
-    # Migrate servers.json if it exists
-    [[ -f "${source_dir}/config/servers.json" ]] && cp -n "${source_dir}/config/servers.json" "${target_dir}/config/" 2>/dev/null || true
+  # Migrate servers.json (always copy if exists in source)
+  if [[ -f "${source_dir}/config/servers.json" ]]; then
+    cp -f "${source_dir}/config/servers.json" "${target_dir}/config/servers.json" 2>/dev/null || true
+    if [[ "${NG_LANG}" == "en" ]]; then
+      printf '  ✓ Migrated servers.json\n'
+    else
+      printf '  ✓ 迁移 servers.json\n'
+    fi
   fi
 
-  # Migrate state files
-  if [[ -d "${source_dir}/state" ]]; then
-    cp -n "${source_dir}/state/"* "${target_dir}/state/" 2>/dev/null || true
+  # Migrate state files (copy all, overwrite if newer)
+  if [[ -d "${source_dir}/state" ]] && [[ -n "$(ls -A "${source_dir}/state" 2>/dev/null)" ]]; then
+    cp -rf "${source_dir}/state/"* "${target_dir}/state/" 2>/dev/null || true
+    local state_count
+    state_count=$(ls -1 "${source_dir}/state" 2>/dev/null | wc -l)
+    if [[ "${NG_LANG}" == "en" ]]; then
+      printf '  ✓ Migrated %d state files\n' "${state_count}"
+    else
+      printf '  ✓ 迁移 %d 个状态文件\n' "${state_count}"
+    fi
   fi
 
-  # Migrate reports
-  if [[ -d "${source_dir}/reports" ]]; then
-    cp -n "${source_dir}/reports/"* "${target_dir}/reports/" 2>/dev/null || true
+  # Migrate reports (copy all)
+  if [[ -d "${source_dir}/reports" ]] && [[ -n "$(ls -A "${source_dir}/reports" 2>/dev/null)" ]]; then
+    cp -rf "${source_dir}/reports/"* "${target_dir}/reports/" 2>/dev/null || true
+    local report_count
+    report_count=$(ls -1 "${source_dir}/reports" 2>/dev/null | wc -l)
+    if [[ "${NG_LANG}" == "en" ]]; then
+      printf '  ✓ Migrated %d reports\n' "${report_count}"
+    else
+      printf '  ✓ 迁移 %d 个报告\n' "${report_count}"
+    fi
   fi
 
-  # Migrate backups
-  if [[ -d "${source_dir}/backups" ]]; then
-    cp -n "${source_dir}/backups/"* "${target_dir}/backups/" 2>/dev/null || true
+  # Migrate backups (copy all)
+  if [[ -d "${source_dir}/backups" ]] && [[ -n "$(ls -A "${source_dir}/backups" 2>/dev/null)" ]]; then
+    cp -rf "${source_dir}/backups/"* "${target_dir}/backups/" 2>/dev/null || true
+    local backup_count
+    backup_count=$(ls -1 "${source_dir}/backups" 2>/dev/null | wc -l)
+    if [[ "${NG_LANG}" == "en" ]]; then
+      printf '  ✓ Migrated %d backups\n' "${backup_count}"
+    else
+      printf '  ✓ 迁移 %d 个备份\n' "${backup_count}"
+    fi
+  fi
+
+  # Migrate custom config files (not defaults)
+  if [[ -f "${source_dir}/config/peers.conf" ]]; then
+    cp -f "${source_dir}/config/peers.conf" "${target_dir}/config/peers.conf" 2>/dev/null || true
+  fi
+  if [[ -f "${source_dir}/config/watch.conf" ]]; then
+    cp -f "${source_dir}/config/watch.conf" "${target_dir}/config/watch.conf" 2>/dev/null || true
   fi
 
   if [[ "${NG_LANG}" == "en" ]]; then
