@@ -561,17 +561,64 @@ ng_node_manage() {
 
       *)
         if [[ "${choice}" =~ ^[0-9]+$ ]] && [[ "${choice}" -ge 1 ]] && [[ "${choice}" -lt "${idx}" ]]; then
-          local remove_name="${node_names[$((choice-1))]}"
+          local target_name="${node_names[$((choice-1))]}"
+          local target_host="${node_hosts[$((choice-1))]}"
+
           if [[ "${NG_LANG}" == "en" ]]; then
-            printf 'Remove node "%s"? [y/N]: ' "${remove_name}"
+            printf '\nNode: %s (%s)\n' "${target_name}" "${target_host}"
+            printf '  [e] Edit name\n'
+            printf '  [d] Delete\n'
+            printf '  [0] Cancel\n'
+            printf 'Choose: '
           else
-            printf '删除节点 "%s"？[y/N]：' "${remove_name}"
+            printf '\n节点: %s (%s)\n' "${target_name}" "${target_host}"
+            printf '  [e] 修改名称\n'
+            printf '  [d] 删除\n'
+            printf '  [0] 取消\n'
+            printf '选择：'
           fi
-          local confirm
-          ng_read_line confirm || return 130
-          if [[ "${confirm}" =~ ^[Yy] ]]; then
-            ng_remove_node "${remove_name}"
-          fi
+          local action
+          ng_read_line action || return 130
+
+          case "${action}" in
+            e|E)
+              if [[ "${NG_LANG}" == "en" ]]; then
+                printf 'New name (current: %s): ' "${target_name}"
+              else
+                printf '新名称（当前: %s）：' "${target_name}"
+              fi
+              local new_name
+              ng_read_line new_name || return 130
+              if [[ -n "${new_name}" && "${new_name}" != "${target_name}" ]]; then
+                if ! ng_ensure_jq; then continue; fi
+                local tmp="${NG_NODES_FILE}.tmp"
+                jq --arg old "${target_name}" --arg new "${new_name}" \
+                  '.servers |= map(if .name == $old then .name = $new else . end)' \
+                  "${NG_NODES_FILE}" > "${tmp}" && mv -f "${tmp}" "${NG_NODES_FILE}"
+                if [[ "${NG_LANG}" == "en" ]]; then
+                  printf '✓ Renamed "%s" → "%s"\n' "${target_name}" "${new_name}"
+                else
+                  printf '✓ 已重命名 "%s" → "%s"\n' "${target_name}" "${new_name}"
+                fi
+              fi
+              ;;
+            d|D)
+              if [[ "${NG_LANG}" == "en" ]]; then
+                printf 'Remove node "%s"? [y/N]: ' "${target_name}"
+              else
+                printf '删除节点 "%s"？[y/N]：' "${target_name}"
+              fi
+              local confirm
+              ng_read_line confirm || return 130
+              if [[ "${confirm}" =~ ^[Yy] ]]; then
+                ng_remove_node "${target_name}"
+              fi
+              ;;
+            0|"") ;;
+            *)
+              ng_t invalid_option
+              ;;
+          esac
         else
           ng_t invalid_option
         fi
@@ -752,13 +799,13 @@ ng_node_menu() {
     clear || true
     if [[ "${NG_LANG}" == "en" ]]; then
       ng_print_title_box "🛰 Node Management" "Multi-server management with SSH"
-      ng_print_option "1" "📋" "Node list" "List / add / remove nodes"
+      ng_print_option "1" "📋" "Node list" "List / add / edit / remove nodes"
       ng_print_option "2" "🤝" "Setup mutual" "Bidirectional node registration"
       ng_print_option "3" "🚀" "Remote execute" "Run commands or presets on a node"
       ng_print_option "0" "↩" "Back"
     else
       ng_print_title_box "🛰 节点管理" "基于 SSH 的多服务器管理"
-      ng_print_option "1" "📋" "节点列表" "列出 / 添加 / 删除节点"
+      ng_print_option "1" "📋" "节点列表" "列出 / 添加 / 修改 / 删除节点"
       ng_print_option "2" "🤝" "建立互信" "双向注册，两台服务器互为节点"
       ng_print_option "3" "🚀" "远程执行" "在选中节点上执行命令或预设操作"
       ng_print_option "0" "↩" "返回"
