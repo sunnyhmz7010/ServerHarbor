@@ -338,12 +338,7 @@ ng_repeat() {
   printf '%s' "${output}"
 }
 
-ng_rule() {
-  local width="${1:-68}"
-  printf '%s\n' "$(ng_color "${NG_C_PANEL_2}" "$(ng_repeat '─' "${width}")")"
-}
-
-ng_print_title_box() {
+ng_print_menu_hint() {
   local title="$1"
   local subtitle="${2:-}"
   local width=68
@@ -381,14 +376,6 @@ ng_print_stat() {
     "$(ng_color "${NG_C_ACCENT_2}" "${icon}")" \
     "$(ng_color "${NG_C_DIM}" "${label}")" \
     "${value}"
-}
-
-ng_print_header() {
-  printf '\n%s %s %s\n' \
-    "$(ng_color "${NG_C_DIM}" "[$(date '+%F %T')]")" \
-    "$(ng_color "${NG_C_ACCENT_2}" "•")" \
-    "$(ng_color "${NG_C_BOLD}" "$1")"
-  ng_rule
 }
 
 ng_print_menu_hint() {

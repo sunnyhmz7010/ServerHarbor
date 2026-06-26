@@ -68,7 +68,7 @@ This repository is `ServerHarbor`, a Bash-based Linux multi-server operations to
 Main menu:
 - `[1]` System bootstrap — base packages, Docker, network tuning, system status, report, data migration
 - `[2]` Security — security report, failed logins, web requests, firewall, integrity baseline/verify, watch paths, security score
-- `[3]` Node management — list, add, remove, test SSH, probe, batch execute, sync config, register new node
+- `[3]` Node management — list/add/remove, test SSH, probe, batch execute
 - `[4]` Update
 - `[5]` Uninstall (installed mode only)
 - `[0]` Exit
@@ -139,7 +139,7 @@ CLI modes: `--cron-probe`, `--cron-security`, `--cron-alerts`
 - The two data directories are completely independent. Changes in one mode do not affect the other.
 - When running online mode and an install is detected, the user is warned that the data stores are separate.
 - The installer (`install.sh`) automatically detects and offers to migrate online data during fresh install.
-- The bootstrap menu `[7]` (data migration) is only visible in installed mode. It migrates data from the online directory to the installed directory.
+- The bootstrap menu `[6]` (data migration) is only visible in installed mode. It migrates data from the online directory to the installed directory.
 - After migration, the source directory is renamed to `~/.config/serverharbor.migrated` to prevent duplicate migration and signal that the data has been transferred.
 - If `.migrated` directory already exists, the migration function reports this and skips.
 - Both migration paths detect: `servers.json`, `serverharbor.conf`, `state/`, `reports/`, `logs/`.

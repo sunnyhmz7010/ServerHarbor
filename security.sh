@@ -150,7 +150,7 @@ ng_firewall_summary() {
     ng_report_detail "$([[ "${NG_LANG}" == "en" ]] && echo "Backend" || echo "后端")" "ufw"
     ng_report_detail "$([[ "${NG_LANG}" == "en" ]] && echo "Status" || echo "状态")" "${status}"
     ng_report_separator
-    printf '%s %s\n' "$(ng_color "${NG_C_PANEL}" "║")" "  ${ufw_output}" | while IFS= read -r line; do
+    printf '%s\n' "${ufw_output}" | while IFS= read -r line; do
       printf '%s   %s\n' "$(ng_color "${NG_C_PANEL}" "║")" "${line}"
     done
   elif command -v firewall-cmd >/dev/null 2>&1; then
@@ -777,131 +777,6 @@ ng_security_score() {
   ng_report_footer
 }
 
-ng_security_report() {
-  if [[ "${NG_LANG}" == "en" ]]; then
-    ng_report_header "🛡 ServerHarbor Security Report"
-    ng_report_meta "Generated At" "$(ng_timestamp)"
-    ng_report_meta "Host" "${NG_HOSTNAME}"
-  else
-    ng_report_header "🛡 ServerHarbor 安全巡检报告"
-    ng_report_meta "生成时间" "$(ng_timestamp)"
-    ng_report_meta "主机" "${NG_HOSTNAME}"
-  fi
-
-  local auth_log=""
-  [[ -f /var/log/auth.log ]] && auth_log="/var/log/auth.log"
-  [[ -f /var/log/secure ]] && auth_log="/var/log/secure"
-
-  if [[ "${NG_LANG}" == "en" ]]; then
-    ng_report_section_start "Failed Login Sources"
-  else
-    ng_report_section_start "失败登录来源"
-  fi
-  if [[ -n "${auth_log}" ]]; then
-    ng_report_detail "$([[ "${NG_LANG}" == "en" ]] && echo "Auth Log" || echo "日志文件")" "${auth_log}"
-    local login_total
-    login_total=$(grep -ciE 'Failed password|authentication failure' "${auth_log}" 2>/dev/null || echo 0)
-    ng_report_detail "$([[ "${NG_LANG}" == "en" ]] && echo "Total failures" || echo "失败总数")" "${login_total}"
-    local login_output
-    login_output="$(grep -Ei 'Failed password' "${auth_log}" 2>/dev/null | grep -Eo '([0-9]{1,3}\.){3}[0-9]{1,3}' | sort | uniq -c | sort -nr | head -5)" || true
-    if [[ -n "${login_output}" ]]; then
-      printf '%s\n' "${login_output}" | while IFS= read -r line; do
-        printf '%s   %s\n' "$(ng_color "${NG_C_PANEL}" "║")" "${line}"
-      done
-    fi
-  else
-    ng_report_line "  $( [[ "${NG_LANG}" == "en" ]] && echo "No auth log found." || echo "未找到认证日志文件。" )"
-  fi
-
-  if [[ "${NG_LANG}" == "en" ]]; then
-    ng_report_section_start "Suspicious Web Requests"
-  else
-    ng_report_section_start "可疑 Web 请求"
-  fi
-  local access_log="/var/log/nginx/access.log"
-  if [[ -f "${access_log}" ]]; then
-    local web_total
-    web_total=$(grep -ciE 'wp-admin|phpmyadmin|\.env|select.+from|union.+select' "${access_log}" 2>/dev/null || echo 0)
-    ng_report_detail "$([[ "${NG_LANG}" == "en" ]] && echo "Access Log" || echo "访问日志")" "${access_log}"
-    ng_report_detail "$([[ "${NG_LANG}" == "en" ]] && echo "Suspicious" || echo "可疑请求")" "${web_total}"
-    local web_output
-    web_output="$(grep -Ei 'wp-admin|phpmyadmin|\.env|select.+from|union.+select' "${access_log}" 2>/dev/null | awk '{print $1}' | sort | uniq -c | sort -nr | head -5)" || true
-    if [[ -n "${web_output}" ]]; then
-      printf '%s\n' "${web_output}" | while IFS= read -r line; do
-        printf '%s   %s\n' "$(ng_color "${NG_C_PANEL}" "║")" "${line}"
-      done
-    fi
-  else
-    ng_report_line "  $( [[ "${NG_LANG}" == "en" ]] && echo "No nginx access log found." || echo "未找到 nginx 访问日志。" )"
-  fi
-
-  if [[ "${NG_LANG}" == "en" ]]; then
-    ng_report_section_start "Listening Ports"
-  else
-    ng_report_section_start "监听端口"
-  fi
-  local port_count
-  port_count=$(ss -lntp 2>/dev/null | tail -n +2 | wc -l || echo 0)
-  ng_report_detail "$([[ "${NG_LANG}" == "en" ]] && echo "Port count" || echo "端口数")" "${port_count}"
-  ss -lntp 2>/dev/null | sed -n '1,10p' | while IFS= read -r line; do
-    printf '%s   %s\n' "$(ng_color "${NG_C_PANEL}" "║")" "${line}"
-  done || true
-
-  if [[ "${NG_LANG}" == "en" ]]; then
-    ng_report_section_start "Firewall"
-  else
-    ng_report_section_start "防火墙"
-  fi
-  if command -v ufw >/dev/null 2>&1; then
-    ng_report_detail "$([[ "${NG_LANG}" == "en" ]] && echo "Backend" || echo "后端")" "ufw"
-    ufw status verbose 2>/dev/null | while IFS= read -r line; do
-      printf '%s   %s\n' "$(ng_color "${NG_C_PANEL}" "║")" "${line}"
-    done || true
-  elif command -v firewall-cmd >/dev/null 2>&1; then
-    ng_report_detail "$([[ "${NG_LANG}" == "en" ]] && echo "Backend" || echo "后端")" "firewalld"
-    firewall-cmd --list-all 2>/dev/null | while IFS= read -r line; do
-      printf '%s   %s\n' "$(ng_color "${NG_C_PANEL}" "║")" "${line}"
-    done || true
-  elif command -v iptables >/dev/null 2>&1; then
-    ng_report_detail "$([[ "${NG_LANG}" == "en" ]] && echo "Backend" || echo "后端")" "iptables"
-    iptables -L -n --line-numbers 2>/dev/null | sed -n '1,10p' | while IFS= read -r line; do
-      printf '%s   %s\n' "$(ng_color "${NG_C_PANEL}" "║")" "${line}"
-    done || true
-  else
-    ng_report_line "  $( [[ "${NG_LANG}" == "en" ]] && echo "No firewall tool found." || echo "未找到防火墙工具。" )"
-  fi
-
-  if [[ "${NG_LANG}" == "en" ]]; then
-    ng_report_summary_start "Overall Summary"
-  else
-    ng_report_summary_start "综合摘要"
-  fi
-
-  local risk_score=100
-  [[ "${EUID}" -eq 0 ]] && risk_score=$((risk_score - 10))
-  ! grep -qE '^[^#]*PasswordAuthentication no' /etc/ssh/sshd_config 2>/dev/null && risk_score=$((risk_score - 15))
-  grep -qE '^[^#]*PermitRootLogin yes' /etc/ssh/sshd_config 2>/dev/null && risk_score=$((risk_score - 20))
-  [[ "${port_count}" -gt 10 ]] && risk_score=$((risk_score - 5))
-  [[ "${risk_score}" -lt 0 ]] && risk_score=0
-
-  ng_report_summary_kv "$([[ "${NG_LANG}" == "en" ]] && echo "Security score:" || echo "安全评分:")" "${risk_score}/100"
-
-  local risk_level risk_color
-  if [[ "${risk_score}" -ge 90 ]]; then
-    risk_level="$( [[ "${NG_LANG}" == "en" ]] && echo "Low" || echo "低" )"
-    risk_color="${NG_C_OK}"
-  elif [[ "${risk_score}" -ge 70 ]]; then
-    risk_level="$( [[ "${NG_LANG}" == "en" ]] && echo "Medium" || echo "中等" )"
-    risk_color="${NG_C_WARN}"
-  else
-    risk_level="$( [[ "${NG_LANG}" == "en" ]] && echo "High" || echo "高" )"
-    risk_color="${NG_C_ERR}"
-  fi
-  ng_report_summary_kv "$([[ "${NG_LANG}" == "en" ]] && echo "Risk level:" || echo "风险等级:")" "$(ng_color "${risk_color}" "${risk_level}")"
-
-  ng_report_footer
-}
-
 ng_security_menu() {
   local choice
 
@@ -938,7 +813,15 @@ ng_security_menu() {
     ng_read_line choice || return 130
 
     case "${choice}" in
-      1) ng_security_report ;;
+      1)
+        ng_scan_auth_failures
+        ng_press_enter || return 130
+        ng_scan_web_attacks
+        ng_press_enter || return 130
+        ng_firewall_summary
+        ng_press_enter || return 130
+        ng_security_score
+        ;;
       2) ng_scan_auth_failures ;;
       3) ng_scan_web_attacks ;;
       4) ng_firewall_summary ;;

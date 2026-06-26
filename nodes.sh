@@ -181,7 +181,7 @@ ng_test_node_ssh() {
       printf '%s\n' "AUTH_FAILED"
       return 1
     fi
-    output=$(sshpass -p "${key}" ssh -o ConnectTimeout=5 -o StrictHostKeyChecking=accept-new -p "${port}" "${user}@${host}" "echo 'SSH_OK'" 2>&1) && {
+    output=$(SSHPASS="${key}" sshpass -e ssh -o ConnectTimeout=5 -o StrictHostKeyChecking=accept-new -p "${port}" "${user}@${host}" "echo 'SSH_OK'" 2>&1) && {
       printf '%s\n' "OK"
       return 0
     }
@@ -320,35 +320,39 @@ ng_run_on_all_nodes() {
 
   local total=0 passed=0 failed=0
 
-  {
-    while read -r node; do
-      local name host user port auth key
-      name=$(echo "${node}" | jq -r '.name')
-      host=$(echo "${node}" | jq -r '.host')
-      user=$(echo "${node}" | jq -r '.ssh.user // "root"')
-      port=$(echo "${node}" | jq -r '.ssh.port // 22')
-      auth=$(echo "${node}" | jq -r '.ssh.auth // "key"')
-      key=$(echo "${node}" | jq -r '.ssh.key // "~/.ssh/id_ed25519"')
+  local -a lines=()
+  while read -r node; do
+    local name host user port auth key
+    name=$(echo "${node}" | jq -r '.name')
+    host=$(echo "${node}" | jq -r '.host')
+    user=$(echo "${node}" | jq -r '.ssh.user // "root"')
+    port=$(echo "${node}" | jq -r '.ssh.port // 22')
+    auth=$(echo "${node}" | jq -r '.ssh.auth // "key"')
+    key=$(echo "${node}" | jq -r '.ssh.key // "~/.ssh/id_ed25519"')
 
-      local -a ssh_opts=(-o ConnectTimeout=10 -o StrictHostKeyChecking=accept-new -p "${port}")
-      if [[ "${auth}" == "key" ]]; then
-        ssh_opts+=(-i "${key}")
-      fi
+    local -a ssh_opts=(-o ConnectTimeout=10 -o StrictHostKeyChecking=accept-new -p "${port}")
+    if [[ "${auth}" == "key" ]]; then
+      ssh_opts+=(-i "${key}")
+    fi
 
-      local output status
-      if [[ "${auth}" == "password" ]] && command -v sshpass >/dev/null 2>&1; then
-        output=$(sshpass -p "${key}" ssh "${ssh_opts[@]}" "${user}@${host}" "${command}" 2>&1) && status="OK" || status="FAIL"
-      else
-        output=$(ssh "${ssh_opts[@]}" "${user}@${host}" "${command}" 2>&1) && status="OK" || status="FAIL"
-      fi
-      local first_line
-      first_line=$(echo "${output}" | head -1)
-      printf '%s   %-20s %-10s %s\n' "$(ng_color "${NG_C_PANEL}" "║")" "${name}" "${status}" "${first_line}"
+    local output status
+    if [[ "${auth}" == "password" ]] && command -v sshpass >/dev/null 2>&1; then
+      output=$(SSHPASS="${key}" sshpass -e ssh "${ssh_opts[@]}" "${user}@${host}" "${command}" 2>&1) && status="OK" || status="FAIL"
+    else
+      output=$(ssh "${ssh_opts[@]}" "${user}@${host}" "${command}" 2>&1) && status="OK" || status="FAIL"
+    fi
+    local first_line
+    first_line=$(echo "${output}" | head -1)
+    local line
+    line=$(printf '%s   %-20s %-10s %s\n' "$(ng_color "${NG_C_PANEL}" "║")" "${name}" "${status}" "${first_line}")
+    printf '%s' "${line}"
+    lines+=("${line}")
 
-      if [[ "${status}" == "OK" ]]; then ((passed++)) || true; else ((failed++)) || true; fi
-      ((total++)) || true
-    done < <(jq -c '.servers[]' "${NG_NODES_FILE}" 2>/dev/null)
-  } | tee "${output_file}"
+    if [[ "${status}" == "OK" ]]; then ((passed++)) || true; else ((failed++)) || true; fi
+    ((total++)) || true
+  done < <(jq -c '.servers[]' "${NG_NODES_FILE}" 2>/dev/null)
+
+  printf '%s\n' "${lines[@]}" > "${output_file}"
 
   ng_report_summary_start "$( [[ "${NG_LANG}" == "en" ]] && echo "Summary" || echo "摘要" )"
   ng_report_summary_kv "$([[ "${NG_LANG}" == "en" ]] && echo "Total:" || echo "总计:")" "${total}"
@@ -389,19 +393,19 @@ ng_probe_single_peer() {
   ping_output="$(ping -c 1 -W "${NG_PROBE_TIMEOUT}" "${peer_host}" 2>/dev/null)" || true
 
   if [[ -n "${ping_output}" ]] && [[ "${ping_output}" == *"bytes from"* ]]; then
-    ping_result="up"
+    if [[ "${NG_LANG}" == "en" ]]; then ping_result="up"; else ping_result="通"; fi
     latency="$(echo "${ping_output}" | awk -F'time=' 'END {print $2}' | awk '{print $1}' || echo n/a)"
   else
-    ping_result="down"
-    latency="timeout"
+    if [[ "${NG_LANG}" == "en" ]]; then ping_result="down"; else ping_result="断"; fi
+    latency="-"
   fi
 
   if nc -z -w "${NG_PROBE_TIMEOUT}" "${peer_host}" 22 2>/dev/null; then
-    ssh_result="open"
+    if [[ "${NG_LANG}" == "en" ]]; then ssh_result="open"; else ssh_result="开"; fi
   elif timeout "${NG_PROBE_TIMEOUT}" bash -c "cat < /dev/null > /dev/tcp/${peer_host}/22" >/dev/null 2>&1; then
-    ssh_result="open"
+    if [[ "${NG_LANG}" == "en" ]]; then ssh_result="open"; else ssh_result="开"; fi
   else
-    ssh_result="closed"
+    if [[ "${NG_LANG}" == "en" ]]; then ssh_result="closed"; else ssh_result="关"; fi
   fi
 
   printf '%-16s %-24s %-8s %-10s %s\n' "${peer_alias}" "${peer_host}" "${ping_result}" "${ssh_result}" "${latency}"
@@ -516,7 +520,23 @@ ng_select_nodes() {
     return 0
   fi
 
-  printf '%s\n' "${selection}"
+  local -a selected_names=()
+  while IFS=',' read -r num; do
+    num=$(echo "${num}" | tr -d ' ')
+    if [[ "${num}" =~ ^[0-9]+$ ]] && [[ "${num}" -ge 1 ]] && [[ "${num}" -le "${idx}" ]]; then
+      local sel_name
+      sel_name=$(jq -r "[.servers[] | select(.enabled != false)][${num} - 1].name" "${NG_NODES_FILE}" 2>/dev/null)
+      if [[ -n "${sel_name}" && "${sel_name}" != "null" ]]; then
+        selected_names+=("${sel_name}")
+      fi
+    fi
+  done <<< "${selection}"
+
+  if [[ "${#selected_names[@]}" -eq 0 ]]; then
+    printf '%s\n' "all"
+  else
+    printf '%s\n' "${selected_names[*]}"
+  fi
 }
 
 ng_node_manage() {
@@ -705,7 +725,7 @@ ng_node_manage() {
           local ssh_ok=0
 
           if [[ "${auth}" == "password" ]] && command -v sshpass >/dev/null 2>&1; then
-            if sshpass -p "${key}" ssh "${test_opts[@]}" "${user}@${host}" "echo OK" >/dev/null 2>&1; then
+            if SSHPASS="${key}" sshpass -e ssh "${test_opts[@]}" "${user}@${host}" "echo OK" >/dev/null 2>&1; then
               ssh_ok=1
             fi
           elif [[ "${auth}" == "key" ]]; then
@@ -791,14 +811,6 @@ ng_node_menu() {
         if [[ "${selection}" == "all" ]]; then
           ng_test_all_nodes
         else
-          local -a target_nodes=()
-          while IFS=',' read -r num; do
-            num=$(echo "${num}" | tr -d ' ')
-            if [[ "${num}" =~ ^[0-9]+$ ]]; then
-              target_nodes+=("${num}")
-            fi
-          done <<< "${selection}"
-
           if [[ "${NG_LANG}" == "en" ]]; then
             ng_report_header "🔍 SSH Connectivity Test"
             ng_report_meta "Generated At" "$(ng_timestamp)"
@@ -813,15 +825,14 @@ ng_node_menu() {
 
           local total=0 passed=0 failed=0
 
-          for node_idx in "${target_nodes[@]}"; do
-            local node_name node_host node_user node_port node_auth node_key
-            node_name=$(jq -r ".servers[$((node_idx-1))].name" "${NG_NODES_FILE}" 2>/dev/null)
-            node_host=$(jq -r ".servers[$((node_idx-1))].host" "${NG_NODES_FILE}" 2>/dev/null)
-            node_user=$(jq -r ".servers[$((node_idx-1))].ssh.user // \"root\"" "${NG_NODES_FILE}" 2>/dev/null)
-            node_port=$(jq -r ".servers[$((node_idx-1))].ssh.port // 22" "${NG_NODES_FILE}" 2>/dev/null)
-            node_auth=$(jq -r ".servers[$((node_idx-1))].ssh.auth // \"key\"" "${NG_NODES_FILE}" 2>/dev/null)
-            node_key=$(jq -r ".servers[$((node_idx-1))].ssh.key // \"~/.ssh/id_ed25519\"" "${NG_NODES_FILE}" 2>/dev/null)
-            if [[ -z "${node_name}" || "${node_name}" == "null" ]]; then continue; fi
+          for node_name in ${selection}; do
+            local node_host node_user node_port node_auth node_key
+            node_host=$(jq -r --arg n "${node_name}" '.servers[] | select(.name == $n) | .host' "${NG_NODES_FILE}" 2>/dev/null)
+            node_user=$(jq -r --arg n "${node_name}" '.servers[] | select(.name == $n) | .ssh.user // "root"' "${NG_NODES_FILE}" 2>/dev/null)
+            node_port=$(jq -r --arg n "${node_name}" '.servers[] | select(.name == $n) | .ssh.port // 22' "${NG_NODES_FILE}" 2>/dev/null)
+            node_auth=$(jq -r --arg n "${node_name}" '.servers[] | select(.name == $n) | .ssh.auth // "key"' "${NG_NODES_FILE}" 2>/dev/null)
+            node_key=$(jq -r --arg n "${node_name}" '.servers[] | select(.name == $n) | .ssh.key // "~/.ssh/id_ed25519"' "${NG_NODES_FILE}" 2>/dev/null)
+            if [[ -z "${node_host}" || "${node_host}" == "null" ]]; then continue; fi
 
             local status detail
             status=$(ng_test_node_ssh "${node_name}" "${node_host}" "${node_user}" "${node_port}" "${node_auth}" "${node_key}") || true
@@ -832,7 +843,7 @@ ng_node_menu() {
               TIMEOUT) if [[ "${NG_LANG}" == "en" ]]; then detail="Connection timeout"; else detail="连接超时"; fi; ((failed++)) || true ;;
               AUTH_FAILED) if [[ "${NG_LANG}" == "en" ]]; then detail="Authentication failed"; else detail="认证失败"; fi; ((failed++)) || true ;;
               KEY_MISMATCH) if [[ "${NG_LANG}" == "en" ]]; then detail="Host key mismatch"; else detail="主机密钥不匹配"; fi; ((failed++)) || true ;;
-              KEY_NOT_FOUND) if [[ "${NG_LANG}" == "en" ]]; then detail="SSH key not found"; else detail "SSH 密钥未找到"; fi; ((failed++)) || true ;;
+              KEY_NOT_FOUND) if [[ "${NG_LANG}" == "en" ]]; then detail="SSH key not found"; else detail="SSH 密钥未找到"; fi; ((failed++)) || true ;;
               *) if [[ "${NG_LANG}" == "en" ]]; then detail="Unknown error"; else detail="未知错误"; fi; ((failed++)) || true ;;
             esac
             ((total++)) || true
@@ -858,14 +869,6 @@ ng_node_menu() {
         if [[ "${selection}" == "all" ]]; then
           ng_probe_all_peers
         else
-          local -a target_nodes=()
-          while IFS=',' read -r num; do
-            num=$(echo "${num}" | tr -d ' ')
-            if [[ "${num}" =~ ^[0-9]+$ ]]; then
-              target_nodes+=("${num}")
-            fi
-          done <<< "${selection}"
-
           if [[ "${NG_LANG}" == "en" ]]; then
             ng_report_header "🛰 ServerHarbor Probe Report"
             ng_report_meta "Generated At" "$(ng_timestamp)"
@@ -878,11 +881,10 @@ ng_node_menu() {
             ng_report_section_start "节点矩阵"
           fi
 
-          for node_idx in "${target_nodes[@]}"; do
-            local node_name node_host
-            node_name=$(jq -r ".servers[$((node_idx-1))].name" "${NG_NODES_FILE}" 2>/dev/null)
-            node_host=$(jq -r ".servers[$((node_idx-1))].host" "${NG_NODES_FILE}" 2>/dev/null)
-            if [[ -z "${node_name}" || "${node_name}" == "null" ]]; then continue; fi
+          for node_name in ${selection}; do
+            local node_host
+            node_host=$(jq -r --arg n "${node_name}" '.servers[] | select(.name == $n) | .host' "${NG_NODES_FILE}" 2>/dev/null)
+            if [[ -z "${node_host}" || "${node_host}" == "null" ]]; then continue; fi
 
             local ping_output ping_result ssh_result latency
             ping_output="$(ping -c 1 -W "${NG_PROBE_TIMEOUT}" "${node_host}" 2>/dev/null)" || true
@@ -929,14 +931,6 @@ ng_node_menu() {
           if [[ "${selection}" == "all" ]]; then
             ng_run_on_all_nodes "${cmd}"
           else
-            local -a target_nodes=()
-            while IFS=',' read -r num; do
-              num=$(echo "${num}" | tr -d ' ')
-              if [[ "${num}" =~ ^[0-9]+$ ]]; then
-                target_nodes+=("${num}")
-              fi
-            done <<< "${selection}"
-
             if [[ "${NG_LANG}" == "en" ]]; then
               ng_report_header "⚡ Batch Execute"
               ng_report_meta "Generated At" "$(ng_timestamp)"
@@ -953,22 +947,21 @@ ng_node_menu() {
 
             local total=0 passed=0 failed=0
 
-            for node_idx in "${target_nodes[@]}"; do
-              local node_name node_host node_user node_port node_auth node_key
-              node_name=$(jq -r ".servers[$((node_idx-1))].name" "${NG_NODES_FILE}" 2>/dev/null)
-              node_host=$(jq -r ".servers[$((node_idx-1))].host" "${NG_NODES_FILE}" 2>/dev/null)
-              node_user=$(jq -r ".servers[$((node_idx-1))].ssh.user // \"root\"" "${NG_NODES_FILE}" 2>/dev/null)
-              node_port=$(jq -r ".servers[$((node_idx-1))].ssh.port // 22" "${NG_NODES_FILE}" 2>/dev/null)
-              node_auth=$(jq -r ".servers[$((node_idx-1))].ssh.auth // \"key\"" "${NG_NODES_FILE}" 2>/dev/null)
-              node_key=$(jq -r ".servers[$((node_idx-1))].ssh.key // \"~/.ssh/id_ed25519\"" "${NG_NODES_FILE}" 2>/dev/null)
-              if [[ -z "${node_name}" || "${node_name}" == "null" ]]; then continue; fi
+            for node_name in ${selection}; do
+              local node_host node_user node_port node_auth node_key
+              node_host=$(jq -r --arg n "${node_name}" '.servers[] | select(.name == $n) | .host' "${NG_NODES_FILE}" 2>/dev/null)
+              node_user=$(jq -r --arg n "${node_name}" '.servers[] | select(.name == $n) | .ssh.user // "root"' "${NG_NODES_FILE}" 2>/dev/null)
+              node_port=$(jq -r --arg n "${node_name}" '.servers[] | select(.name == $n) | .ssh.port // 22' "${NG_NODES_FILE}" 2>/dev/null)
+              node_auth=$(jq -r --arg n "${node_name}" '.servers[] | select(.name == $n) | .ssh.auth // "key"' "${NG_NODES_FILE}" 2>/dev/null)
+              node_key=$(jq -r --arg n "${node_name}" '.servers[] | select(.name == $n) | .ssh.key // "~/.ssh/id_ed25519"' "${NG_NODES_FILE}" 2>/dev/null)
+              if [[ -z "${node_host}" || "${node_host}" == "null" ]]; then continue; fi
 
               local -a ssh_opts=(-o ConnectTimeout=10 -o StrictHostKeyChecking=accept-new -p "${node_port}")
               if [[ "${node_auth}" == "key" ]]; then ssh_opts+=(-i "${node_key}"); fi
 
               local output status
               if [[ "${node_auth}" == "password" ]] && command -v sshpass >/dev/null 2>&1; then
-                output=$(sshpass -p "${node_key}" ssh "${ssh_opts[@]}" "${node_user}@${node_host}" "${cmd}" 2>&1) && status="OK" || status="FAIL"
+                output=$(SSHPASS="${node_key}" sshpass -e ssh "${ssh_opts[@]}" "${node_user}@${node_host}" "${cmd}" 2>&1) && status="OK" || status="FAIL"
               else
                 output=$(ssh "${ssh_opts[@]}" "${node_user}@${node_host}" "${cmd}" 2>&1) && status="OK" || status="FAIL"
               fi
