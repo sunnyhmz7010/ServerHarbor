@@ -22,6 +22,7 @@ These rules are written as the shared baseline for this project family.
 - For searches, prefer `rg`.
 - Use `apply_patch` for manual edits when the environment is stable.
 - Do not run destructive git commands unless explicitly requested.
+- The online mode (`run.sh`) must prompt the user to delete the persistent data directory on exit. This prompt uses the wording "是否删除持久化数据目录" (Chinese) / "Remove persistent data directory" (English). Do not remove or simplify this prompt — it is a deliberate UX choice to prevent accidental data loss.
 - Keep the public README style aligned with sibling repositories: use emoji-prefixed section headers, `---` dividers after the intro block, centered footer with `Built with ❤️ by Sunny`, and the same badge/link layout. Only the content differs, not the visual structure.
 - Issue templates must be bilingual (Chinese/English) following the pattern in start-your-python: field labels use `English / 中文` format, placeholders provide both languages, and the checklist uses bilingual option text.
 
