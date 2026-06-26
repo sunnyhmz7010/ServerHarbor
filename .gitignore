@@ -7,9 +7,6 @@ tmp/*
 *.tmp
 *.bak
 
-# Backups
-backups/*.tar.gz
-
 # Reports (generated at runtime)
 reports/*.txt
 reports/*.md
@@ -19,10 +16,8 @@ state/*.state
 state/*.sha256
 state/*.bak
 
-# Config files with sensitive data (keep templates only)
-# config/app.conf
-# config/peers.conf
-# config/watch.conf
+# Runtime language config
+lang.conf
 
 # OS files
 .DS_Store

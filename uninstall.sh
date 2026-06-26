@@ -10,19 +10,19 @@ MANIFEST_PATH="${INSTALL_ROOT}/.serverharbor-install"
 INTERRUPT_REQUESTED=0
 CRITICAL_SECTION=0
 KEEP_DATA=0
-LANG="${SERVERHARBOR_LANG:-${NG_LANG:-zh}}"
+SH_LANG="${SERVERHARBOR_LANG:-${NG_LANG:-zh}}"
 
 handle_interrupt() {
   if [[ "${CRITICAL_SECTION}" -eq 1 ]]; then
     INTERRUPT_REQUESTED=1
-    if [[ "${LANG}" == "en" ]]; then
+    if [[ "${SH_LANG}" == "en" ]]; then
       printf '\nInterrupt received. Waiting for the current critical step to finish.\n' >&2
     else
       printf '\n收到中断信号，等待当前关键步骤完成...\n' >&2
     fi
     return 0
   fi
-  if [[ "${LANG}" == "en" ]]; then
+  if [[ "${SH_LANG}" == "en" ]]; then
     printf '\nUninstall cancelled.\n' >&2
   else
     printf '\n卸载已取消。\n' >&2
@@ -37,7 +37,7 @@ enter_critical_section() {
 leave_critical_section() {
   CRITICAL_SECTION=0
   if [[ "${INTERRUPT_REQUESTED}" -eq 1 ]]; then
-    if [[ "${LANG}" == "en" ]]; then
+    if [[ "${SH_LANG}" == "en" ]]; then
       printf 'Uninstall cancelled.\n' >&2
     else
       printf '卸载已取消。\n' >&2
@@ -49,7 +49,7 @@ leave_critical_section() {
 confirm() {
   local answer
 
-  if [[ "${LANG}" == "en" ]]; then
+  if [[ "${SH_LANG}" == "en" ]]; then
     printf 'This will remove:\n'
     printf '  - %s\n' "${BIN_PATH}"
     printf '  - %s\n' "${APP_ROOT}"
@@ -74,7 +74,7 @@ confirm() {
     printf '  [n] 取消\n'
     printf '请选择 [y/k/N]: '
   fi
-  read -r answer < /dev/tty
+  IFS= read -r answer < /dev/tty
 
   case "${answer}" in
     [Yy]|[Yy][Ee][Ss])
@@ -97,7 +97,7 @@ acquire_lock() {
   install -m 600 /dev/null "${LOCK_FILE}" 2>/dev/null || true
   exec {lock_fd}>"${LOCK_FILE}"
   if ! flock -n "${lock_fd}" 2>/dev/null; then
-    if [[ "${LANG}" == "en" ]]; then
+    if [[ "${SH_LANG}" == "en" ]]; then
       printf 'Another install/uninstall process is running. Aborting.\n' >&2
     else
       printf '另一个安装/卸载进程正在运行，已中止。\n' >&2
@@ -107,7 +107,7 @@ acquire_lock() {
 }
 
 if [[ "${EUID}" -ne 0 ]]; then
-  if [[ "${LANG}" == "en" ]]; then
+  if [[ "${SH_LANG}" == "en" ]]; then
     printf 'Please run uninstall.sh as root.\n' >&2
   else
     printf '请以 root 身份运行 uninstall.sh。\n' >&2
@@ -124,7 +124,7 @@ trap cleanup EXIT
 acquire_lock
 
 if [[ ! -f "${MANIFEST_PATH}" ]]; then
-  if [[ "${LANG}" == "en" ]]; then
+  if [[ "${SH_LANG}" == "en" ]]; then
     printf 'ServerHarbor manifest not found at %s\n' "${MANIFEST_PATH}" >&2
     printf 'Refusing to remove files that may not belong to ServerHarbor.\n' >&2
   else
@@ -135,7 +135,7 @@ if [[ ! -f "${MANIFEST_PATH}" ]]; then
 fi
 
 if ! confirm; then
-  if [[ "${LANG}" == "en" ]]; then
+  if [[ "${SH_LANG}" == "en" ]]; then
     printf 'Uninstall cancelled.\n'
   else
     printf '卸载已取消。\n'
@@ -148,7 +148,7 @@ if [[ -e "${BIN_PATH}" ]]; then
   if grep -q "${APP_ROOT}/menu.sh" "${BIN_PATH}" 2>/dev/null; then
     rm -f "${BIN_PATH}"
   else
-    if [[ "${LANG}" == "en" ]]; then
+    if [[ "${SH_LANG}" == "en" ]]; then
       printf 'Refusing to remove %s because it is not managed by ServerHarbor.\n' "${BIN_PATH}" >&2
     else
       printf '拒绝删除 %s，因为它不属于 ServerHarbor 管理。\n' "${BIN_PATH}" >&2
@@ -164,7 +164,7 @@ if [[ "${KEEP_DATA}" -eq 1 ]]; then
     rm -rf "${APP_ROOT}"
   fi
   rm -f "${MANIFEST_PATH}"
-  if [[ "${LANG}" == "en" ]]; then
+  if [[ "${SH_LANG}" == "en" ]]; then
     printf 'ServerHarbor program removed. Data preserved at %s\n' "${DATA_ROOT}"
   else
     printf 'ServerHarbor 程序已删除，数据保留在 %s\n' "${DATA_ROOT}"
@@ -173,7 +173,7 @@ else
   if [[ -n "${INSTALL_ROOT}" && -d "${INSTALL_ROOT}" ]]; then
     rm -rf "${INSTALL_ROOT}"
   fi
-  if [[ "${LANG}" == "en" ]]; then
+  if [[ "${SH_LANG}" == "en" ]]; then
     printf 'ServerHarbor removed completely.\n'
   else
     printf 'ServerHarbor 已完全删除。\n'

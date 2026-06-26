@@ -21,14 +21,14 @@ else
 fi
 
 NG_LANG="${SERVERHARBOR_LANG:-zh}"
-NG_CONFIG_DIR="${NG_DATA_ROOT}/config"
 NG_LOG_DIR="${NG_DATA_ROOT}/logs"
 NG_REPORT_DIR="${NG_DATA_ROOT}/reports"
 NG_STATE_DIR="${NG_DATA_ROOT}/state"
-NG_TMP_DIR="${NG_DATA_ROOT}/tmp"
-NG_CONFIG_FILE="${NG_CONFIG_DIR}/serverharbor.conf"
+NG_CONFIG_FILE="${NG_DATA_ROOT}/serverharbor.conf"
+NG_NODES_FILE="${NG_DATA_ROOT}/servers.json"
 NG_INTEGRITY_DB="${NG_STATE_DIR}/integrity.sha256"
-NG_DEFAULT_CONFIG_DIR="${NG_PROJECT_ROOT}/config"
+NG_DEFAULT_CONFIG_DIR="${NG_PROJECT_ROOT}"
+NG_WATCH_PATHS="/etc /var/www /root"
 NG_COLOR_ENABLED=0
 NG_C_RESET=""
 NG_C_DIM=""
@@ -43,11 +43,10 @@ NG_C_PANEL_2=""
 
 ng_has_meaningful_data() {
   local dir="$1"
-  [[ -f "${dir}/config/servers.json" ]] && return 0
-  [[ -f "${dir}/config/serverharbor.conf" ]] && return 0
+  [[ -f "${dir}/servers.json" ]] && return 0
+  [[ -f "${dir}/serverharbor.conf" ]] && return 0
   [[ -d "${dir}/state" ]] && [[ -n "$(ls -A "${dir}/state" 2>/dev/null)" ]] && return 0
   [[ -d "${dir}/reports" ]] && [[ -n "$(ls -A "${dir}/reports" 2>/dev/null)" ]] && return 0
-  [[ -d "${dir}/backups" ]] && [[ -n "$(ls -A "${dir}/backups" 2>/dev/null)" ]] && return 0
   [[ -d "${dir}/logs" ]] && [[ -n "$(ls -A "${dir}/logs" 2>/dev/null)" ]] && return 0
   return 1
 }
@@ -57,27 +56,27 @@ ng_do_migration() {
   local target_dir="$2"
   local migrated_dir="$3"
 
-  mkdir -p "${target_dir}/config" "${target_dir}/state" "${target_dir}/logs" "${target_dir}/reports" "${target_dir}/backups"
+  mkdir -p "${target_dir}/state" "${target_dir}/logs" "${target_dir}/reports"
 
   local copied=0
 
   for conf_name in servers.json serverharbor.conf; do
-    if [[ -f "${source_dir}/config/${conf_name}" ]]; then
-      if [[ -f "${target_dir}/config/${conf_name}" ]]; then
+    if [[ -f "${source_dir}/${conf_name}" ]]; then
+      if [[ -f "${target_dir}/${conf_name}" ]]; then
         if [[ "${NG_LANG}" == "en" ]]; then
           printf '  %s already exists, skipping %s\n' "$(ng_color "${NG_C_WARN}" "⚠")" "${conf_name}"
         else
           printf '  %s 已存在，跳过 %s\n' "$(ng_color "${NG_C_WARN}" "⚠")" "${conf_name}"
         fi
       else
-        cp -f "${source_dir}/config/${conf_name}" "${target_dir}/config/${conf_name}" 2>/dev/null || true
+        cp -f "${source_dir}/${conf_name}" "${target_dir}/${conf_name}" 2>/dev/null || true
         printf '  %s %s\n' "$(ng_color "${NG_C_OK}" "✓")" "${conf_name}"
         ((copied++)) || true
       fi
     fi
   done
 
-  for sub_dir in state reports backups logs; do
+  for sub_dir in state reports logs; do
     if [[ -d "${source_dir}/${sub_dir}" ]] && [[ -n "$(ls -A "${source_dir}/${sub_dir}" 2>/dev/null)" ]]; then
       local count
       count=$(ls -1 "${source_dir}/${sub_dir}" 2>/dev/null | wc -l)
@@ -258,7 +257,7 @@ ng_trigger_migration() {
 }
 
 ng_init_environment() {
-  mkdir -p "${NG_CONFIG_DIR}" "${NG_LOG_DIR}" "${NG_REPORT_DIR}" "${NG_STATE_DIR}" "${NG_TMP_DIR}"
+  mkdir -p "${NG_DATA_ROOT}" "${NG_LOG_DIR}" "${NG_REPORT_DIR}" "${NG_STATE_DIR}"
 
   ng_init_theme
   ng_seed_default_configs
@@ -278,12 +277,12 @@ ng_init_environment() {
   fi
 
   if [[ -f "${NG_CONFIG_FILE}" ]]; then
-    # Basic config file validation - only allow KEY=VALUE patterns
-    if grep -qEv '^\s*(#|$|[A-Z_]+=)' "${NG_CONFIG_FILE}" 2>/dev/null; then
+    if grep -qEv '^\s*(#|$|NG_[A-Z_]+=)' "${NG_CONFIG_FILE}" 2>/dev/null \
+      || grep -qE '`|\$\(' "${NG_CONFIG_FILE}" 2>/dev/null; then
       if [[ "${NG_LANG}" == "en" ]]; then
-        ng_log "WARN" "Config file contains unexpected syntax. Using defaults."
+        ng_log "WARN" "Config file contains unexpected syntax or dangerous patterns. Using defaults."
       else
-        ng_log "WARN" "配置文件包含异常语法，已使用默认值。"
+        ng_log "WARN" "配置文件包含异常语法或危险模式，已使用默认值。"
       fi
     else
       # shellcheck disable=SC1090
@@ -526,19 +525,8 @@ ng_read_line() {
 }
 
 ng_seed_default_configs() {
-  if [[ ! -f "${NG_CONFIG_DIR}/serverharbor.conf" && -f "${NG_DEFAULT_CONFIG_DIR}/serverharbor.conf" ]]; then
-    cp "${NG_DEFAULT_CONFIG_DIR}/serverharbor.conf" "${NG_CONFIG_DIR}/serverharbor.conf"
-  fi
-
-  if [[ -f "${NG_CONFIG_DIR}/app.conf" ]]; then
-    cat "${NG_CONFIG_DIR}/app.conf" >> "${NG_CONFIG_DIR}/serverharbor.conf" 2>/dev/null || true
-    rm -f "${NG_CONFIG_DIR}/app.conf"
-  fi
-  if [[ -f "${NG_CONFIG_DIR}/watch.conf" ]]; then
-    rm -f "${NG_CONFIG_DIR}/watch.conf"
-  fi
-  if [[ -f "${NG_CONFIG_DIR}/peers.conf" ]]; then
-    rm -f "${NG_CONFIG_DIR}/peers.conf"
+  if [[ ! -f "${NG_DATA_ROOT}/serverharbor.conf" && -f "${NG_DEFAULT_CONFIG_DIR}/serverharbor.conf" ]]; then
+    cp "${NG_DEFAULT_CONFIG_DIR}/serverharbor.conf" "${NG_DATA_ROOT}/serverharbor.conf"
   fi
 }
 
@@ -853,7 +841,7 @@ ng_install_base_packages() {
             printf '%s\n' "${apt_output}"
             
             # Check if apt suggests autoremove
-            if echo "${apt_output}" | grep -q "no longer required"; then
+            if [[ "${apt_output}" == *"no longer required"* ]]; then
               local autoremove_packages
               autoremove_packages=$(apt-get --dry-run autoremove 2>/dev/null | grep "^Remv" | awk '{print $2}' || true)
               
@@ -894,15 +882,9 @@ ng_install_base_packages() {
   done
 }
 
-ng_read_peers() {
-  if [[ -f "${NG_DATA_ROOT}/config/servers.json" ]] && command -v jq >/dev/null 2>&1; then
-    jq -r '.servers[] | select(.enabled != false) | "\(.name),\(.host)"' "${NG_DATA_ROOT}/config/servers.json" 2>/dev/null || true
-  fi
-}
-
 ng_peer_count() {
-  if [[ -f "${NG_DATA_ROOT}/config/servers.json" ]] && command -v jq >/dev/null 2>&1; then
-    jq '[.servers[] | select(.enabled != false)] | length' "${NG_DATA_ROOT}/config/servers.json" 2>/dev/null || echo 0
+  if [[ -f "${NG_NODES_FILE}" ]] && command -v jq >/dev/null 2>&1; then
+    jq '[.servers[] | select(.enabled != false)] | length' "${NG_NODES_FILE}" 2>/dev/null || echo 0
   else
     echo 0
   fi
@@ -1017,4 +999,31 @@ ng_show_system_status() {
   ng_check_alerts
 }
 
+ng_report_detail() {
+  local label="$1"
+  local value="$2"
+  printf '%s  %s%-14s%s %s\n' "$(ng_color "${NG_C_PANEL}" "║")" "$(ng_color "${NG_C_PANEL}" "${label}:")" "" "${NG_C_RESET}" "${value}"
+}
+
+ng_report_separator() {
+  printf '%s\n' "$(ng_color "${NG_C_PANEL}" "║")$(ng_color "${NG_C_PANEL_2}" " $(ng_repeat '─' 66)")"
+}
+
+ng_report_summary_start() {
+  local title="$1"
+  printf '%s\n' "$(ng_color "${NG_C_PANEL}" "╠$(ng_repeat '─' 68)")"
+  printf '%s %s\n' "$(ng_color "${NG_C_PANEL}" "║")" "$(ng_color "${NG_C_BOLD}${NG_C_OK}" "📊 ${title}")"
+}
+
+ng_report_summary_kv() {
+  local label="$1"
+  local value="$2"
+  printf '%s   %-14s %s\n' "$(ng_color "${NG_C_PANEL}" "║")" "${label}" "${value}"
+}
+
+ng_report_advice_start() {
+  local title="$1"
+  printf '%s\n' "$(ng_color "${NG_C_PANEL}" "╠$(ng_repeat '─' 68)")"
+  printf '%s %s\n' "$(ng_color "${NG_C_PANEL}" "║")" "$(ng_color "${NG_C_BOLD}${NG_C_ACCENT}" "💡 ${title}")"
+}
 

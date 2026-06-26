@@ -4,7 +4,6 @@ set -euo pipefail
 
 ng_scan_auth_failures() {
   local auth_log=""
-  local summary=""
 
   if [[ -f /var/log/auth.log ]]; then
     auth_log="/var/log/auth.log"
@@ -12,110 +11,180 @@ ng_scan_auth_failures() {
     auth_log="/var/log/secure"
   fi
 
-  if [[ -z "${auth_log}" ]]; then
-    if [[ "${NG_LANG}" == "en" ]]; then
-      printf 'No auth log found.\n'
-    else
-      printf '未找到认证日志文件。\n'
-    fi
-    return 0
-  fi
-
-  summary="$(
-    grep -Ei 'Failed password|authentication failure' "${auth_log}" 2>/dev/null \
+  local summary=""
+  local total=0
+  if [[ -n "${auth_log}" ]]; then
+    summary="$(grep -Ei 'Failed password|authentication failure' "${auth_log}" 2>/dev/null \
       | grep -Eo '([0-9]{1,3}\.){3}[0-9]{1,3}' \
-      | sort | uniq -c | sort -nr | head || true
-  )"
+      | sort | uniq -c | sort -nr | head -10 || true)"
+    total="$(grep -ciE 'Failed password|authentication failure' "${auth_log}" 2>/dev/null || echo 0)"
+  fi
 
   if [[ "${NG_LANG}" == "en" ]]; then
-    ng_report_section 'Failed Login Sources'
-    ng_report_kv 'Auth Log' "${auth_log}"
-    ng_report_note 'Top source IPs by failed password events:'
+    ng_report_header "🔍 Failed Login Statistics"
+    ng_report_meta "Generated At" "$(ng_timestamp)"
+    ng_report_meta "Host" "${NG_HOSTNAME}"
+    ng_report_section_start "Auth Log"
   else
-    ng_report_section '失败登录来源'
-    ng_report_kv '日志文件' "${auth_log}"
-    ng_report_note '以下为失败密码登录事件最多的来源 IP：'
+    ng_report_header "🔍 失败登录统计"
+    ng_report_meta "生成时间" "$(ng_timestamp)"
+    ng_report_meta "主机" "${NG_HOSTNAME}"
+    ng_report_section_start "认证日志"
   fi
 
-  if [[ -z "${summary}" ]]; then
-    if [[ "${NG_LANG}" == "en" ]]; then
-      ng_report_note 'No failed login entries found.'
+  if [[ -z "${auth_log}" ]]; then
+    ng_report_detail "日志文件" "$( [[ "${NG_LANG}" == "en" ]] && echo "Not found" || echo "未找到" )"
+  else
+    ng_report_detail "$([[ "${NG_LANG}" == "en" ]] && echo "Log file" || echo "日志文件")" "${auth_log}"
+    ng_report_separator
+    if [[ -n "${summary}" ]]; then
+      if [[ "${NG_LANG}" == "en" ]]; then
+        printf '%s %s\n' "$(ng_color "${NG_C_PANEL}" "║")" "  Top source IPs:"
+      else
+        printf '%s %s\n' "$(ng_color "${NG_C_PANEL}" "║")" "  来源 IP TOP10:"
+      fi
+      printf '%s\n' "${summary}" | while IFS= read -r line; do
+        printf '%s   %s\n' "$(ng_color "${NG_C_PANEL}" "║")" "${line}"
+      done
     else
-      ng_report_note '未发现失败登录记录。'
+      ng_report_line "  $( [[ "${NG_LANG}" == "en" ]] && echo "No failed login entries found." || echo "未发现失败登录记录。" )"
     fi
-    return 0
   fi
 
-  printf '%s\n' "${summary}"
+  ng_report_summary_start "$( [[ "${NG_LANG}" == "en" ]] && echo "Summary" || echo "摘要" )"
+  ng_report_summary_kv "$([[ "${NG_LANG}" == "en" ]] && echo "Total failures:" || echo "失败总数:")" "${total}"
+  if [[ "${total}" -gt 0 ]]; then
+    ng_report_summary_kv "$([[ "${NG_LANG}" == "en" ]] && echo "Status:" || echo "状态:")" "$(ng_color "${NG_C_WARN}" "⚠️  $( [[ "${NG_LANG}" == "en" ]] && echo "Abnormal logins detected" || echo "存在异常登录" )")"
+    ng_report_advice_start "$( [[ "${NG_LANG}" == "en" ]] && echo "Suggestions" || echo "建议" )"
+    printf '%s   %s\n' "$(ng_color "${NG_C_PANEL}" "║")" "$( [[ "${NG_LANG}" == "en" ]] && echo "• Install fail2ban to block brute force attacks" || echo "• 安装 fail2ban 防暴力破解" )"
+    printf '%s   %s\n' "$(ng_color "${NG_C_PANEL}" "║")" "$( [[ "${NG_LANG}" == "en" ]] && echo "• Configure IP whitelist or SSH key-only auth" || echo "• 配置 IP 白名单或仅密钥认证" )"
+  else
+    ng_report_summary_kv "$([[ "${NG_LANG}" == "en" ]] && echo "Status:" || echo "状态:")" "$(ng_color "${NG_C_OK}" "✅ $( [[ "${NG_LANG}" == "en" ]] && echo "Normal" || echo "正常" )")"
+  fi
+  ng_report_footer
 }
 
 ng_scan_web_attacks() {
   local access_log="/var/log/nginx/access.log"
   local summary=""
-
-  [[ -f "${access_log}" ]] || {
-    if [[ "${NG_LANG}" == "en" ]]; then
-      ng_report_section 'Suspicious Web Requests'
-      ng_report_note 'No nginx access log found.'
-    else
-      ng_report_section '可疑 Web 请求'
-      ng_report_note '未找到 nginx 访问日志。'
-    fi
-    return 0
-  }
-
-  summary="$(
-    grep -Ei 'wp-admin|phpmyadmin|\.env|select.+from|union.+select|/etc/passwd|\.\./' "${access_log}" \
-      | awk '{print $1}' | sort | uniq -c | sort -nr | head || true
-  )"
+  local total=0
 
   if [[ "${NG_LANG}" == "en" ]]; then
-    ng_report_section 'Suspicious Web Requests'
-    ng_report_kv 'Access Log' "${access_log}"
-    ng_report_note 'Top source IPs matching common suspicious request patterns:'
+    ng_report_header "🌐 Suspicious Web Request Scan"
+    ng_report_meta "Generated At" "$(ng_timestamp)"
+    ng_report_meta "Host" "${NG_HOSTNAME}"
+    ng_report_section_start "Access Log"
   else
-    ng_report_section '可疑 Web 请求'
-    ng_report_kv '访问日志' "${access_log}"
-    ng_report_note '以下为命中常见可疑请求特征最多的来源 IP：'
+    ng_report_header "🌐 可疑 Web 请求扫描"
+    ng_report_meta "生成时间" "$(ng_timestamp)"
+    ng_report_meta "主机" "${NG_HOSTNAME}"
+    ng_report_section_start "访问日志"
   fi
 
-  if [[ -z "${summary}" ]]; then
-    if [[ "${NG_LANG}" == "en" ]]; then
-      ng_report_note 'No suspicious request patterns found.'
+  if [[ ! -f "${access_log}" ]]; then
+    ng_report_detail "$([[ "${NG_LANG}" == "en" ]] && echo "Log file" || echo "日志文件")" "$( [[ "${NG_LANG}" == "en" ]] && echo "Not found (nginx not installed)" || echo "未找到（nginx 未安装）" )"
+  else
+    ng_report_detail "$([[ "${NG_LANG}" == "en" ]] && echo "Log file" || echo "日志文件")" "${access_log}"
+    ng_report_detail "$([[ "${NG_LANG}" == "en" ]] && echo "Patterns" || echo "检测模式")" "wp-admin, phpmyadmin, .env, SQL injection, path traversal"
+    ng_report_separator
+
+    summary="$(grep -Ei 'wp-admin|phpmyadmin|\.env|select.+from|union.+select|/etc/passwd|\.\./' "${access_log}" 2>/dev/null \
+      | awk '{print $1}' | sort | uniq -c | sort -nr | head -10 || true)"
+    total="$(grep -ciE 'wp-admin|phpmyadmin|\.env|select.+from|union.+select|/etc/passwd|\.\./' "${access_log}" 2>/dev/null || echo 0)"
+
+    if [[ -n "${summary}" ]]; then
+      if [[ "${NG_LANG}" == "en" ]]; then
+        printf '%s %s\n' "$(ng_color "${NG_C_PANEL}" "║")" "  Top source IPs:"
+      else
+        printf '%s %s\n' "$(ng_color "${NG_C_PANEL}" "║")" "  来源 IP TOP10:"
+      fi
+      printf '%s\n' "${summary}" | while IFS= read -r line; do
+        printf '%s   %s\n' "$(ng_color "${NG_C_PANEL}" "║")" "${line}"
+      done
     else
-      ng_report_note '未发现可疑请求特征。'
+      ng_report_line "  $( [[ "${NG_LANG}" == "en" ]] && echo "No suspicious request patterns found." || echo "未发现可疑请求特征。" )"
     fi
-    return 0
   fi
 
-  printf '%s\n' "${summary}"
+  ng_report_summary_start "$( [[ "${NG_LANG}" == "en" ]] && echo "Summary" || echo "摘要" )"
+  ng_report_summary_kv "$([[ "${NG_LANG}" == "en" ]] && echo "Suspicious requests:" || echo "可疑请求:")" "${total}"
+  if [[ "${total}" -gt 0 ]]; then
+    ng_report_summary_kv "$([[ "${NG_LANG}" == "en" ]] && echo "Status:" || echo "状态:")" "$(ng_color "${NG_C_WARN}" "⚠️  $( [[ "${NG_LANG}" == "en" ]] && echo "Scanning activity detected" || echo "存在扫描行为" )")"
+    ng_report_advice_start "$( [[ "${NG_LANG}" == "en" ]] && echo "Suggestions" || echo "建议" )"
+    printf '%s   %s\n' "$(ng_color "${NG_C_PANEL}" "║")" "$( [[ "${NG_LANG}" == "en" ]] && echo "• Configure WAF or nginx deny rules" || echo "• 配置 WAF 或 nginx 的 deny 规则" )"
+    printf '%s   %s\n' "$(ng_color "${NG_C_PANEL}" "║")" "$( [[ "${NG_LANG}" == "en" ]] && echo "• Block offending IPs at firewall level" || echo "• 在防火墙层面封禁攻击 IP" )"
+  else
+    ng_report_summary_kv "$([[ "${NG_LANG}" == "en" ]] && echo "Status:" || echo "状态:")" "$(ng_color "${NG_C_OK}" "✅ $( [[ "${NG_LANG}" == "en" ]] && echo "Normal" || echo "正常" )")"
+  fi
+  ng_report_footer
 }
 
 ng_firewall_summary() {
   if [[ "${NG_LANG}" == "en" ]]; then
-    ng_report_section 'Firewall Summary'
-    ng_report_note 'Detected firewall backend and current active rules:'
+    ng_report_header "🔥 Firewall Status"
+    ng_report_meta "Generated At" "$(ng_timestamp)"
+    ng_report_meta "Host" "${NG_HOSTNAME}"
+    ng_report_section_start "Firewall Info"
   else
-    ng_report_section '防火墙状态'
-    ng_report_note '以下为检测到的防火墙后端及当前生效规则：'
+    ng_report_header "🔥 防火墙状态"
+    ng_report_meta "生成时间" "$(ng_timestamp)"
+    ng_report_meta "主机" "${NG_HOSTNAME}"
+    ng_report_section_start "防火墙信息"
   fi
 
+  local backend="none"
+  local status="inactive"
+  local rule_count=0
+
   if command -v ufw >/dev/null 2>&1; then
-    ng_report_kv 'Backend' 'ufw'
-    ufw status verbose || true
-  elif command -v firewall-cmd >/dev/null 2>&1; then
-    ng_report_kv 'Backend' 'firewalld'
-    firewall-cmd --list-all || true
-  elif command -v iptables >/dev/null 2>&1; then
-    ng_report_kv 'Backend' 'iptables'
-    iptables -L -n --line-numbers || true
-  else
-    if [[ "${NG_LANG}" == "en" ]]; then
-      ng_report_note 'No firewall tool found.'
-    else
-      ng_report_note '未找到防火墙工具。'
+    backend="ufw"
+    local ufw_output
+    ufw_output="$(ufw status verbose 2>/dev/null || true)"
+    if [[ "${ufw_output}" == *"Status: active"* ]]; then
+      status="active"
     fi
+    rule_count="$(echo "${ufw_output}" | grep -c "^[0-9]" 2>/dev/null || echo 0)"
+    ng_report_detail "$([[ "${NG_LANG}" == "en" ]] && echo "Backend" || echo "后端")" "ufw"
+    ng_report_detail "$([[ "${NG_LANG}" == "en" ]] && echo "Status" || echo "状态")" "${status}"
+    ng_report_separator
+    printf '%s %s\n' "$(ng_color "${NG_C_PANEL}" "║")" "  ${ufw_output}" | while IFS= read -r line; do
+      printf '%s   %s\n' "$(ng_color "${NG_C_PANEL}" "║")" "${line}"
+    done
+  elif command -v firewall-cmd >/dev/null 2>&1; then
+    backend="firewalld"
+    local fwd_output
+    fwd_output="$(firewall-cmd --list-all 2>/dev/null || true)"
+    status="active"
+    rule_count="$(echo "${fwd_output}" | grep -c "services\|ports" 2>/dev/null || echo 0)"
+    ng_report_detail "$([[ "${NG_LANG}" == "en" ]] && echo "Backend" || echo "后端")" "firewalld"
+    ng_report_detail "$([[ "${NG_LANG}" == "en" ]] && echo "Status" || echo "状态")" "${status}"
+    ng_report_separator
+    printf '%s\n' "${fwd_output}" | while IFS= read -r line; do
+      printf '%s   %s\n' "$(ng_color "${NG_C_PANEL}" "║")" "${line}"
+    done
+  elif command -v iptables >/dev/null 2>&1; then
+    backend="iptables"
+    local ipt_output
+    ipt_output="$(iptables -L -n --line-numbers 2>/dev/null | head -20 || true)"
+    rule_count="$(iptables -L -n 2>/dev/null | grep -c "^Chain\|^[0-9]" 2>/dev/null || echo 0)"
+    ng_report_detail "$([[ "${NG_LANG}" == "en" ]] && echo "Backend" || echo "后端")" "iptables"
+    ng_report_separator
+    printf '%s\n' "${ipt_output}" | while IFS= read -r line; do
+      printf '%s   %s\n' "$(ng_color "${NG_C_PANEL}" "║")" "${line}"
+    done
+  else
+    ng_report_line "  $( [[ "${NG_LANG}" == "en" ]] && echo "No firewall tool found." || echo "未找到防火墙工具。" )"
   fi
+
+  ng_report_summary_start "$( [[ "${NG_LANG}" == "en" ]] && echo "Summary" || echo "摘要" )"
+  ng_report_summary_kv "$([[ "${NG_LANG}" == "en" ]] && echo "Backend:" || echo "后端:")" "${backend}"
+  ng_report_summary_kv "$([[ "${NG_LANG}" == "en" ]] && echo "Rules:" || echo "规则数:")" "${rule_count}"
+  if [[ "${status}" == "active" ]]; then
+    ng_report_summary_kv "$([[ "${NG_LANG}" == "en" ]] && echo "Status:" || echo "状态:")" "$(ng_color "${NG_C_OK}" "✅ $( [[ "${NG_LANG}" == "en" ]] && echo "Firewall enabled" || echo "防火墙已启用" )")"
+  else
+    ng_report_summary_kv "$([[ "${NG_LANG}" == "en" ]] && echo "Status:" || echo "状态:")" "$(ng_color "${NG_C_WARN}" "⚠️  $( [[ "${NG_LANG}" == "en" ]] && echo "Firewall not active or not found" || echo "防火墙未启用或未找到" )")"
+  fi
+  ng_report_footer
 }
 
 ng_integrity_create_baseline() {
@@ -131,12 +200,19 @@ ng_integrity_create_baseline() {
   fi
 
   if [[ "${NG_LANG}" == "en" ]]; then
-    ng_print_header "Creating Integrity Baseline"
-    printf 'Scanning paths: %s\n\n' "${NG_WATCH_PATHS}"
+    ng_report_header "🧬 Create Integrity Baseline"
+    ng_report_meta "Generated At" "$(ng_timestamp)"
+    ng_report_meta "Host" "${NG_HOSTNAME}"
+    ng_report_section_start "Scan Paths"
   else
-    ng_print_header "创建完整性基线"
-    printf '扫描路径: %s\n\n' "${NG_WATCH_PATHS}"
+    ng_report_header "🧬 创建完整性基线"
+    ng_report_meta "生成时间" "$(ng_timestamp)"
+    ng_report_meta "主机" "${NG_HOSTNAME}"
+    ng_report_section_start "扫描路径"
   fi
+
+  ng_report_detail "$([[ "${NG_LANG}" == "en" ]] && echo "Watch paths" || echo "监控路径")" "${NG_WATCH_PATHS}"
+  ng_report_separator
 
   : > "${baseline_file}"
   local total_files=0
@@ -148,44 +224,41 @@ ng_integrity_create_baseline() {
         local file_count
         file_count=$(find "${watch_path}" -type f 2>/dev/null | wc -l)
         find "${watch_path}" -type f -exec sha256sum {} \; >> "${baseline_file}" 2>/dev/null || true
+        printf '%s   ✓ %s' "$(ng_color "${NG_C_PANEL}" "║")" "${watch_path}"
         if [[ "${NG_LANG}" == "en" ]]; then
-          printf '  ✓ %s (%d files)\n' "${watch_path}" "${file_count}"
+          printf '  (%d files)\n' "${file_count}"
         else
-          printf '  ✓ %s（%d 个文件）\n' "${watch_path}" "${file_count}"
+          printf '（%d 个文件）\n' "${file_count}"
         fi
         total_files=$((total_files + file_count))
       else
+        printf '%s   ✗ %s' "$(ng_color "${NG_C_PANEL}" "║")" "${watch_path}"
         if [[ "${NG_LANG}" == "en" ]]; then
-          printf '  ✗ %s (not readable)\n' "${watch_path}"
+          printf '  (not readable)\n'
         else
-          printf '  ✗ %s（不可读）\n' "${watch_path}"
+          printf '（不可读）\n'
         fi
         ((skipped_paths++)) || true
       fi
     else
+      printf '%s   ✗ %s' "$(ng_color "${NG_C_PANEL}" "║")" "${watch_path}"
       if [[ "${NG_LANG}" == "en" ]]; then
-        printf '  ✗ %s (not found)\n' "${watch_path}"
+        printf '  (not found)\n'
       else
-        printf '  ✗ %s（不存在）\n' "${watch_path}"
+        printf '（不存在）\n'
       fi
       ((skipped_paths++)) || true
     fi
   done
-  
-  printf '\n'
-  if [[ "${NG_LANG}" == "en" ]]; then
-    printf 'Total files indexed: %d\n' "${total_files}"
-    printf 'Baseline saved to: %s\n' "${baseline_file}"
-    if [[ "${skipped_paths}" -gt 0 ]]; then
-      printf 'Skipped paths: %d\n' "${skipped_paths}"
-    fi
-  else
-    printf '已索引文件数：%d\n' "${total_files}"
-    printf '基线保存至：%s\n' "${baseline_file}"
-    if [[ "${skipped_paths}" -gt 0 ]]; then
-      printf '跳过路径：%d\n' "${skipped_paths}"
-    fi
-  fi
+
+  ng_report_summary_start "$( [[ "${NG_LANG}" == "en" ]] && echo "Summary" || echo "摘要" )"
+  ng_report_summary_kv "$([[ "${NG_LANG}" == "en" ]] && echo "Indexed files:" || echo "索引文件:")" "${total_files}"
+  ng_report_summary_kv "$([[ "${NG_LANG}" == "en" ]] && echo "Skipped paths:" || echo "跳过路径:")" "${skipped_paths}"
+  ng_report_summary_kv "$([[ "${NG_LANG}" == "en" ]] && echo "Baseline location:" || echo "基线位置:")" "${baseline_file}"
+  ng_report_summary_kv "$([[ "${NG_LANG}" == "en" ]] && echo "Status:" || echo "状态:")" "$(ng_color "${NG_C_OK}" "✅ $( [[ "${NG_LANG}" == "en" ]] && echo "Baseline created" || echo "基线已建立" )")"
+  ng_report_footer
+
+  ng_log "INFO" "Integrity baseline created: ${total_files} files indexed"
 }
 
 ng_integrity_verify() {
@@ -199,123 +272,46 @@ ng_integrity_verify() {
   fi
 
   local changes=0
+  local total=0
+  local passed=0
 
   if [[ "${NG_LANG}" == "en" ]]; then
-    ng_print_header "Integrity Verification"
-    printf 'Checking files against baseline...\n\n'
+    ng_report_header "✅ Integrity Verification"
+    ng_report_meta "Generated At" "$(ng_timestamp)"
+    ng_report_meta "Host" "${NG_HOSTNAME}"
+    ng_report_section_start "Baseline File"
   else
-    ng_print_header "完整性校验"
-    printf '正在检查文件与基线的一致性...\n\n'
+    ng_report_header "✅ 完整性校验"
+    ng_report_meta "生成时间" "$(ng_timestamp)"
+    ng_report_meta "主机" "${NG_HOSTNAME}"
+    ng_report_section_start "基线文件"
   fi
+
+  ng_report_detail "$([[ "${NG_LANG}" == "en" ]] && echo "Baseline" || echo "基线文件")" "${NG_INTEGRITY_DB}"
+  ng_report_separator
 
   while IFS= read -r line; do
     if [[ "${line}" == *"FAILED"* ]]; then
-      printf '%s %s\n' "$(ng_color "${NG_C_ERR}" "✗")" "${line}"
+      printf '%s   %s %s\n' "$(ng_color "${NG_C_PANEL}" "║")" "$(ng_color "${NG_C_ERR}" "✗")" "${line}"
       ((changes++)) || true
+      ((total++)) || true
     elif [[ "${line}" == *"OK"* ]]; then
-      printf '%s %s\n' "$(ng_color "${NG_C_OK}" "✓")" "${line}"
+      printf '%s   %s %s\n' "$(ng_color "${NG_C_PANEL}" "║")" "$(ng_color "${NG_C_OK}" "✓")" "${line}"
+      ((passed++)) || true
+      ((total++)) || true
     else
-      printf '%s\n' "${line}"
+      printf '%s   %s\n' "$(ng_color "${NG_C_PANEL}" "║")" "${line}"
     fi
   done < <(cd / && sha256sum -c "${NG_INTEGRITY_DB}" 2>&1 || true)
 
+  ng_report_summary_start "$( [[ "${NG_LANG}" == "en" ]] && echo "Summary" || echo "摘要" )"
+  ng_report_summary_kv "$([[ "${NG_LANG}" == "en" ]] && echo "Checked files:" || echo "检查文件:")" "${total}"
+  ng_report_summary_kv "$([[ "${NG_LANG}" == "en" ]] && echo "Passed:" || echo "通过:")" "${passed}"
+  ng_report_summary_kv "$([[ "${NG_LANG}" == "en" ]] && echo "Changed:" || echo "变更:")" "${changes}"
   if [[ "${changes}" -gt 0 ]]; then
-    if [[ "${NG_LANG}" == "en" ]]; then
-      printf '\n⚠️  %d file(s) have changed since baseline.\n' "${changes}"
-    else
-      printf '\n⚠️  有 %d 个文件自基线以来发生了变化。\n' "${changes}"
-    fi
+    ng_report_summary_kv "$([[ "${NG_LANG}" == "en" ]] && echo "Status:" || echo "状态:")" "$(ng_color "${NG_C_WARN}" "⚠️  $( [[ "${NG_LANG}" == "en" ]] && echo "Files have changed since baseline" || echo "有文件自基线以来发生了变化" )")"
   else
-    if [[ "${NG_LANG}" == "en" ]]; then
-      printf '\n✓ All files match the baseline.\n'
-    else
-      printf '\n✓ 所有文件与基线一致。\n'
-    fi
-  fi
-}
-
-ng_security_report() {
-  if [[ "${NG_LANG}" == "en" ]]; then
-    ng_report_header "🛡 ServerHarbor Security Report"
-    ng_report_meta "Generated At" "$(ng_timestamp)"
-    ng_report_meta "Host" "${NG_HOSTNAME}"
-    ng_report_section_start "Failed Login Sources"
-  else
-    ng_report_header "🛡 ServerHarbor 安全巡检报告"
-    ng_report_meta "生成时间" "$(ng_timestamp)"
-    ng_report_meta "主机" "${NG_HOSTNAME}"
-    ng_report_section_start "失败登录来源"
-  fi
-
-  local auth_log=""
-  [[ -f /var/log/auth.log ]] && auth_log="/var/log/auth.log"
-  [[ -f /var/log/secure ]] && auth_log="/var/log/secure"
-  if [[ -n "${auth_log}" ]]; then
-    ng_report_kv_styled "$([[ "${NG_LANG}" == "en" ]] && echo "Auth Log" || echo "日志文件")" "${auth_log}"
-    local login_output
-    login_output="$(grep -Ei 'Failed password' "${auth_log}" 2>/dev/null | grep -Eo '([0-9]{1,3}\.){3}[0-9]{1,3}' | sort | uniq -c | sort -nr | head -5)" || true
-    if [[ -n "${login_output}" ]]; then
-      printf '%s\n' "${login_output}" | while IFS= read -r line; do
-        ng_report_line "  ${line}"
-      done
-    else
-      ng_report_line "  $([[ "${NG_LANG}" == "en" ]] && echo "No failed login entries found." || echo "未发现失败登录记录。")"
-    fi
-  else
-    ng_report_line "  $([[ "${NG_LANG}" == "en" ]] && echo "No auth log found." || echo "未找到认证日志文件。")"
-  fi
-
-  if [[ "${NG_LANG}" == "en" ]]; then
-    ng_report_section_start "Suspicious Web Requests"
-  else
-    ng_report_section_start "可疑 Web 请求"
-  fi
-  local access_log="/var/log/nginx/access.log"
-  if [[ -f "${access_log}" ]]; then
-    local web_output
-    web_output="$(grep -Ei 'wp-admin|phpmyadmin|\.env|select.+from|union.+select' "${access_log}" 2>/dev/null | awk '{print $1}' | sort | uniq -c | sort -nr | head -5)" || true
-    if [[ -n "${web_output}" ]]; then
-      printf '%s\n' "${web_output}" | while IFS= read -r line; do
-        ng_report_line "  ${line}"
-      done
-    else
-      ng_report_line "  $([[ "${NG_LANG}" == "en" ]] && echo "No suspicious requests found." || echo "未发现可疑请求特征。")"
-    fi
-  else
-    ng_report_line "  $([[ "${NG_LANG}" == "en" ]] && echo "No nginx access log found." || echo "未找到 nginx 访问日志。")"
-  fi
-
-  if [[ "${NG_LANG}" == "en" ]]; then
-    ng_report_section_start "Listening Ports"
-  else
-    ng_report_section_start "监听端口"
-  fi
-  ss -lntp 2>/dev/null | sed -n '1,15p' | while IFS= read -r line; do
-    ng_report_line "  ${line}"
-  done || true
-
-  if [[ "${NG_LANG}" == "en" ]]; then
-    ng_report_section_start "Firewall"
-  else
-    ng_report_section_start "防火墙"
-  fi
-  if command -v ufw >/dev/null 2>&1; then
-    ng_report_kv_styled "$([[ "${NG_LANG}" == "en" ]] && echo "Backend" || echo "后端")" "ufw"
-    ufw status verbose 2>/dev/null | while IFS= read -r line; do
-      ng_report_line "  ${line}"
-    done || true
-  elif command -v firewall-cmd >/dev/null 2>&1; then
-    ng_report_kv_styled "$([[ "${NG_LANG}" == "en" ]] && echo "Backend" || echo "后端")" "firewalld"
-    firewall-cmd --list-all 2>/dev/null | while IFS= read -r line; do
-      ng_report_line "  ${line}"
-    done || true
-  elif command -v iptables >/dev/null 2>&1; then
-    ng_report_kv_styled "$([[ "${NG_LANG}" == "en" ]] && echo "Backend" || echo "后端")" "iptables"
-    iptables -L -n --line-numbers 2>/dev/null | sed -n '1,15p' | while IFS= read -r line; do
-      ng_report_line "  ${line}"
-    done || true
-  else
-    ng_report_line "  $([[ "${NG_LANG}" == "en" ]] && echo "No firewall tool found." || echo "未找到防火墙工具。")"
+    ng_report_summary_kv "$([[ "${NG_LANG}" == "en" ]] && echo "Status:" || echo "状态:")" "$(ng_color "${NG_C_OK}" "✅ $( [[ "${NG_LANG}" == "en" ]] && echo "All files match baseline" || echo "所有文件与基线一致" )")"
   fi
   ng_report_footer
 }
@@ -377,7 +373,11 @@ ng_manage_watch_paths() {
         if [[ -n "${new_path}" ]]; then
           if [[ -e "${new_path}" ]]; then
             NG_WATCH_PATHS="${NG_WATCH_PATHS} ${new_path}"
-            sed -i 's|^NG_WATCH_PATHS=.*|NG_WATCH_PATHS="'"${NG_WATCH_PATHS}"'"|' "${NG_CONFIG_FILE}" 2>/dev/null || true
+            if grep -q '^NG_WATCH_PATHS=' "${NG_CONFIG_FILE}" 2>/dev/null; then
+              sed -i "s#^NG_WATCH_PATHS=.*#NG_WATCH_PATHS=\"${NG_WATCH_PATHS}\"#" "${NG_CONFIG_FILE}"
+            else
+              echo "NG_WATCH_PATHS=\"${NG_WATCH_PATHS}\"" >> "${NG_CONFIG_FILE}"
+            fi
             if [[ "${NG_LANG}" == "en" ]]; then
               printf 'Path added: %s\n' "${new_path}"
             else
@@ -411,7 +411,7 @@ ng_manage_watch_paths() {
           if [[ "${remove_num}" =~ ^[0-9]+$ ]] && [[ "${remove_num}" -ge 1 ]] && [[ "${remove_num}" -le "${#paths_array[@]}" ]]; then
             unset 'paths_array[remove_num-1]'
             NG_WATCH_PATHS="${paths_array[*]}"
-            sed -i 's|^NG_WATCH_PATHS=.*|NG_WATCH_PATHS="'"${NG_WATCH_PATHS}"'"|' "${NG_CONFIG_FILE}" 2>/dev/null || true
+            sed -i "s#^NG_WATCH_PATHS=.*#NG_WATCH_PATHS=\"${NG_WATCH_PATHS}\"#" "${NG_CONFIG_FILE}" 2>/dev/null || true
             if [[ "${NG_LANG}" == "en" ]]; then
               printf 'Path removed.\n'
             else
@@ -422,7 +422,11 @@ ng_manage_watch_paths() {
         ;;
       3)
         NG_WATCH_PATHS="/etc /var/www /root"
-        sed -i 's|^NG_WATCH_PATHS=.*|NG_WATCH_PATHS="'"${NG_WATCH_PATHS}"'"|' "${NG_CONFIG_FILE}" 2>/dev/null || true
+        if grep -q '^NG_WATCH_PATHS=' "${NG_CONFIG_FILE}" 2>/dev/null; then
+          sed -i "s#^NG_WATCH_PATHS=.*#NG_WATCH_PATHS=\"${NG_WATCH_PATHS}\"#" "${NG_CONFIG_FILE}"
+        else
+          echo "NG_WATCH_PATHS=\"${NG_WATCH_PATHS}\"" >> "${NG_CONFIG_FILE}"
+        fi
         if [[ "${NG_LANG}" == "en" ]]; then
           printf 'Reset to default paths.\n'
         else
@@ -440,15 +444,23 @@ ng_manage_watch_paths() {
 ng_security_score() {
   local score=100
   local issues=()
-  
+
   if [[ "${NG_LANG}" == "en" ]]; then
-    ng_print_header "Security Score Calculation"
-    printf 'Calculating security score...\n'
+    ng_report_header "📊 Security Score"
+    ng_report_meta "Generated At" "$(ng_timestamp)"
+    ng_report_meta "Host" "${NG_HOSTNAME}"
+    ng_report_section_start "Scanning"
   else
-    ng_print_header "安全评分计算"
-    printf '正在计算安全评分...\n'
+    ng_report_header "📊 安全评分"
+    ng_report_meta "生成时间" "$(ng_timestamp)"
+    ng_report_meta "主机" "${NG_HOSTNAME}"
+    ng_report_section_start "扫描中"
   fi
-  
+
+  ng_report_line "  $( [[ "${NG_LANG}" == "en" ]] && echo "Checking SSH configuration..." || echo "检查 SSH 配置..." )"
+  ng_report_line "  $( [[ "${NG_LANG}" == "en" ]] && echo "Checking firewall..." || echo "检查防火墙..." )"
+  ng_report_line "  $( [[ "${NG_LANG}" == "en" ]] && echo "Checking auth logs..." || echo "检查认证日志..." )"
+
   if [[ "${EUID}" -eq 0 ]]; then
     score=$((score - 10))
     if [[ "${NG_LANG}" == "en" ]]; then
@@ -501,32 +513,184 @@ ng_security_score() {
       fi
     fi
   fi
-  
+
   if [[ "${score}" -lt 0 ]]; then
     score=0
   fi
-  
+
+  local risk_level risk_color
+  if [[ "${score}" -ge 90 ]]; then
+    risk_level="$( [[ "${NG_LANG}" == "en" ]] && echo "Low" || echo "低" )"
+    risk_color="${NG_C_OK}"
+  elif [[ "${score}" -ge 70 ]]; then
+    risk_level="$( [[ "${NG_LANG}" == "en" ]] && echo "Medium" || echo "中等" )"
+    risk_color="${NG_C_WARN}"
+  elif [[ "${score}" -ge 50 ]]; then
+    risk_level="$( [[ "${NG_LANG}" == "en" ]] && echo "High" || echo "高" )"
+    risk_color="${NG_C_ERR}"
+  else
+    risk_level="$( [[ "${NG_LANG}" == "en" ]] && echo "Critical" || echo "严重" )"
+    risk_color="${NG_C_ERR}"
+  fi
+
+  ng_report_summary_start "$( [[ "${NG_LANG}" == "en" ]] && echo "Score" || echo "评分" )"
+  ng_report_summary_kv "$([[ "${NG_LANG}" == "en" ]] && echo "Score:" || echo "评分:")" "${score}/100"
+  ng_report_summary_kv "$([[ "${NG_LANG}" == "en" ]] && echo "Risk level:" || echo "风险等级:")" "$(ng_color "${risk_color}" "${risk_level}")"
+
+  if [[ "${#issues[@]}" -gt 0 ]]; then
+    ng_report_separator
+    printf '%s %s\n' "$(ng_color "${NG_C_PANEL}" "║")" "$(ng_color "${NG_C_WARN}" "  $( [[ "${NG_LANG}" == "en" ]] && echo "Issues found:" || echo "发现问题：" )")"
+    for issue in "${issues[@]}"; do
+      printf '%s   • %s\n' "$(ng_color "${NG_C_PANEL}" "║")" "${issue}"
+    done
+
+    ng_report_advice_start "$( [[ "${NG_LANG}" == "en" ]] && echo "Suggestions" || echo "建议" )"
+    if grep -qE '^[^#]*PasswordAuthentication yes' /etc/ssh/sshd_config 2>/dev/null; then
+      printf '%s   %s\n' "$(ng_color "${NG_C_PANEL}" "║")" "$( [[ "${NG_LANG}" == "en" ]] && echo "• Disable password auth, use SSH keys" || echo "• 禁用密码认证，使用密钥登录" )"
+    fi
+    if grep -qE '^[^#]*PermitRootLogin yes' /etc/ssh/sshd_config 2>/dev/null; then
+      printf '%s   %s\n' "$(ng_color "${NG_C_PANEL}" "║")" "$( [[ "${NG_LANG}" == "en" ]] && echo "• Disable root login (PermitRootLogin no)" || echo "• 禁用 root 直接登录 (PermitRootLogin no)" )"
+    fi
+    if [[ -n "${auth_log}" ]]; then
+      local fc
+      fc=$(grep -c "Failed password" "${auth_log}" 2>/dev/null || echo 0)
+      if [[ "${fc}" -gt 50 ]]; then
+        printf '%s   %s\n' "$(ng_color "${NG_C_PANEL}" "║")" "$( [[ "${NG_LANG}" == "en" ]] && echo "• Install fail2ban to block brute force" || echo "• 安装 fail2ban 防暴力破解" )"
+      fi
+    fi
+    if ! command -v ufw >/dev/null 2>&1 && ! command -v firewall-cmd >/dev/null 2>&1 && ! command -v iptables >/dev/null 2>&1; then
+      printf '%s   %s\n' "$(ng_color "${NG_C_PANEL}" "║")" "$( [[ "${NG_LANG}" == "en" ]] && echo "• Enable a firewall (ufw recommended)" || echo "• 启用防火墙（推荐 ufw）" )"
+    fi
+    printf '%s   %s\n' "$(ng_color "${NG_C_PANEL}" "║")" "$( [[ "${NG_LANG}" == "en" ]] && echo "• Run security reports regularly" || echo "• 定期运行安全报告" )"
+  else
+    ng_report_line "  $( [[ "${NG_LANG}" == "en" ]] && echo "No major security issues found." || echo "未发现重大安全问题。" )"
+  fi
+  ng_report_footer
+}
+
+ng_security_report() {
   if [[ "${NG_LANG}" == "en" ]]; then
-    printf '\nSecurity Score: %d/100\n' "${score}"
-    if [[ "${#issues[@]}" -gt 0 ]]; then
-      printf '\nIssues found:\n'
-      for issue in "${issues[@]}"; do
-        printf '  • %s\n' "${issue}"
+    ng_report_header "🛡 ServerHarbor Security Report"
+    ng_report_meta "Generated At" "$(ng_timestamp)"
+    ng_report_meta "Host" "${NG_HOSTNAME}"
+  else
+    ng_report_header "🛡 ServerHarbor 安全巡检报告"
+    ng_report_meta "生成时间" "$(ng_timestamp)"
+    ng_report_meta "主机" "${NG_HOSTNAME}"
+  fi
+
+  local auth_log=""
+  [[ -f /var/log/auth.log ]] && auth_log="/var/log/auth.log"
+  [[ -f /var/log/secure ]] && auth_log="/var/log/secure"
+
+  if [[ "${NG_LANG}" == "en" ]]; then
+    ng_report_section_start "Failed Login Sources"
+  else
+    ng_report_section_start "失败登录来源"
+  fi
+  if [[ -n "${auth_log}" ]]; then
+    ng_report_detail "$([[ "${NG_LANG}" == "en" ]] && echo "Auth Log" || echo "日志文件")" "${auth_log}"
+    local login_total
+    login_total=$(grep -ciE 'Failed password|authentication failure' "${auth_log}" 2>/dev/null || echo 0)
+    ng_report_detail "$([[ "${NG_LANG}" == "en" ]] && echo "Total failures" || echo "失败总数")" "${login_total}"
+    local login_output
+    login_output="$(grep -Ei 'Failed password' "${auth_log}" 2>/dev/null | grep -Eo '([0-9]{1,3}\.){3}[0-9]{1,3}' | sort | uniq -c | sort -nr | head -5)" || true
+    if [[ -n "${login_output}" ]]; then
+      printf '%s\n' "${login_output}" | while IFS= read -r line; do
+        printf '%s   %s\n' "$(ng_color "${NG_C_PANEL}" "║")" "${line}"
       done
-    else
-      printf 'No major security issues found.\n'
     fi
   else
-    printf '\n安全评分: %d/100\n' "${score}"
-    if [[ "${#issues[@]}" -gt 0 ]]; then
-      printf '\n发现的问题:\n'
-      for issue in "${issues[@]}"; do
-        printf '  • %s\n' "${issue}"
-      done
-    else
-      printf '未发现重大安全问题。\n'
-    fi
+    ng_report_line "  $( [[ "${NG_LANG}" == "en" ]] && echo "No auth log found." || echo "未找到认证日志文件。" )"
   fi
+
+  if [[ "${NG_LANG}" == "en" ]]; then
+    ng_report_section_start "Suspicious Web Requests"
+  else
+    ng_report_section_start "可疑 Web 请求"
+  fi
+  local access_log="/var/log/nginx/access.log"
+  if [[ -f "${access_log}" ]]; then
+    local web_total
+    web_total=$(grep -ciE 'wp-admin|phpmyadmin|\.env|select.+from|union.+select' "${access_log}" 2>/dev/null || echo 0)
+    ng_report_detail "$([[ "${NG_LANG}" == "en" ]] && echo "Access Log" || echo "访问日志")" "${access_log}"
+    ng_report_detail "$([[ "${NG_LANG}" == "en" ]] && echo "Suspicious" || echo "可疑请求")" "${web_total}"
+    local web_output
+    web_output="$(grep -Ei 'wp-admin|phpmyadmin|\.env|select.+from|union.+select' "${access_log}" 2>/dev/null | awk '{print $1}' | sort | uniq -c | sort -nr | head -5)" || true
+    if [[ -n "${web_output}" ]]; then
+      printf '%s\n' "${web_output}" | while IFS= read -r line; do
+        printf '%s   %s\n' "$(ng_color "${NG_C_PANEL}" "║")" "${line}"
+      done
+    fi
+  else
+    ng_report_line "  $( [[ "${NG_LANG}" == "en" ]] && echo "No nginx access log found." || echo "未找到 nginx 访问日志。" )"
+  fi
+
+  if [[ "${NG_LANG}" == "en" ]]; then
+    ng_report_section_start "Listening Ports"
+  else
+    ng_report_section_start "监听端口"
+  fi
+  local port_count
+  port_count=$(ss -lntp 2>/dev/null | tail -n +2 | wc -l || echo 0)
+  ng_report_detail "$([[ "${NG_LANG}" == "en" ]] && echo "Port count" || echo "端口数")" "${port_count}"
+  ss -lntp 2>/dev/null | sed -n '1,10p' | while IFS= read -r line; do
+    printf '%s   %s\n' "$(ng_color "${NG_C_PANEL}" "║")" "${line}"
+  done || true
+
+  if [[ "${NG_LANG}" == "en" ]]; then
+    ng_report_section_start "Firewall"
+  else
+    ng_report_section_start "防火墙"
+  fi
+  if command -v ufw >/dev/null 2>&1; then
+    ng_report_detail "$([[ "${NG_LANG}" == "en" ]] && echo "Backend" || echo "后端")" "ufw"
+    ufw status verbose 2>/dev/null | while IFS= read -r line; do
+      printf '%s   %s\n' "$(ng_color "${NG_C_PANEL}" "║")" "${line}"
+    done || true
+  elif command -v firewall-cmd >/dev/null 2>&1; then
+    ng_report_detail "$([[ "${NG_LANG}" == "en" ]] && echo "Backend" || echo "后端")" "firewalld"
+    firewall-cmd --list-all 2>/dev/null | while IFS= read -r line; do
+      printf '%s   %s\n' "$(ng_color "${NG_C_PANEL}" "║")" "${line}"
+    done || true
+  elif command -v iptables >/dev/null 2>&1; then
+    ng_report_detail "$([[ "${NG_LANG}" == "en" ]] && echo "Backend" || echo "后端")" "iptables"
+    iptables -L -n --line-numbers 2>/dev/null | sed -n '1,10p' | while IFS= read -r line; do
+      printf '%s   %s\n' "$(ng_color "${NG_C_PANEL}" "║")" "${line}"
+    done || true
+  else
+    ng_report_line "  $( [[ "${NG_LANG}" == "en" ]] && echo "No firewall tool found." || echo "未找到防火墙工具。" )"
+  fi
+
+  if [[ "${NG_LANG}" == "en" ]]; then
+    ng_report_summary_start "Overall Summary"
+  else
+    ng_report_summary_start "综合摘要"
+  fi
+
+  local risk_score=100
+  [[ "${EUID}" -eq 0 ]] && risk_score=$((risk_score - 10))
+  ! grep -qE '^[^#]*PasswordAuthentication no' /etc/ssh/sshd_config 2>/dev/null && risk_score=$((risk_score - 15))
+  grep -qE '^[^#]*PermitRootLogin yes' /etc/ssh/sshd_config 2>/dev/null && risk_score=$((risk_score - 20))
+  [[ "${port_count}" -gt 10 ]] && risk_score=$((risk_score - 5))
+  [[ "${risk_score}" -lt 0 ]] && risk_score=0
+
+  ng_report_summary_kv "$([[ "${NG_LANG}" == "en" ]] && echo "Security score:" || echo "安全评分:")" "${risk_score}/100"
+
+  local risk_level risk_color
+  if [[ "${risk_score}" -ge 90 ]]; then
+    risk_level="$( [[ "${NG_LANG}" == "en" ]] && echo "Low" || echo "低" )"
+    risk_color="${NG_C_OK}"
+  elif [[ "${risk_score}" -ge 70 ]]; then
+    risk_level="$( [[ "${NG_LANG}" == "en" ]] && echo "Medium" || echo "中等" )"
+    risk_color="${NG_C_WARN}"
+  else
+    risk_level="$( [[ "${NG_LANG}" == "en" ]] && echo "High" || echo "高" )"
+    risk_color="${NG_C_ERR}"
+  fi
+  ng_report_summary_kv "$([[ "${NG_LANG}" == "en" ]] && echo "Risk level:" || echo "风险等级:")" "$(ng_color "${risk_color}" "${risk_level}")"
+
+  ng_report_footer
 }
 
 ng_security_menu() {
@@ -576,7 +740,7 @@ ng_security_menu() {
       0) return 0 ;;
       *) ng_t invalid_option ;;
     esac
-    
+
     ng_press_enter || return 130
   done
 }

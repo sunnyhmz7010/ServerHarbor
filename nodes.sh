@@ -2,8 +2,6 @@
 
 set -euo pipefail
 
-NG_NODES_FILE="${NG_DATA_ROOT}/config/servers.json"
-
 ng_init_nodes() {
   if [[ ! -f "${NG_NODES_FILE}" ]]; then
     mkdir -p "$(dirname "${NG_NODES_FILE}")"
@@ -219,21 +217,21 @@ ng_test_node_ssh() {
 
   local output
   output=$(ssh "${ssh_opts[@]}" "${user}@${host}" "echo 'SSH_OK'" 2>&1) && {
-    echo "OK"
+    printf '%s\n' "OK"
     return 0
   } || {
-    if echo "${output}" | grep -qi "connection refused"; then
-      echo "CONN_REFUSED"
-    elif echo "${output}" | grep -qi "connection timed out\|no route to host"; then
-      echo "TIMEOUT"
-    elif echo "${output}" | grep -qi "permission denied"; then
-      echo "AUTH_FAILED"
-    elif echo "${output}" | grep -qi "host key verification failed"; then
-      echo "KEY_MISMATCH"
-    elif echo "${output}" | grep -qi "no such file\|not found"; then
-      echo "KEY_NOT_FOUND"
+    if [[ "${output}" == *"connection refused"* ]]; then
+      printf '%s\n' "CONN_REFUSED"
+    elif [[ "${output}" == *"connection timed out"* ]] || [[ "${output}" == *"no route to host"* ]]; then
+      printf '%s\n' "TIMEOUT"
+    elif [[ "${output}" == *"permission denied"* ]]; then
+      printf '%s\n' "AUTH_FAILED"
+    elif [[ "${output}" == *"host key verification failed"* ]]; then
+      printf '%s\n' "KEY_MISMATCH"
+    elif [[ "${output}" == *"no such file"* ]] || [[ "${output}" == *"not found"* ]]; then
+      printf '%s\n' "KEY_NOT_FOUND"
     else
-      echo "UNKNOWN"
+      printf '%s\n' "UNKNOWN"
     fi
     return 1
   }
@@ -562,7 +560,7 @@ ng_probe_single_peer() {
 
   ping_output="$(ping -c 1 -W "${NG_PROBE_TIMEOUT}" "${peer_host}" 2>/dev/null)" || true
 
-  if [[ -n "${ping_output}" ]] && echo "${ping_output}" | grep -q "bytes from"; then
+  if [[ -n "${ping_output}" ]] && [[ "${ping_output}" == *"bytes from"* ]]; then
     ping_result="up"
     latency="$(echo "${ping_output}" | awk -F'time=' 'END {print $2}' | awk '{print $1}' || echo n/a)"
   else
@@ -593,8 +591,8 @@ ng_probe_all_peers() {
       printf '%s\n' '---------------------------------------------------------------------'
     fi
 
-    if [[ -f "${NG_DATA_ROOT}/config/servers.json" ]] && command -v jq >/dev/null 2>&1; then
-      jq -r '.servers[] | select(.enabled != false) | "\(.name),\(.host)"' "${NG_DATA_ROOT}/config/servers.json" 2>/dev/null | while IFS=',' read -r peer_alias peer_host; do
+    if [[ -f "${NG_NODES_FILE}" ]] && command -v jq >/dev/null 2>&1; then
+      jq -r '.servers[] | select(.enabled != false) | "\(.name),\(.host)"' "${NG_NODES_FILE}" 2>/dev/null | while IFS=',' read -r peer_alias peer_host; do
         [[ -n "${peer_alias}" && -n "${peer_host}" ]] || continue
         ng_probe_single_peer "${peer_host}" "${peer_alias}"
       done
@@ -633,6 +631,76 @@ ng_probe_all_peers() {
   fi
 }
 
+ng_select_nodes() {
+  if ! ng_ensure_jq; then
+    return 1
+  fi
+
+  local count
+  count=$(jq '.servers | length' "${NG_NODES_FILE}" 2>/dev/null || echo 0)
+
+  if [[ "${count}" -eq 0 ]]; then
+    if [[ "${NG_LANG}" == "en" ]]; then
+      printf 'No nodes configured.\n'
+    else
+      printf '未配置节点。\n'
+    fi
+    return 1
+  fi
+
+  if [[ "${NG_LANG}" == "en" ]]; then
+    printf '\nConfigured nodes:\n'
+  else
+    printf '\n已配置的节点：\n'
+  fi
+
+  local idx=1
+  while IFS=$'\t' read -r name host user port; do
+    printf '  [%d] %s (%s)\n' "${idx}" "${name}" "${host}"
+    ((idx++)) || true
+  done < <(jq -r '.servers[] | select(.enabled != false) | "\(.name)\t\(.host)\t(.ssh.user // "root")\t(.ssh.port // 22)"' "${NG_NODES_FILE}" 2>/dev/null)
+
+  printf '  [a] %s\n' "$( [[ "${NG_LANG}" == "en" ]] && echo "All" || echo "全部" )"
+  printf '\n'
+
+  if [[ "${NG_LANG}" == "en" ]]; then
+    printf 'Select nodes (comma-separated, e.g. 1,3 or a): '
+  else
+    printf '选择节点（逗号分隔，如 1,3 或 a）：'
+  fi
+
+  local selection
+  ng_read_line selection || return 130
+
+  if [[ "${selection}" == "a" ]] || [[ "${selection}" == "A" ]] || [[ -z "${selection}" ]]; then
+    printf '%s\n' "all"
+    return 0
+  fi
+
+  printf '%s\n' "${selection}"
+}
+
+ng_generate_join_command() {
+  local main_host
+  main_host=$(hostname -I 2>/dev/null | awk '{print $1}' || hostname)
+
+  if [[ "${NG_LANG}" == "en" ]]; then
+    ng_print_header "Generate Join Command"
+    printf 'Run this command on a new server to register it:\n\n'
+    printf '%s\n' "$(ng_color "${NG_C_ACCENT}" "ssh root@${main_host} \"jq --arg n ALIAS --arg h \$(hostname -I | awk '{print \\\$1}') '.servers += [{\\\"name\\\": \\\$n, \\\"host\\\": \\\$h, \\\"ssh\\\": {\\\"user\\\": \\\"root\\\", \\\"port\\\": 22, \\\"auth\\\": \\\"key\\\", \\\"key\\\": \\\"~/.ssh/id_ed25519\\\"}, \\\"tags\\\": [], \\\"enabled\\\": true}]' /opt/serverharbor/data/servers.json > /tmp/sh.json && mv /tmp/sh.json /opt/serverharbor/data/servers.json\"")"
+    printf '\n'
+    printf 'Replace ALIAS with a name for the new node (e.g. hk-01).\n'
+    printf 'The new server needs SSH access to this server.\n'
+  else
+    ng_print_header "生成加入命令"
+    printf '在新服务器上执行此命令注册到本服务器：\n\n'
+    printf '%s\n' "$(ng_color "${NG_C_ACCENT}" "ssh root@${main_host} \"jq --arg n ALIAS --arg h \$(hostname -I | awk '{print \\\$1}') '.servers += [{\\\"name\\\": \\\$n, \\\"host\\\": \\\$h, \\\"ssh\\\": {\\\"user\\\": \\\"root\\\", \\\"port\\\": 22, \\\"auth\\\": \\\"key\\\", \\\"key\\\": \\\"~/.ssh/id_ed25519\\\"}, \\\"tags\\\": [], \\\"enabled\\\": true}]' /opt/serverharbor/data/servers.json > /tmp/sh.json && mv /tmp/sh.json /opt/serverharbor/data/servers.json\"")"
+    printf '\n'
+    printf '将 ALIAS 替换为新节点的名称（如 hk-01）。\n'
+    printf '新服务器需要能通过 SSH 连接到本服务器。\n'
+  fi
+}
+
 ng_node_menu() {
   local choice
 
@@ -643,22 +711,24 @@ ng_node_menu() {
       ng_print_option "1" "📋" "List nodes" "Show all configured nodes"
       ng_print_option "2" "➕" "Add node" "Add a new server node"
       ng_print_option "3" "➖" "Remove node" "Remove a server node"
-      ng_print_option "4" "🔍" "Test all nodes" "Test SSH connectivity to all nodes"
-      ng_print_option "5" "📡" "Probe all nodes" "Check ICMP, SSH, latency and local health"
-      ng_print_option "6" "⚡" "Batch execute" "Run command on all nodes"
-      ng_print_option "7" "📁" "Sync config" "Sync config file to all nodes"
-      ng_print_option "8" "🔑" "Deploy SSH keys" "Deploy SSH keys to all nodes"
+      ng_print_option "4" "🔍" "Test SSH" "Test SSH connectivity to selected nodes"
+      ng_print_option "5" "📡" "Probe nodes" "Check ICMP, SSH, latency and local health"
+      ng_print_option "6" "⚡" "Batch execute" "Run command on selected nodes"
+      ng_print_option "7" "📁" "Sync config" "Sync config file to selected nodes"
+      ng_print_option "8" "🔑" "Deploy SSH keys" "Deploy SSH keys to selected nodes"
+      ng_print_option "9" "🔗" "Generate join command" "Generate command for new servers to join"
       ng_print_option "0" "↩" "Back"
     else
       ng_print_title_box "🛰 节点管理" "基于 SSH 的多服务器管理"
       ng_print_option "1" "📋" "列出节点" "显示所有已配置的节点"
       ng_print_option "2" "➕" "添加节点" "添加新的服务器节点"
       ng_print_option "3" "➖" "删除节点" "删除服务器节点"
-      ng_print_option "4" "🔍" "测试所有节点" "测试所有节点的 SSH 连接"
-      ng_print_option "5" "📡" "探测所有节点" "检查 ICMP、SSH、延迟和本机健康"
-      ng_print_option "6" "⚡" "批量执行" "在所有节点上执行命令"
-      ng_print_option "7" "📁" "配置同步" "将配置文件同步到所有节点"
-      ng_print_option "8" "🔑" "部署 SSH 密钥" "部署 SSH 密钥到所有节点"
+      ng_print_option "4" "🔍" "测试 SSH" "测试选中节点的 SSH 连接"
+      ng_print_option "5" "📡" "探测节点" "检查 ICMP、SSH、延迟和本机健康"
+      ng_print_option "6" "⚡" "批量执行" "在选中节点上执行命令"
+      ng_print_option "7" "📁" "配置同步" "将配置文件同步到选中节点"
+      ng_print_option "8" "🔑" "部署 SSH 密钥" "部署 SSH 密钥到选中节点"
+      ng_print_option "9" "🔗" "生成加入命令" "生成新服务器加入的命令"
       ng_print_option "0" "↩" "返回"
     fi
 
@@ -768,27 +838,76 @@ ng_node_menu() {
         fi
         ;;
       7)
+        local src_file remote_path
         if [[ "${NG_LANG}" == "en" ]]; then
           printf 'Enter source file path: '
         else
           printf '输入源文件路径：'
         fi
-        local src_file
         ng_read_line src_file || return 130
 
-        if [[ "${NG_LANG}" == "en" ]]; then
-          printf 'Enter remote target path: '
-        else
-          printf '输入远程目标路径：'
-        fi
-        local remote_path
-        ng_read_line remote_path || return 130
+        if [[ -n "${src_file}" ]]; then
+          local -a target_nodes=()
+          local selection
+          selection="$(ng_select_nodes)" || continue
+          if [[ "${selection}" == "all" ]]; then
+            if [[ "${NG_LANG}" == "en" ]]; then
+              printf 'Enter remote target path: '
+            else
+              printf '输入远程目标路径：'
+            fi
+            ng_read_line remote_path || return 130
+            if [[ -n "${remote_path}" ]]; then
+              ng_sync_to_all_nodes "${src_file}" "${remote_path}"
+            fi
+          else
+            while IFS=',' read -r num; do
+              num=$(echo "${num}" | tr -d ' ')
+              if [[ "${num}" =~ ^[0-9]+$ ]]; then
+                target_nodes+=("${num}")
+              fi
+            done <<< "${selection}"
 
-        if [[ -n "${src_file}" && -n "${remote_path}" ]]; then
-          ng_sync_to_all_nodes "${src_file}" "${remote_path}"
+            for node_idx in "${target_nodes[@]}"; do
+              local node_name node_host
+              node_name=$(jq -r ".servers[$((node_idx-1))].name" "${NG_NODES_FILE}" 2>/dev/null)
+              node_host=$(jq -r ".servers[$((node_idx-1))].host" "${NG_NODES_FILE}" 2>/dev/null)
+              if [[ -z "${node_name}" || "${node_name}" == "null" ]]; then
+                continue
+              fi
+
+              if [[ "${NG_LANG}" == "en" ]]; then
+                printf '\nNode %s (%s):\n' "${node_name}" "${node_host}"
+                printf '  Remote target path: '
+              else
+                printf '\n节点 %s (%s)：\n' "${node_name}" "${node_host}"
+                printf '  远程目标路径：'
+              fi
+              ng_read_line remote_path || return 130
+              remote_path="${remote_path:-/tmp/$(basename "${src_file}")}"
+
+              local node_user node_port node_auth node_key
+              node_user=$(jq -r ".servers[$((node_idx-1))].ssh.user // \"root\"" "${NG_NODES_FILE}" 2>/dev/null)
+              node_port=$(jq -r ".servers[$((node_idx-1))].ssh.port // 22" "${NG_NODES_FILE}" 2>/dev/null)
+              node_auth=$(jq -r ".servers[$((node_idx-1))].ssh.auth // \"key\"" "${NG_NODES_FILE}" 2>/dev/null)
+              node_key=$(jq -r ".servers[$((node_idx-1))].ssh.key // \"~/.ssh/id_ed25519\"" "${NG_NODES_FILE}" 2>/dev/null)
+
+              local -a scp_opts=(-o ConnectTimeout=5 -o StrictHostKeyChecking=accept-new -P "${node_port}")
+              if [[ "${node_auth}" == "key" ]]; then
+                scp_opts+=(-i "${node_key}")
+              fi
+
+              if scp "${scp_opts[@]}" "${src_file}" "${node_user}@${node_host}:${remote_path}" 2>/dev/null; then
+                printf '  ✓ %s\n' "$( [[ "${NG_LANG}" == "en" ]] && echo "Synced" || echo "同步成功" )"
+              else
+                printf '  ✗ %s\n' "$( [[ "${NG_LANG}" == "en" ]] && echo "Failed" || echo "失败" )"
+              fi
+            done
+          fi
         fi
         ;;
       8) ng_deploy_ssh_keys ;;
+      9) ng_generate_join_command ;;
       0) return 0 ;;
       *) ng_t invalid_option ;;
     esac

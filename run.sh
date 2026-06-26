@@ -9,7 +9,7 @@ WORK_DIR="$(mktemp -d "${TMP_ROOT%/}/serverharbor-run-XXXXXX")"
 ARCHIVE_PATH="${WORK_DIR}/serverharbor-run.tar.gz"
 EXTRACT_DIR="${WORK_DIR}/extract"
 DATA_ROOT="${SERVERHARBOR_HOME:-${XDG_CONFIG_HOME:-${HOME}/.config}/serverharbor}"
-LANG_CONFIG_FILE="${DATA_ROOT}/config/lang.conf"
+LANG_CONFIG_FILE="${DATA_ROOT}/lang.conf"
 LANGUAGE="${SERVERHARBOR_LANG:-}"
 REFRESH_EXIT_CODE=42
 

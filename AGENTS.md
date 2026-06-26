@@ -62,12 +62,12 @@ These rules are written as the shared baseline for this project family.
 
 This repository is `ServerHarbor`, a Bash-based Linux multi-server operations toolkit.
 
-### Menu Structure (as of v1.0.1)
+### Menu Structure (as of v1.0.0)
 
 Main menu:
 - `[1]` System bootstrap — base packages, Docker, network tuning, system status, report, data migration
 - `[2]` Security — security report, failed logins, web requests, firewall, integrity baseline/verify, watch paths, security score
-- `[3]` Node management — list, add, remove, test SSH, probe, batch execute, sync config, deploy SSH keys
+- `[3]` Node management — list, add, remove, test SSH, probe, batch execute, sync config, deploy SSH keys, generate join command
 - `[4]` Update
 - `[5]` Uninstall (installed mode only)
 - `[0]` Exit
@@ -94,10 +94,13 @@ CLI modes: `--cron-probe`, `--cron-security`, `--cron-alerts`
 - Installer and remover: `install.sh`, `uninstall.sh`
 - Shared helpers: `common.sh`
 - Functional scripts: `bootstrap.sh`, `nodes.sh`, `security.sh`
-- Runtime config: `config/`
-- Generated state: `state/`
-- Generated reports: `reports/`
-- Runtime logs: `logs/`
+- Default config: `serverharbor.conf` (root)
+- Runtime data root: `${NG_DATA_ROOT}/` (flat, no config/ subdirectory)
+- Runtime config: `${NG_DATA_ROOT}/serverharbor.conf`
+- Runtime node config: `${NG_DATA_ROOT}/servers.json`
+- Generated state: `${NG_DATA_ROOT}/state/`
+- Generated reports: `${NG_DATA_ROOT}/reports/`
+- Runtime logs: `${NG_DATA_ROOT}/logs/`
 - Installed code root: `/opt/serverharbor/app`
 - Installed mutable data root: `/opt/serverharbor/data`
 
@@ -114,7 +117,7 @@ CLI modes: `--cron-probe`, `--cron-security`, `--cron-alerts`
 - This project is a Shell toolkit, not a full orchestration platform.
 - Do not introduce centralized service discovery, consensus, or automatic failover without explicit user request.
 - Keep the design lightweight and script-first.
-- Prefer configuration through plain text files under `config/`.
+- Prefer configuration through plain text files. Default config is `serverharbor.conf` at repo root, runtime config is at `${NG_DATA_ROOT}/serverharbor.conf`.
 - Do not define config variables in `common.sh` or `serverharbor.conf` unless they are actively read by at least one function. Orphaned config variables (defined but never read) must be removed.
 
 ## Runtime Model
@@ -122,8 +125,8 @@ CLI modes: `--cron-probe`, `--cron-security`, `--cron-alerts`
 - `menu.sh` is the interactive user entry point.
 - Supported CLI entry points are `menu.sh --cron-probe`, `menu.sh --cron-security`, and `menu.sh --cron-alerts`.
 - Bootstrap and hardening functions may require root privileges.
-- Peer monitoring is file-driven through `config/servers.json`.
-- Integrity scanning is path-driven through `NG_WATCH_PATHS` in `config/serverharbor.conf`.
+- Peer monitoring is file-driven through `${NG_DATA_ROOT}/servers.json`.
+- Integrity scanning is path-driven through `NG_WATCH_PATHS` in `${NG_DATA_ROOT}/serverharbor.conf`.
 - Managed code and mutable user data must stay decoupled. Installer updates may replace `/opt/serverharbor/app`, but must preserve user config and runtime data under `/opt/serverharbor/data`.
 - Before any installer package operation or filesystem write, the script must print the intended actions and require explicit user confirmation.
 - Generated reports and state files may be retained locally for inspection, but logs should stay ignored unless requested otherwise.
@@ -138,7 +141,7 @@ CLI modes: `--cron-probe`, `--cron-security`, `--cron-alerts`
 - The bootstrap menu `[7]` (data migration) is only visible in installed mode. It migrates data from the online directory to the installed directory.
 - After migration, the source directory is renamed to `~/.config/serverharbor.migrated` to prevent duplicate migration and signal that the data has been transferred.
 - If `.migrated` directory already exists, the migration function reports this and skips.
-- Both migration paths detect: `servers.json`, `serverharbor.conf`, `state/`, `reports/`, `backups/`, `logs/`.
+- Both migration paths detect: `servers.json`, `serverharbor.conf`, `state/`, `reports/`, `logs/`.
 
 ## Development Commands
 
@@ -165,7 +168,7 @@ CLI modes: `--cron-probe`, `--cron-security`, `--cron-alerts`
 - Prefer a flat directory structure. Avoid second-level subdirectories unless the volume of files genuinely requires grouping. Merge related shell functions into the same file rather than splitting across many small files.
 - Every function must have a corresponding menu entry or CLI entry point. If a function is not reachable from any menu option or CLI flag, it is dead code and must be deleted. Do not keep "potential" or "future" functions without a wired entry point.
 - Do not add features that are not reflected in the menu UI. If a feature is removed from the menu, its implementation function must also be removed.
-- README, CHANGELOG, and menu descriptions must exactly match the actual available features. Never advertise a feature in docs or UI text that does not exist in the code.
+- README and menu descriptions must exactly match the actual available features. Never advertise a feature in docs or UI text that does not exist in the code.
 - `ng_security_report()` must not duplicate logic from individual scan functions. Keep report generation DRY by reusing existing helpers.
 - `install.sh` and `run.sh` are standalone entry-point scripts (not sourced from `menu.sh`). Some code duplication across them is architecturally unavoidable (e.g., `detect_pkg_manager`, `require_cmd`, `acquire_lock`). Do not try to consolidate these into `common.sh`.
 - Favor readable shell over dense one-liners when a function has side effects.
@@ -218,3 +221,18 @@ CLI modes: `--cron-probe`, `--cron-security`, `--cron-alerts`
 - Tags should use `vX.Y.Z`.
 - Keep release notes focused on user-visible Shell capabilities and operational changes.
 - If adding CI/CD later, document workflow behavior here and in README only when relevant to users.
+
+## Version History
+
+### v1.0.0 (2026-06-26)
+- Initial release
+- System bootstrap (base packages, Docker, network tuning)
+- Security audit (login stats, web attacks, firewall, integrity baseline, security score)
+- Node management (JSON config, SSH, batch commands, config sync, join command)
+- Interactive bilingual menu (Chinese/English)
+- CLI modes: --cron-probe, --cron-security, --cron-alerts
+- Install/uninstall scripts, online run mode
+- System alert threshold detection (CPU/Memory/Disk)
+- jq auto-installation in nodes.sh
+- Node selection for batch operations
+- Detailed beautified reports with sections and summaries

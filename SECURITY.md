@@ -32,5 +32,5 @@ This policy mainly covers:
 
 - bootstrap and hardening logic that changes system configuration
 - peer probing and remote synchronization behavior
-- backup, integrity, and scheduled execution logic
+- integrity monitoring and scheduled execution logic
 - repository-managed scripts and configuration defaults
