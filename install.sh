@@ -393,7 +393,11 @@ migrate_online_data() {
   for sub_dir in state reports backups logs; do
     if [[ -d "${online_dir}/${sub_dir}" ]] && [[ -n "$(ls -A "${online_dir}/${sub_dir}" 2>/dev/null)" ]]; then
       cp -rf "${online_dir}/${sub_dir}/"* "${DATA_ROOT}/${sub_dir}/" 2>/dev/null || true
-      printf '  ✓ %s (%d files)\n' "${sub_dir}" "$(ls -1 "${online_dir}/${sub_dir}" 2>/dev/null | wc -l)"
+      if [[ "${LANGUAGE}" == "en" ]]; then
+        printf '  ✓ %s (%d files)\n' "${sub_dir}" "$(ls -1 "${online_dir}/${sub_dir}" 2>/dev/null | wc -l)"
+      else
+        printf '  ✓ %s（%d 个文件）\n' "${sub_dir}" "$(ls -1 "${online_dir}/${sub_dir}" 2>/dev/null | wc -l)"
+      fi
     fi
   done
 
@@ -411,7 +415,11 @@ acquire_lock() {
   install -m 600 /dev/null "${LOCK_FILE}" 2>/dev/null || true
   exec {lock_fd}>"${LOCK_FILE}"
   if ! flock -n "${lock_fd}" 2>/dev/null; then
-    printf 'Another install/uninstall process is running. Aborting.\n' >&2
+    if [[ "${LANGUAGE}" == "en" ]]; then
+      printf 'Another install/uninstall process is running. Aborting.\n' >&2
+    else
+      printf '另一个安装/卸载进程正在运行，已中止。\n' >&2
+    fi
     exit 1
   fi
 }

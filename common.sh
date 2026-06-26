@@ -43,74 +43,23 @@ NG_C_ERR=""
 NG_C_PANEL=""
 NG_C_PANEL_2=""
 
-ng_trigger_migration() {
-  if [[ "${NG_RUNTIME_MODE}" != "installed" ]]; then
-    if [[ "${NG_LANG}" == "en" ]]; then
-      ng_log "WARN" "Data migration is only available in installed mode."
-      printf '  Run the installed version (shr) to use this feature.\n'
-    else
-      ng_log "WARN" "数据迁移仅在安装模式下可用。"
-      printf '  请运行安装版（shr）使用此功能。\n'
-    fi
-    return 1
-  fi
+ng_has_meaningful_data() {
+  local dir="$1"
+  [[ -f "${dir}/config/servers.json" ]] && return 0
+  [[ -f "${dir}/config/app.conf" ]] && return 0
+  [[ -f "${dir}/config/peers.conf" ]] && return 0
+  [[ -f "${dir}/config/watch.conf" ]] && return 0
+  [[ -d "${dir}/state" ]] && [[ -n "$(ls -A "${dir}/state" 2>/dev/null)" ]] && return 0
+  [[ -d "${dir}/reports" ]] && [[ -n "$(ls -A "${dir}/reports" 2>/dev/null)" ]] && return 0
+  [[ -d "${dir}/backups" ]] && [[ -n "$(ls -A "${dir}/backups" 2>/dev/null)" ]] && return 0
+  [[ -d "${dir}/logs" ]] && [[ -n "$(ls -A "${dir}/logs" 2>/dev/null)" ]] && return 0
+  return 1
+}
 
-  local source_dir="${NG_ONLINE_DATA}"
-  local target_dir="${NG_DATA_ROOT}"
-  local migrated_dir="${NG_ONLINE_DATA}.migrated"
-
-  if [[ -d "${migrated_dir}" ]]; then
-    if [[ "${NG_LANG}" == "en" ]]; then
-      printf '%s\n' "$(ng_color "${NG_C_OK}" "✓ Data was already migrated to ${migrated_dir}")"
-      printf '  If you need to re-migrate, remove or rename that directory first.\n'
-    else
-      printf '%s\n' "$(ng_color "${NG_C_OK}" "✓ 数据已迁移至 ${migrated_dir}")"
-      printf '  如需重新迁移，请先删除或重命名该目录。\n'
-    fi
-    return 0
-  fi
-
-  if [[ ! -d "${source_dir}" ]]; then
-    if [[ "${NG_LANG}" == "en" ]]; then
-      ng_log "WARN" "No online data found at ${source_dir}"
-    else
-      ng_log "WARN" "未找到在线版数据 ${source_dir}"
-    fi
-    return 1
-  fi
-
-  local has_data=0
-  [[ -f "${source_dir}/config/servers.json" ]] && has_data=1
-  [[ -f "${source_dir}/config/app.conf" ]] && has_data=1
-  [[ -f "${source_dir}/config/peers.conf" ]] && has_data=1
-  [[ -f "${source_dir}/config/watch.conf" ]] && has_data=1
-  [[ -d "${source_dir}/state" ]] && [[ -n "$(ls -A "${source_dir}/state" 2>/dev/null)" ]] && has_data=1
-  [[ -d "${source_dir}/reports" ]] && [[ -n "$(ls -A "${source_dir}/reports" 2>/dev/null)" ]] && has_data=1
-  [[ -d "${source_dir}/backups" ]] && [[ -n "$(ls -A "${source_dir}/backups" 2>/dev/null)" ]] && has_data=1
-  [[ -d "${source_dir}/logs" ]] && [[ -n "$(ls -A "${source_dir}/logs" 2>/dev/null)" ]] && has_data=1
-
-  if [[ "${has_data}" -eq 0 ]]; then
-    if [[ "${NG_LANG}" == "en" ]]; then
-      ng_log "WARN" "No meaningful data to migrate from ${source_dir}"
-    else
-      ng_log "WARN" "${source_dir} 中没有可迁移的数据"
-    fi
-    return 1
-  fi
-
-  if [[ "${NG_LANG}" == "en" ]]; then
-    printf '\n  Source: %s\n' "${source_dir}"
-    printf '  Target: %s\n\n' "${target_dir}"
-    printf '  After migration, source will be renamed to:\n'
-    printf '  %s\n\n' "${migrated_dir}"
-    ng_prompt_yes_no "Migrate data from online to installed?" || return 0
-  else
-    printf '\n  源目录: %s\n' "${source_dir}"
-    printf '  目标目录: %s\n\n' "${target_dir}"
-    printf '  迁移完成后，源目录将重命名为：\n'
-    printf '  %s\n\n' "${migrated_dir}"
-    ng_prompt_yes_no "是否将在线版数据迁移到安装版？" || return 0
-  fi
+ng_do_migration() {
+  local source_dir="$1"
+  local target_dir="$2"
+  local migrated_dir="$3"
 
   mkdir -p "${target_dir}/config" "${target_dir}/state" "${target_dir}/logs" "${target_dir}/reports" "${target_dir}/backups"
 
@@ -137,7 +86,11 @@ ng_trigger_migration() {
       local count
       count=$(ls -1 "${source_dir}/${sub_dir}" 2>/dev/null | wc -l)
       cp -rf "${source_dir}/${sub_dir}/"* "${target_dir}/${sub_dir}/" 2>/dev/null || true
-      printf '  %s %s (%d files)\n' "$(ng_color "${NG_C_OK}" "✓")" "${sub_dir}" "${count}"
+      if [[ "${NG_LANG}" == "en" ]]; then
+        printf '  %s %s (%d files)\n' "$(ng_color "${NG_C_OK}" "✓")" "${sub_dir}" "${count}"
+      else
+        printf '  %s %s（%d 个文件）\n' "$(ng_color "${NG_C_OK}" "✓")" "${sub_dir}" "${count}"
+      fi
       ((copied++)) || true
     fi
   done
@@ -161,7 +114,151 @@ ng_trigger_migration() {
     printf '  源目录已重命名为: %s\n' "${migrated_dir}"
   fi
 
-  ng_log "INFO" "Data migrated from ${source_dir} to ${target_dir}, source renamed to ${migrated_dir}"
+  if [[ "${NG_LANG}" == "en" ]]; then
+    ng_log "INFO" "Data migrated from ${source_dir} to ${target_dir}, source renamed to ${migrated_dir}"
+  else
+    ng_log "INFO" "数据已从 ${source_dir} 迁移至 ${target_dir}，源目录重命名为 ${migrated_dir}"
+  fi
+}
+
+ng_trigger_migration() {
+  if [[ "${NG_RUNTIME_MODE}" != "installed" ]]; then
+    if [[ "${NG_LANG}" == "en" ]]; then
+      ng_log "WARN" "Data migration is only available in installed mode."
+      printf '  Run the installed version (shr) to use this feature.\n'
+    else
+      ng_log "WARN" "数据迁移仅在安装模式下可用。"
+      printf '  请运行安装版（shr）使用此功能。\n'
+    fi
+    return 1
+  fi
+
+  local online_dir="${NG_ONLINE_DATA}"
+  local installed_dir="${NG_DATA_ROOT}"
+  local online_migrated="${online_dir}.migrated"
+  local installed_migrated="${installed_dir}.migrated"
+
+  local online_has_data=0
+  local installed_has_data=0
+
+  if [[ -d "${online_dir}" ]] && ng_has_meaningful_data "${online_dir}"; then
+    online_has_data=1
+  fi
+  if [[ -d "${installed_dir}" ]] && ng_has_meaningful_data "${installed_dir}"; then
+    installed_has_data=1
+  fi
+
+  if [[ "${online_has_data}" -eq 0 ]] && [[ "${installed_has_data}" -eq 0 ]]; then
+    if [[ -d "${online_migrated}" ]]; then
+      if [[ "${NG_LANG}" == "en" ]]; then
+        printf '%s\n' "$(ng_color "${NG_C_OK}" "✓ Online data was already migrated to ${online_migrated}")"
+      else
+        printf '%s\n' "$(ng_color "${NG_C_OK}" "✓ 在线版数据已迁移至 ${online_migrated}")"
+      fi
+      return 0
+    fi
+    if [[ "${NG_LANG}" == "en" ]]; then
+      ng_log "WARN" "No data found to migrate in either location."
+    else
+      ng_log "WARN" "两个位置都没有可迁移的数据。"
+    fi
+    return 1
+  fi
+
+  if [[ "${online_has_data}" -eq 1 ]] && [[ "${installed_has_data}" -eq 0 ]]; then
+    if [[ -d "${online_migrated}" ]]; then
+      if [[ "${NG_LANG}" == "en" ]]; then
+        printf '%s\n' "$(ng_color "${NG_C_OK}" "✓ Online data was already migrated to ${online_migrated}")"
+      else
+        printf '%s\n' "$(ng_color "${NG_C_OK}" "✓ 在线版数据已迁移至 ${online_migrated}")"
+      fi
+      return 0
+    fi
+    if [[ "${NG_LANG}" == "en" ]]; then
+      printf '\n  Online data:   %s\n' "${online_dir}"
+      printf '  Installed data: %s (empty)\n\n' "${installed_dir}"
+      ng_prompt_yes_no "Migrate online data → installed?" || return 0
+    else
+      printf '\n  在线版数据:   %s\n' "${online_dir}"
+      printf '  安装版数据:   %s（空）\n\n' "${installed_dir}"
+      ng_prompt_yes_no "是否迁移在线版数据 → 安装版？" || return 0
+    fi
+    ng_do_migration "${online_dir}" "${installed_dir}" "${online_migrated}"
+    return 0
+  fi
+
+  if [[ "${online_has_data}" -eq 0 ]] && [[ "${installed_has_data}" -eq 1 ]]; then
+    if [[ "${NG_LANG}" == "en" ]]; then
+      printf '\n  Installed data: %s\n' "${installed_dir}"
+      printf '  Online data:   %s (empty or migrated)\n\n' "${online_dir}"
+      printf '  No online data to migrate.\n'
+      printf '  Use the online version first to create data, then migrate here.\n'
+    else
+      printf '\n  安装版数据:   %s\n' "${installed_dir}"
+      printf '  在线版数据:   %s（空或已迁移）\n\n' "${online_dir}"
+      printf '  没有在线版数据可迁移。\n'
+      printf '  请先使用在线版产生数据，再执行迁移。\n'
+    fi
+    return 0
+  fi
+
+  if [[ "${NG_LANG}" == "en" ]]; then
+    printf '\n  Both locations have data:\n'
+    printf '    Online data:    %s\n' "${online_dir}"
+    printf '    Installed data: %s\n\n' "${installed_dir}"
+    printf '  Choose migration direction:\n'
+    printf '    [1] Online → Installed (merge online into installed)\n'
+    printf '    [2] Installed → Online (merge installed into online)\n'
+    printf '    [0] Cancel\n'
+  else
+    printf '\n  两处都有数据：\n'
+    printf '    在线版数据:   %s\n' "${online_dir}"
+    printf '    安装版数据:   %s\n\n' "${installed_dir}"
+    printf '  选择迁移方向：\n'
+    printf '    [1] 在线版 → 安装版（合并到安装版）\n'
+    printf '    [2] 安装版 → 在线版（合并到在线版）\n'
+    printf '    [0] 取消\n'
+  fi
+
+  local dir_choice
+  ng_read_line dir_choice || return 130
+
+  case "${dir_choice}" in
+    1)
+      if [[ -d "${online_migrated}" ]]; then
+        if [[ "${NG_LANG}" == "en" ]]; then
+          printf '%s\n' "$(ng_color "${NG_C_OK}" "✓ Online data was already migrated to ${online_migrated}")"
+        else
+          printf '%s\n' "$(ng_color "${NG_C_OK}" "✓ 在线版数据已迁移至 ${online_migrated}")"
+        fi
+        return 0
+      fi
+      if [[ "${NG_LANG}" == "en" ]]; then
+        printf '\n  Migrating: %s → %s\n\n' "${online_dir}" "${installed_dir}"
+      else
+        printf '\n  迁移方向: %s → %s\n\n' "${online_dir}" "${installed_dir}"
+      fi
+      ng_do_migration "${online_dir}" "${installed_dir}" "${online_migrated}"
+      ;;
+    2)
+      if [[ "${NG_LANG}" == "en" ]]; then
+        printf '\n  Migrating: %s → %s\n\n' "${installed_dir}" "${online_dir}"
+      else
+        printf '\n  迁移方向: %s → %s\n\n' "${installed_dir}" "${online_dir}"
+      fi
+      ng_do_migration "${installed_dir}" "${online_dir}" "${installed_migrated}"
+      ;;
+    0)
+      if [[ "${NG_LANG}" == "en" ]]; then
+        printf 'Cancelled.\n'
+      else
+        printf '已取消。\n'
+      fi
+      ;;
+    *)
+      ng_t invalid_option
+      ;;
+  esac
 }
 
 ng_init_environment() {
@@ -187,7 +284,11 @@ ng_init_environment() {
   if [[ -f "${NG_CONFIG_FILE}" ]]; then
     # Basic config file validation - only allow KEY=VALUE patterns
     if grep -qEv '^\s*(#|$|[A-Z_]+=)' "${NG_CONFIG_FILE}" 2>/dev/null; then
-      ng_log "WARN" "Config file contains unexpected syntax. Using defaults."
+      if [[ "${NG_LANG}" == "en" ]]; then
+        ng_log "WARN" "Config file contains unexpected syntax. Using defaults."
+      else
+        ng_log "WARN" "配置文件包含异常语法，已使用默认值。"
+      fi
     else
       # shellcheck disable=SC1090
       source "${NG_CONFIG_FILE}"

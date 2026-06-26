@@ -65,7 +65,11 @@ run_cli_mode() {
       return 0
       ;;
     *)
-      printf 'Unknown argument: %s\n' "$1"
+      if [[ "${NG_LANG}" == "en" ]]; then
+        printf 'Unknown argument: %s\n' "$1"
+      else
+        printf '未知参数: %s\n' "$1"
+      fi
       exit 1
       ;;
   esac

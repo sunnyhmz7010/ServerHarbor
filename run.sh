@@ -277,7 +277,11 @@ main() {
     local current_retry="${SERVERHARBOR_REFRESH_RETRY:-0}"
 
     if [[ "${current_retry}" -ge "${max_retries}" ]]; then
-      printf 'Maximum refresh retries (%d) reached. Aborting.\n' "${max_retries}" >&2
+      if [[ "${LANGUAGE}" == "en" ]]; then
+        printf 'Maximum refresh retries (%d) reached. Aborting.\n' "${max_retries}" >&2
+      else
+        printf '已达到最大刷新重试次数（%d），已中止。\n' "${max_retries}" >&2
+      fi
       exit 1
     fi
 
@@ -289,7 +293,7 @@ main() {
     exec bash "${refresh_script}" "$@"
   fi
 
-  if [[ -f "/opt/serverharbor/.serverharbor-install" ]] && [[ -d "${DATA_ROOT}" ]] && confirm_remove_data; then
+  if [[ -d "${DATA_ROOT}" ]] && confirm_remove_data; then
     t removing_data
     rm -rf "${DATA_ROOT}"
   fi

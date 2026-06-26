@@ -59,12 +59,20 @@ ng_add_node() {
   local tags="${7:-}"
 
   if [[ -z "${name}" ]]; then
-    ng_log "ERROR" "Node name is required."
+    if [[ "${NG_LANG}" == "en" ]]; then
+      ng_log "ERROR" "Node name is required."
+    else
+      ng_log "ERROR" "节点名称不能为空。"
+    fi
     return 1
   fi
 
   if [[ -z "${host}" ]]; then
-    ng_log "ERROR" "Host is required."
+    if [[ "${NG_LANG}" == "en" ]]; then
+      ng_log "ERROR" "Host is required."
+    else
+      ng_log "ERROR" "主机地址不能为空。"
+    fi
     return 1
   fi
 
@@ -270,31 +278,31 @@ ng_test_all_nodes() {
 
     case "${status}" in
       OK)
-        detail="✓ Connected"
+        if [[ "${NG_LANG}" == "en" ]]; then detail="✓ Connected"; else detail="✓ 已连接"; fi
         status="OK"
         ;;
       CONN_REFUSED)
-        detail="SSH port closed"
+        if [[ "${NG_LANG}" == "en" ]]; then detail="SSH port closed"; else detail="SSH 端口关闭"; fi
         status="FAIL"
         ;;
       TIMEOUT)
-        detail="Connection timeout"
+        if [[ "${NG_LANG}" == "en" ]]; then detail="Connection timeout"; else detail="连接超时"; fi
         status="FAIL"
         ;;
       AUTH_FAILED)
-        detail="Authentication failed"
+        if [[ "${NG_LANG}" == "en" ]]; then detail="Authentication failed"; else detail="认证失败"; fi
         status="FAIL"
         ;;
       KEY_MISMATCH)
-        detail="Host key mismatch"
+        if [[ "${NG_LANG}" == "en" ]]; then detail="Host key mismatch"; else detail="主机密钥不匹配"; fi
         status="FAIL"
         ;;
       KEY_NOT_FOUND)
-        detail="SSH key not found"
+        if [[ "${NG_LANG}" == "en" ]]; then detail="SSH key not found"; else detail="SSH 密钥未找到"; fi
         status="FAIL"
         ;;
       *)
-        detail="Unknown error"
+        if [[ "${NG_LANG}" == "en" ]]; then detail="Unknown error"; else detail="未知错误"; fi
         status="FAIL"
         ;;
     esac
@@ -541,7 +549,7 @@ ng_collect_local_probe() {
     printf '%s\n' "${state_file}"
   else
     rm -f "${tmp_file}" 2>/dev/null
-    ng_log "ERROR" "Failed to write state file"
+    ng_log "ERROR" "$( [[ "${NG_LANG}" == "en" ]] && echo "Failed to write state file" || echo "写入状态文件失败" )"
     return 1
   fi
 }
@@ -577,8 +585,13 @@ ng_probe_all_peers() {
   local output_file="${NG_STATE_DIR}/${NG_HOSTNAME}-peers.state"
 
   {
-    printf 'Peer Alias       Peer Host                ICMP     SSH Port   Latency\n'
-    printf '%s\n' '---------------------------------------------------------------------'
+    if [[ "${NG_LANG}" == "en" ]]; then
+      printf 'Peer Alias       Peer Host                ICMP     SSH Port   Latency\n'
+      printf '%s\n' '---------------------------------------------------------------------'
+    else
+      printf '节点别名           主机地址                 ICMP     SSH端口    延迟\n'
+      printf '%s\n' '---------------------------------------------------------------------'
+    fi
 
     if [[ -f "${NG_DATA_ROOT}/config/servers.json" ]] && command -v jq >/dev/null 2>&1; then
       jq -r '.servers[] | select(.enabled != false) | "\(.name),\(.host)"' "${NG_DATA_ROOT}/config/servers.json" 2>/dev/null | while IFS=',' read -r peer_alias peer_host; do

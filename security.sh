@@ -457,34 +457,54 @@ ng_security_score() {
   
   if [[ "${EUID}" -eq 0 ]]; then
     score=$((score - 10))
-    issues+=("Running as root (-10)")
+    if [[ "${NG_LANG}" == "en" ]]; then
+      issues+=("Running as root (-10)")
+    else
+      issues+=("以 root 身份运行 (-10)")
+    fi
   fi
-  
+
   if ! grep -qE '^[^#]*PasswordAuthentication no' /etc/ssh/sshd_config 2>/dev/null; then
     score=$((score - 15))
-    issues+=("SSH password authentication enabled (-15)")
+    if [[ "${NG_LANG}" == "en" ]]; then
+      issues+=("SSH password authentication enabled (-15)")
+    else
+      issues+=("SSH 密码认证已启用 (-15)")
+    fi
   fi
-  
+
   if grep -qE '^[^#]*PermitRootLogin yes' /etc/ssh/sshd_config 2>/dev/null; then
     score=$((score - 20))
-    issues+=("Root login permitted (-20)")
+    if [[ "${NG_LANG}" == "en" ]]; then
+      issues+=("Root login permitted (-20)")
+    else
+      issues+=("允许 root 登录 (-20)")
+    fi
   fi
-  
+
   if ! command -v ufw >/dev/null 2>&1 && ! command -v firewall-cmd >/dev/null 2>&1 && ! command -v iptables >/dev/null 2>&1; then
     score=$((score - 25))
-    issues+=("No firewall detected (-25)")
+    if [[ "${NG_LANG}" == "en" ]]; then
+      issues+=("No firewall detected (-25)")
+    else
+      issues+=("未检测到防火墙 (-25)")
+    fi
   fi
-  
+
   local auth_log=""
   [[ -f /var/log/auth.log ]] && auth_log="/var/log/auth.log"
   [[ -f /var/log/secure ]] && auth_log="/var/log/secure"
-  
+
   if [[ -n "${auth_log}" ]]; then
     local failed_count
     failed_count=$(grep -c "Failed password" "${auth_log}" 2>/dev/null || echo 0)
     if [[ "${failed_count}" -gt 100 ]]; then
       score=$((score - 10))
-      issues+=("High number of failed login attempts: ${failed_count} (-10)")
+      if [[ "${NG_LANG}" == "en" ]]; then
+        issues+=("High number of failed login attempts: ${failed_count} (-10)")
+      else
+        issues+=("大量失败登录尝试: ${failed_count} 次 (-10)")
+      fi
     fi
   fi
   
