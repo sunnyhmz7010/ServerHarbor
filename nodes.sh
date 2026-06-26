@@ -843,13 +843,15 @@ ng_node_menu() {
           done <<< "${selection}"
 
           if [[ "${NG_LANG}" == "en" ]]; then
-            ng_print_header "Node Probe"
-            printf '%-16s %-24s %-8s %-10s %s\n' "Alias" "Host" "ICMP" "SSH" "Latency"
-            printf '%s\n' '---------------------------------------------------------------------'
+            ng_report_header "🛰 ServerHarbor Probe Report"
+            ng_report_meta "Generated At" "$(ng_timestamp)"
+            ng_report_meta "Host" "${NG_HOSTNAME}"
+            ng_report_section_start "Peer Matrix"
           else
-            ng_print_header "节点探测"
-            printf '%-16s %-24s %-8s %-10s %s\n' "别名" "主机" "ICMP" "SSH" "延迟"
-            printf '%s\n' '---------------------------------------------------------------------'
+            ng_report_header "🛰 ServerHarbor 节点探测报告"
+            ng_report_meta "生成时间" "$(ng_timestamp)"
+            ng_report_meta "主机" "${NG_HOSTNAME}"
+            ng_report_section_start "节点矩阵"
           fi
 
           for node_idx in "${target_nodes[@]}"; do
@@ -857,16 +859,36 @@ ng_node_menu() {
             node_name=$(jq -r ".servers[$((node_idx-1))].name" "${NG_NODES_FILE}" 2>/dev/null)
             node_host=$(jq -r ".servers[$((node_idx-1))].host" "${NG_NODES_FILE}" 2>/dev/null)
             if [[ -z "${node_name}" || "${node_name}" == "null" ]]; then continue; fi
-            ng_probe_single_peer "${node_host}" "${node_name}"
+
+            local ping_output ping_result ssh_result latency
+            ping_output="$(ping -c 1 -W "${NG_PROBE_TIMEOUT}" "${node_host}" 2>/dev/null)" || true
+            if [[ -n "${ping_output}" ]] && [[ "${ping_output}" == *"bytes from"* ]]; then
+              ping_result="up"
+              latency="$(echo "${ping_output}" | awk -F'time=' 'END {print $2}' | awk '{print $1}' || echo n/a)"
+            else
+              ping_result="down"
+              latency="timeout"
+            fi
+
+            if nc -z -w "${NG_PROBE_TIMEOUT}" "${node_host}" 22 2>/dev/null; then
+              ssh_result="open"
+            elif timeout "${NG_PROBE_TIMEOUT}" bash -c "cat < /dev/null > /dev/tcp/${node_host}/22" >/dev/null 2>&1; then
+              ssh_result="open"
+            else
+              ssh_result="closed"
+            fi
+
+            printf '%s   %-16s %-24s %-8s %-10s %s\n' "$(ng_color "${NG_C_PANEL}" "║")" "${node_name}" "${node_host}" "${ping_result}" "${ssh_result}" "${latency}"
           done
 
           local state_file
           state_file="$(ng_collect_local_probe)"
-          if [[ "${NG_LANG}" == "en" ]]; then
-            printf '\nLocal snapshot saved to: %s\n' "${state_file}"
-          else
-            printf '\n本机快照已保存至: %s\n' "${state_file}"
-          fi
+
+          ng_report_section_start "$( [[ "${NG_LANG}" == "en" ]] && echo "Local Snapshot" || echo "本机快照" )"
+          while IFS= read -r line; do
+            printf '%s   %s\n' "$(ng_color "${NG_C_PANEL}" "║")" "${line}"
+          done < "${state_file}"
+          ng_report_footer
         fi
         ;;
       4)
