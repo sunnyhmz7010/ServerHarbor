@@ -232,8 +232,8 @@ ng_setup_mutual_nodes() {
   fi
 
   if [[ -z "${remote_ip}" ]]; then
-    if [[ "${NG_LANG}" == "en" ]]; then ng_log "ERROR" "IP is required."; else ng_log "ERROR" "IP 不能为空。"; fi
-    return 1
+    if [[ "${NG_LANG}" == "en" ]]; then printf 'IP is required.\n'; else printf 'IP 不能为空。\n'; fi
+    return 0
   fi
 
   if [[ "${NG_LANG}" == "en" ]]; then printf 'SSH port (default 22): '; else printf 'SSH 端口（默认 22）：'; fi
@@ -708,11 +708,14 @@ ng_remote_execute() {
     node_names+=("${name}")
     ((idx++)) || true
   done < <(jq -r '.servers[] | select(.enabled != false) | "\(.name)\t\(.host)"' "${NG_NODES_FILE}" 2>/dev/null)
+  printf '  [0] %s\n' "$( [[ "${NG_LANG}" == "en" ]] && echo "Back" || echo "返回" )"
 
   printf '\n'
   if [[ "${NG_LANG}" == "en" ]]; then printf 'Select node (number): '; else printf '选择节点（输入编号）：'; fi
   local sel
   ng_read_line sel || return 130
+
+  if [[ "${sel}" == "0" ]]; then return 0; fi
 
   if [[ -z "${sel}" ]] || ! [[ "${sel}" =~ ^[0-9]+$ ]] || [[ "${sel}" -lt 1 ]] || [[ "${sel}" -gt "${idx}" ]]; then
     if [[ "${NG_LANG}" == "en" ]]; then printf 'Invalid selection.\n'; else printf '无效选择。\n'; fi
@@ -881,7 +884,5 @@ ng_node_menu() {
       0) return 0 ;;
       *) ng_t invalid_option ;;
     esac
-
-    ng_press_enter || return 130
   done
 }
