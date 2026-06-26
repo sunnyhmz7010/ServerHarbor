@@ -305,19 +305,23 @@ ng_run_on_all_nodes() {
   fi
 
   if [[ "${NG_LANG}" == "en" ]]; then
-    ng_print_header "Batch Command Execution"
-    printf 'Command: %s\n\n' "${command}"
-    printf '%-20s %-10s %s\n' "NODE" "STATUS" "OUTPUT"
-    printf '%s\n' '---------------------------------------------------------------------'
+    ng_report_header "⚡ Batch Execute"
+    ng_report_meta "Generated At" "$(ng_timestamp)"
+    ng_report_meta "Host" "${NG_HOSTNAME}"
+    ng_report_meta "Command" "${command}"
+    ng_report_section_start "Results"
   else
-    ng_print_header "批量执行命令"
-    printf '命令: %s\n\n' "${command}"
-    printf '%-20s %-10s %s\n' "节点" "状态" "输出"
-    printf '%s\n' '---------------------------------------------------------------------'
+    ng_report_header "⚡ 批量执行"
+    ng_report_meta "生成时间" "$(ng_timestamp)"
+    ng_report_meta "主机" "${NG_HOSTNAME}"
+    ng_report_meta "命令" "${command}"
+    ng_report_section_start "执行结果"
   fi
 
+  local total=0 passed=0 failed=0
+
   {
-    jq -c '.servers[]' "${NG_NODES_FILE}" 2>/dev/null | while read -r node; do
+    while read -r node; do
       local name host user port auth key
       name=$(echo "${node}" | jq -r '.name')
       host=$(echo "${node}" | jq -r '.host')
@@ -337,15 +341,20 @@ ng_run_on_all_nodes() {
       else
         output=$(ssh "${ssh_opts[@]}" "${user}@${host}" "${command}" 2>&1) && status="OK" || status="FAIL"
       fi
-      printf '%-20s %-10s %s\n' "${name}" "${status}" "$(echo "${output}" | head -1)"
-    done
+      local first_line
+      first_line=$(echo "${output}" | head -1)
+      printf '%s   %-20s %-10s %s\n' "$(ng_color "${NG_C_PANEL}" "║")" "${name}" "${status}" "${first_line}"
+
+      if [[ "${status}" == "OK" ]]; then ((passed++)) || true; else ((failed++)) || true; fi
+      ((total++)) || true
+    done < <(jq -c '.servers[]' "${NG_NODES_FILE}" 2>/dev/null)
   } | tee "${output_file}"
 
-  if [[ "${NG_LANG}" == "en" ]]; then
-    printf '\nResults saved to: %s\n' "${output_file}"
-  else
-    printf '\n结果已保存至: %s\n' "${output_file}"
-  fi
+  ng_report_summary_start "$( [[ "${NG_LANG}" == "en" ]] && echo "Summary" || echo "摘要" )"
+  ng_report_summary_kv "$([[ "${NG_LANG}" == "en" ]] && echo "Total:" || echo "总计:")" "${total}"
+  ng_report_summary_kv "$([[ "${NG_LANG}" == "en" ]] && echo "Passed:" || echo "通过:")" "${passed}"
+  ng_report_summary_kv "$([[ "${NG_LANG}" == "en" ]] && echo "Failed:" || echo "失败:")" "${failed}"
+  ng_report_footer
 }
 
 ng_collect_local_probe() {
@@ -929,16 +938,20 @@ ng_node_menu() {
             done <<< "${selection}"
 
             if [[ "${NG_LANG}" == "en" ]]; then
-              ng_print_header "Batch Execute"
-              printf 'Command: %s\n\n' "${cmd}"
-              printf '%-20s %-10s %s\n' "NODE" "STATUS" "OUTPUT"
-              printf '%s\n' '---------------------------------------------------------------------'
+              ng_report_header "⚡ Batch Execute"
+              ng_report_meta "Generated At" "$(ng_timestamp)"
+              ng_report_meta "Host" "${NG_HOSTNAME}"
+              ng_report_meta "Command" "${cmd}"
+              ng_report_section_start "Results"
             else
-              ng_print_header "批量执行"
-              printf '命令: %s\n\n' "${cmd}"
-              printf '%-20s %-10s %s\n' "节点" "状态" "输出"
-              printf '%s\n' '---------------------------------------------------------------------'
+              ng_report_header "⚡ 批量执行"
+              ng_report_meta "生成时间" "$(ng_timestamp)"
+              ng_report_meta "主机" "${NG_HOSTNAME}"
+              ng_report_meta "命令" "${cmd}"
+              ng_report_section_start "执行结果"
             fi
+
+            local total=0 passed=0 failed=0
 
             for node_idx in "${target_nodes[@]}"; do
               local node_name node_host node_user node_port node_auth node_key
@@ -959,8 +972,19 @@ ng_node_menu() {
               else
                 output=$(ssh "${ssh_opts[@]}" "${node_user}@${node_host}" "${cmd}" 2>&1) && status="OK" || status="FAIL"
               fi
-              printf '%-20s %-10s %s\n' "${node_name}" "${status}" "$(echo "${output}" | head -1)"
+              local first_line
+              first_line=$(echo "${output}" | head -1)
+              printf '%s   %-20s %-10s %s\n' "$(ng_color "${NG_C_PANEL}" "║")" "${node_name}" "${status}" "${first_line}"
+
+              if [[ "${status}" == "OK" ]]; then ((passed++)) || true; else ((failed++)) || true; fi
+              ((total++)) || true
             done
+
+            ng_report_summary_start "$( [[ "${NG_LANG}" == "en" ]] && echo "Summary" || echo "摘要" )"
+            ng_report_summary_kv "$([[ "${NG_LANG}" == "en" ]] && echo "Total:" || echo "总计:")" "${total}"
+            ng_report_summary_kv "$([[ "${NG_LANG}" == "en" ]] && echo "Passed:" || echo "通过:")" "${passed}"
+            ng_report_summary_kv "$([[ "${NG_LANG}" == "en" ]] && echo "Failed:" || echo "失败:")" "${failed}"
+            ng_report_footer
           fi
         fi
         ;;
