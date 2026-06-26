@@ -50,7 +50,7 @@ ServerHarbor 的目标，就是用一个可以直接在 Linux 上运行的 Shell
 
 ### 🛰 节点管理
 
-- 通过 `config/servers.json` 管理节点（兼容旧版 `config/peers.conf`）
+- 通过 `config/servers.json` 管理节点
 - 检查节点 ICMP、SSH 端口和延迟
 - 批量在多台服务器上执行命令
 - 配置文件同步（去中心化）
@@ -103,9 +103,7 @@ chmod +x menu.sh
 
 3. 首次使用前，建议先检查配置
 
-- `/opt/serverharbor/data/config/app.conf`
-- `/opt/serverharbor/data/config/peers.conf`
-- `/opt/serverharbor/data/config/watch.conf`
+- `/opt/serverharbor/data/config/serverharbor.conf`
 
 ### 💻 一条命令直接运行
 
@@ -202,14 +200,6 @@ JSON 格式（首选）：
 }
 ```
 
-也兼容旧版 CSV 格式（`config/peers.conf`）：
-
-```text
-# alias,host
-hk-01,203.0.113.10
-sg-01,198.51.100.20
-```
-
 运行探测后会：
 
 - 检查节点 ICMP 是否可达
@@ -226,11 +216,7 @@ sg-01,198.51.100.20
 - 防火墙状态查看
 - 文件完整性基线创建与校验
 
-完整性监控路径配置在：
-
-```text
-config/watch.conf
-```
+完整性监控路径配置在 `serverharbor.conf` 的 `NG_WATCH_PATHS` 变量中。
 
 ## 🧠 功能细节
 
@@ -271,9 +257,7 @@ ServerHarbor/
 ├─ nodes.sh                     # 节点管理（JSON 配置、SSH、探测、批量操作）
 ├─ security.sh                  # 安全巡检（登录、Web 攻击、防火墙、完整性）
 ├─ config/
-│  ├─ app.conf                  # 全局运行配置（告警阈值等）
-│  ├─ peers.conf                # 旧版节点配置（CSV 兼容格式）
-│  └─ watch.conf                # 完整性监控路径
+│  └─ serverharbor.conf        # 全局运行配置（探测超时、告警阈值、监控路径）
 ├─ install.sh                   # 安装脚本
 ├─ run.sh                       # 在线运行脚本
 ├─ uninstall.sh                 # 卸载脚本

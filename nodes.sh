@@ -598,11 +598,6 @@ ng_probe_all_peers() {
         [[ -n "${peer_alias}" && -n "${peer_host}" ]] || continue
         ng_probe_single_peer "${peer_host}" "${peer_alias}"
       done
-    else
-      while IFS=',' read -r peer_alias peer_host; do
-        [[ -n "${peer_alias}" && -n "${peer_host}" ]] || continue
-        ng_probe_single_peer "${peer_host}" "${peer_alias}"
-      done < <(ng_read_peers)
     fi
   } | tee "${output_file}"
 

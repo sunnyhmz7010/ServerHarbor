@@ -121,29 +121,28 @@ ng_firewall_summary() {
 ng_integrity_create_baseline() {
   local baseline_file="${NG_INTEGRITY_DB}"
 
-  [[ -f "${NG_WATCH_FILE}" ]] || {
+  if [[ -z "${NG_WATCH_PATHS:-}" ]]; then
     if [[ "${NG_LANG}" == "en" ]]; then
-      printf 'Watch file is missing: %s\n' "${NG_WATCH_FILE}"
+      printf 'No watch paths configured. Set NG_WATCH_PATHS in serverharbor.conf.\n'
     else
-      printf '监控路径配置文件不存在：%s\n' "${NG_WATCH_FILE}"
+      printf '未配置监控路径，请在 serverharbor.conf 中设置 NG_WATCH_PATHS。\n'
     fi
     return 1
-  }
+  fi
 
   if [[ "${NG_LANG}" == "en" ]]; then
     ng_print_header "Creating Integrity Baseline"
-    printf 'Scanning paths defined in: %s\n\n' "${NG_WATCH_FILE}"
+    printf 'Scanning paths: %s\n\n' "${NG_WATCH_PATHS}"
   else
     ng_print_header "创建完整性基线"
-    printf '扫描路径配置：%s\n\n' "${NG_WATCH_FILE}"
+    printf '扫描路径: %s\n\n' "${NG_WATCH_PATHS}"
   fi
 
   : > "${baseline_file}"
   local total_files=0
   local skipped_paths=0
-  
-  while IFS= read -r watch_path; do
-    [[ -n "${watch_path}" && "${watch_path}" != \#* ]] || continue
+
+  for watch_path in ${NG_WATCH_PATHS}; do
     if [[ -e "${watch_path}" ]]; then
       if [[ -r "${watch_path}" ]]; then
         local file_count
@@ -171,7 +170,7 @@ ng_integrity_create_baseline() {
       fi
       ((skipped_paths++)) || true
     fi
-  done < "${NG_WATCH_FILE}"
+  done
   
   printf '\n'
   if [[ "${NG_LANG}" == "en" ]]; then
@@ -334,13 +333,12 @@ ng_manage_watch_paths() {
       printf '\n当前监控路径：\n'
     fi
 
-    if [[ -f "${NG_WATCH_FILE}" ]]; then
+    if [[ -n "${NG_WATCH_PATHS:-}" ]]; then
       local line_num=1
-      while IFS= read -r path; do
-        [[ -n "${path}" && "${path}" != \#* ]] || continue
+      for path in ${NG_WATCH_PATHS}; do
         printf '  [%d] %s\n' "${line_num}" "${path}"
         ((line_num++)) || true
-      done < "${NG_WATCH_FILE}"
+      done
     else
       if [[ "${NG_LANG}" == "en" ]]; then
         printf '  (No paths configured)\n'
@@ -378,11 +376,8 @@ ng_manage_watch_paths() {
 
         if [[ -n "${new_path}" ]]; then
           if [[ -e "${new_path}" ]]; then
-            # Create watch file if it doesn't exist
-            if [[ ! -f "${NG_WATCH_FILE}" ]]; then
-              printf '# One path per line for integrity scan\n' > "${NG_WATCH_FILE}"
-            fi
-            echo "${new_path}" >> "${NG_WATCH_FILE}"
+            NG_WATCH_PATHS="${NG_WATCH_PATHS} ${new_path}"
+            sed -i 's|^NG_WATCH_PATHS=.*|NG_WATCH_PATHS="'"${NG_WATCH_PATHS}"'"|' "${NG_CONFIG_FILE}" 2>/dev/null || true
             if [[ "${NG_LANG}" == "en" ]]; then
               printf 'Path added: %s\n' "${new_path}"
             else
@@ -398,22 +393,25 @@ ng_manage_watch_paths() {
         fi
         ;;
       2)
-        if [[ ! -f "${NG_WATCH_FILE}" ]] || [[ -z "$(grep -Ev '^\s*#|^\s*$' "${NG_WATCH_FILE}" 2>/dev/null)" ]]; then
+        if [[ -z "${NG_WATCH_PATHS:-}" ]]; then
           if [[ "${NG_LANG}" == "en" ]]; then
             printf 'No paths to remove.\n'
           else
             printf '没有可删除的路径。\n'
           fi
         else
+          local -a paths_array=(${NG_WATCH_PATHS})
           if [[ "${NG_LANG}" == "en" ]]; then
-            printf 'Enter line number to remove: '
+            printf 'Enter path number to remove (1-%d): ' "${#paths_array[@]}"
           else
-            printf '输入要删除的行号：'
+            printf '输入要删除的路径编号（1-%d）：' "${#paths_array[@]}"
           fi
-          local line_num
-          ng_read_line line_num || return 130
-          if [[ "${line_num}" =~ ^[0-9]+$ ]]; then
-            sed -i "${line_num}d" "${NG_WATCH_FILE}"
+          local remove_num
+          ng_read_line remove_num || return 130
+          if [[ "${remove_num}" =~ ^[0-9]+$ ]] && [[ "${remove_num}" -ge 1 ]] && [[ "${remove_num}" -le "${#paths_array[@]}" ]]; then
+            unset 'paths_array[remove_num-1]'
+            NG_WATCH_PATHS="${paths_array[*]}"
+            sed -i 's|^NG_WATCH_PATHS=.*|NG_WATCH_PATHS="'"${NG_WATCH_PATHS}"'"|' "${NG_CONFIG_FILE}" 2>/dev/null || true
             if [[ "${NG_LANG}" == "en" ]]; then
               printf 'Path removed.\n'
             else
@@ -423,12 +421,8 @@ ng_manage_watch_paths() {
         fi
         ;;
       3)
-        cat > "${NG_WATCH_FILE}" <<'EOF'
-# One path per line for integrity scan
-/etc
-/var/www
-/root
-EOF
+        NG_WATCH_PATHS="/etc /var/www /root"
+        sed -i 's|^NG_WATCH_PATHS=.*|NG_WATCH_PATHS="'"${NG_WATCH_PATHS}"'"|' "${NG_CONFIG_FILE}" 2>/dev/null || true
         if [[ "${NG_LANG}" == "en" ]]; then
           printf 'Reset to default paths.\n'
         else

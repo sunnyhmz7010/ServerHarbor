@@ -26,9 +26,7 @@ NG_LOG_DIR="${NG_DATA_ROOT}/logs"
 NG_REPORT_DIR="${NG_DATA_ROOT}/reports"
 NG_STATE_DIR="${NG_DATA_ROOT}/state"
 NG_TMP_DIR="${NG_DATA_ROOT}/tmp"
-NG_CONFIG_FILE="${NG_CONFIG_DIR}/app.conf"
-NG_PEERS_FILE="${NG_CONFIG_DIR}/peers.conf"
-NG_WATCH_FILE="${NG_CONFIG_DIR}/watch.conf"
+NG_CONFIG_FILE="${NG_CONFIG_DIR}/serverharbor.conf"
 NG_INTEGRITY_DB="${NG_STATE_DIR}/integrity.sha256"
 NG_DEFAULT_CONFIG_DIR="${NG_PROJECT_ROOT}/config"
 NG_COLOR_ENABLED=0
@@ -46,9 +44,7 @@ NG_C_PANEL_2=""
 ng_has_meaningful_data() {
   local dir="$1"
   [[ -f "${dir}/config/servers.json" ]] && return 0
-  [[ -f "${dir}/config/app.conf" ]] && return 0
-  [[ -f "${dir}/config/peers.conf" ]] && return 0
-  [[ -f "${dir}/config/watch.conf" ]] && return 0
+  [[ -f "${dir}/config/serverharbor.conf" ]] && return 0
   [[ -d "${dir}/state" ]] && [[ -n "$(ls -A "${dir}/state" 2>/dev/null)" ]] && return 0
   [[ -d "${dir}/reports" ]] && [[ -n "$(ls -A "${dir}/reports" 2>/dev/null)" ]] && return 0
   [[ -d "${dir}/backups" ]] && [[ -n "$(ls -A "${dir}/backups" 2>/dev/null)" ]] && return 0
@@ -65,7 +61,7 @@ ng_do_migration() {
 
   local copied=0
 
-  for conf_name in servers.json app.conf peers.conf watch.conf; do
+  for conf_name in servers.json serverharbor.conf; do
     if [[ -f "${source_dir}/config/${conf_name}" ]]; then
       if [[ -f "${target_dir}/config/${conf_name}" ]]; then
         if [[ "${NG_LANG}" == "en" ]]; then
@@ -299,6 +295,7 @@ ng_init_environment() {
   : "${NG_ALERT_CPU_THRESHOLD:=80}"
   : "${NG_ALERT_MEM_THRESHOLD:=80}"
   : "${NG_ALERT_DISK_THRESHOLD:=90}"
+  : "${NG_WATCH_PATHS:=/etc /var/www /root}"
 }
 
 ng_init_theme() {
@@ -529,27 +526,19 @@ ng_read_line() {
 }
 
 ng_seed_default_configs() {
-  local config_name
-  for config_name in app.conf peers.conf watch.conf; do
-    if [[ ! -f "${NG_CONFIG_DIR}/${config_name}" && -f "${NG_DEFAULT_CONFIG_DIR}/${config_name}" ]]; then
-      cp "${NG_DEFAULT_CONFIG_DIR}/${config_name}" "${NG_CONFIG_DIR}/${config_name}"
-    fi
-  done
+  if [[ ! -f "${NG_CONFIG_DIR}/serverharbor.conf" && -f "${NG_DEFAULT_CONFIG_DIR}/serverharbor.conf" ]]; then
+    cp "${NG_DEFAULT_CONFIG_DIR}/serverharbor.conf" "${NG_CONFIG_DIR}/serverharbor.conf"
+  fi
 
-  ng_cleanup_legacy_sample_peers
-}
-
-ng_cleanup_legacy_sample_peers() {
-  [[ -f "${NG_PEERS_FILE}" ]] || return 0
-
-  if grep -qx 'alpha,192.168.1.10' "${NG_PEERS_FILE}" \
-    && grep -qx 'beta,192.168.1.11' "${NG_PEERS_FILE}" \
-    && [[ "$(grep -Evc '^\s*#|^\s*$' "${NG_PEERS_FILE}")" -eq 2 ]]; then
-    cat > "${NG_PEERS_FILE}" <<'EOF'
-# alias,host
-# hk-01,203.0.113.10
-# sg-01,198.51.100.20
-EOF
+  if [[ -f "${NG_CONFIG_DIR}/app.conf" ]]; then
+    cat "${NG_CONFIG_DIR}/app.conf" >> "${NG_CONFIG_DIR}/serverharbor.conf" 2>/dev/null || true
+    rm -f "${NG_CONFIG_DIR}/app.conf"
+  fi
+  if [[ -f "${NG_CONFIG_DIR}/watch.conf" ]]; then
+    rm -f "${NG_CONFIG_DIR}/watch.conf"
+  fi
+  if [[ -f "${NG_CONFIG_DIR}/peers.conf" ]]; then
+    rm -f "${NG_CONFIG_DIR}/peers.conf"
   fi
 }
 
@@ -906,20 +895,23 @@ ng_install_base_packages() {
 }
 
 ng_read_peers() {
-  [[ -f "${NG_PEERS_FILE}" ]] || return 0
-  grep -Ev '^\s*#|^\s*$' "${NG_PEERS_FILE}" || true
+  if [[ -f "${NG_DATA_ROOT}/config/servers.json" ]] && command -v jq >/dev/null 2>&1; then
+    jq -r '.servers[] | select(.enabled != false) | "\(.name),\(.host)"' "${NG_DATA_ROOT}/config/servers.json" 2>/dev/null || true
+  fi
 }
 
 ng_peer_count() {
-  local count
-  count="$(ng_read_peers | wc -l | tr -d ' ')" || count=0
-  printf '%s' "${count}"
+  if [[ -f "${NG_DATA_ROOT}/config/servers.json" ]] && command -v jq >/dev/null 2>&1; then
+    jq '[.servers[] | select(.enabled != false)] | length' "${NG_DATA_ROOT}/config/servers.json" 2>/dev/null || echo 0
+  else
+    echo 0
+  fi
 }
 
 ng_total_node_count() {
-  local peer_count
-  peer_count="$(ng_peer_count)"
-  printf '%s\n' "$((peer_count + 1))"
+  local node_count
+  node_count="$(ng_peer_count)"
+  printf '%s\n' "$((node_count + 1))"
 }
 
 ng_timestamp() {

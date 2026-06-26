@@ -318,7 +318,7 @@ EOF
 seed_data_root() {
   local config_name
   mkdir -p "${DATA_ROOT}/config" "${DATA_ROOT}/logs" "${DATA_ROOT}/reports" "${DATA_ROOT}/state" "${DATA_ROOT}/backups" "${DATA_ROOT}/tmp"
-  for config_name in app.conf peers.conf watch.conf; do
+  for config_name in serverharbor.conf; do
     if [[ ! -f "${DATA_ROOT}/config/${config_name}" ]]; then
       cp "${APP_ROOT}/config/${config_name}" "${DATA_ROOT}/config/${config_name}"
     fi
@@ -334,9 +334,7 @@ migrate_online_data() {
 
   local has_data=0
   [[ -f "${online_dir}/config/servers.json" ]] && has_data=1
-  [[ -f "${online_dir}/config/app.conf" ]] && has_data=1
-  [[ -f "${online_dir}/config/peers.conf" ]] && has_data=1
-  [[ -f "${online_dir}/config/watch.conf" ]] && has_data=1
+  [[ -f "${online_dir}/config/serverharbor.conf" ]] && has_data=1
   [[ -d "${online_dir}/state" ]] && [[ -n "$(ls -A "${online_dir}/state" 2>/dev/null)" ]] && has_data=1
   [[ -d "${online_dir}/reports" ]] && [[ -n "$(ls -A "${online_dir}/reports" 2>/dev/null)" ]] && has_data=1
   [[ -d "${online_dir}/backups" ]] && [[ -n "$(ls -A "${online_dir}/backups" 2>/dev/null)" ]] && has_data=1
@@ -383,7 +381,7 @@ migrate_online_data() {
 
   mkdir -p "${DATA_ROOT}/config" "${DATA_ROOT}/state" "${DATA_ROOT}/reports" "${DATA_ROOT}/backups" "${DATA_ROOT}/logs"
 
-  for conf_name in servers.json app.conf peers.conf watch.conf; do
+  for conf_name in servers.json serverharbor.conf; do
     if [[ -f "${online_dir}/config/${conf_name}" ]]; then
       cp -f "${online_dir}/config/${conf_name}" "${DATA_ROOT}/config/${conf_name}" 2>/dev/null || true
       printf '  ✓ %s\n' "${conf_name}"

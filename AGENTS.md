@@ -115,15 +115,15 @@ CLI modes: `--cron-probe`, `--cron-security`, `--cron-alerts`
 - Do not introduce centralized service discovery, consensus, or automatic failover without explicit user request.
 - Keep the design lightweight and script-first.
 - Prefer configuration through plain text files under `config/`.
-- Do not define config variables in `common.sh` or `app.conf` unless they are actively read by at least one function. Orphaned config variables (defined but never read) must be removed.
+- Do not define config variables in `common.sh` or `serverharbor.conf` unless they are actively read by at least one function. Orphaned config variables (defined but never read) must be removed.
 
 ## Runtime Model
 
 - `menu.sh` is the interactive user entry point.
 - Supported CLI entry points are `menu.sh --cron-probe`, `menu.sh --cron-security`, and `menu.sh --cron-alerts`.
 - Bootstrap and hardening functions may require root privileges.
-- Peer monitoring is file-driven through `config/servers.json` (preferred) with fallback to `config/peers.conf` (legacy CSV format).
-- Integrity scanning is path-driven through `config/watch.conf`.
+- Peer monitoring is file-driven through `config/servers.json`.
+- Integrity scanning is path-driven through `NG_WATCH_PATHS` in `config/serverharbor.conf`.
 - Managed code and mutable user data must stay decoupled. Installer updates may replace `/opt/serverharbor/app`, but must preserve user config and runtime data under `/opt/serverharbor/data`.
 - Before any installer package operation or filesystem write, the script must print the intended actions and require explicit user confirmation.
 - Generated reports and state files may be retained locally for inspection, but logs should stay ignored unless requested otherwise.
@@ -138,7 +138,7 @@ CLI modes: `--cron-probe`, `--cron-security`, `--cron-alerts`
 - The bootstrap menu `[7]` (data migration) is only visible in installed mode. It migrates data from the online directory to the installed directory.
 - After migration, the source directory is renamed to `~/.config/serverharbor.migrated` to prevent duplicate migration and signal that the data has been transferred.
 - If `.migrated` directory already exists, the migration function reports this and skips.
-- Both migration paths detect: `servers.json`, `app.conf`, `peers.conf`, `watch.conf`, `state/`, `reports/`, `backups/`, `logs/`.
+- Both migration paths detect: `servers.json`, `serverharbor.conf`, `state/`, `reports/`, `backups/`, `logs/`.
 
 ## Development Commands
 
