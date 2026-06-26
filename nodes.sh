@@ -609,19 +609,43 @@ ng_node_manage() {
 }
 
 ng_remote_execute() {
-  local selection
-  selection="$(ng_select_nodes)" || return 0
-
-  if [[ "${selection}" == "all" ]]; then
-    if [[ "${NG_LANG}" == "en" ]]; then
-      printf 'Select a single node for remote execution.\n'
-    else
-      printf '远程执行请选择单个节点。\n'
-    fi
+  if ! ng_ensure_jq; then return 1; fi
+  if [[ ! -f "${NG_NODES_FILE}" ]]; then
+    if [[ "${NG_LANG}" == "en" ]]; then printf 'No nodes configured.\n'; else printf '未配置节点。\n'; fi
     return 1
   fi
 
-  local node_name="${selection}"
+  local count
+  count=$(jq '.servers | length' "${NG_NODES_FILE}" 2>/dev/null || echo "0")
+  count=$(echo "${count}" | tr -d '[:space:]')
+  : "${count:=0}"
+  if [[ "${count}" -eq 0 ]]; then
+    if [[ "${NG_LANG}" == "en" ]]; then printf 'No nodes configured.\n'; else printf '未配置节点。\n'; fi
+    return 1
+  fi
+
+  if [[ "${NG_LANG}" == "en" ]]; then printf '\nSelect target node:\n'; else printf '\n选择目标节点：\n'; fi
+  local idx=1
+  local -a node_names=()
+  while IFS=$'\t' read -r name host; do
+    local node_status
+    node_status=$(ng_check_node_status "${host}")
+    printf '  [%d] %-20s %-20s %s\n' "${idx}" "${name}" "${host}" "${node_status}"
+    node_names+=("${name}")
+    ((idx++)) || true
+  done < <(jq -r '.servers[] | select(.enabled != false) | "\(.name)\t\(.host)"' "${NG_NODES_FILE}" 2>/dev/null)
+
+  printf '\n'
+  if [[ "${NG_LANG}" == "en" ]]; then printf 'Select node (number): '; else printf '选择节点（输入编号）：'; fi
+  local sel
+  ng_read_line sel || return 130
+
+  if [[ -z "${sel}" ]] || ! [[ "${sel}" =~ ^[0-9]+$ ]] || [[ "${sel}" -lt 1 ]] || [[ "${sel}" -gt "${idx}" ]]; then
+    ng_t invalid_option
+    return 1
+  fi
+
+  local node_name="${node_names[$((sel-1))]}"
   local node_host node_user node_port node_auth node_key
   node_host=$(jq -r --arg n "${node_name}" '.servers[] | select(.name == $n) | .host' "${NG_NODES_FILE}" 2>/dev/null)
   node_user=$(jq -r --arg n "${node_name}" '.servers[] | select(.name == $n) | .ssh.user // "root"' "${NG_NODES_FILE}" 2>/dev/null)
