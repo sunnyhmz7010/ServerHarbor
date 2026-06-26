@@ -185,12 +185,52 @@ ng_check_node_status() {
 ng_setup_mutual_nodes() {
   local remote_ip ssh_port ssh_user auth_method key
 
-  if [[ "${NG_LANG}" == "en" ]]; then
-    printf 'Enter remote server IP: '
+  local remote_ip ssh_port ssh_user
+
+  if [[ -f "${NG_NODES_FILE}" ]] && command -v jq >/dev/null 2>&1; then
+    local node_count
+    node_count=$(jq '.servers | length' "${NG_NODES_FILE}" 2>/dev/null || echo "0")
+    if [[ "${node_count}" -gt 0 ]]; then
+      if [[ "${NG_LANG}" == "en" ]]; then
+        printf '\nSelect from existing nodes or enter new IP:\n'
+      else
+        printf '\n从已有节点选择或输入新 IP：\n'
+      fi
+      local ni=1
+      local -a existing_names=()
+      local -a existing_hosts=()
+      while IFS=$'\t' read -r n h; do
+        printf '  [%d] %s (%s)\n' "${ni}" "${n}" "${h}"
+        existing_names+=("${n}")
+        existing_hosts+=("${h}")
+        ((ni++)) || true
+      done < <(jq -r '.servers[] | select(.enabled != false) | "\(.name)\t\(.host)"' "${NG_NODES_FILE}" 2>/dev/null)
+      printf '  [n] %s\n' "$( [[ "${NG_LANG}" == "en" ]] && echo "Enter new IP" || echo "输入新 IP" )"
+
+      printf '\n'
+      if [[ "${NG_LANG}" == "en" ]]; then printf 'Select: '; else printf '选择：'; fi
+      local node_sel
+      ng_read_line node_sel || return 130
+
+      if [[ "${node_sel}" == "n" ]] || [[ "${node_sel}" == "N" ]]; then
+        if [[ "${NG_LANG}" == "en" ]]; then printf 'Enter remote server IP: '; else printf '输入对方服务器 IP：'; fi
+        ng_read_line remote_ip || return 130
+      elif [[ "${node_sel}" =~ ^[0-9]+$ ]] && [[ "${node_sel}" -ge 1 ]] && [[ "${node_sel}" -lt "${ni}" ]]; then
+        remote_ip="${existing_hosts[$((node_sel-1))]}"
+        if [[ "${NG_LANG}" == "en" ]]; then printf 'Selected: %s (%s)\n' "${existing_names[$((node_sel-1))]}" "${remote_ip}"; else printf '已选择: %s (%s)\n' "${existing_names[$((node_sel-1))]}" "${remote_ip}"; fi
+      else
+        if [[ "${NG_LANG}" == "en" ]]; then printf 'Invalid selection.\n'; else printf '无效选择。\n'; fi
+        return 0
+      fi
+    else
+      if [[ "${NG_LANG}" == "en" ]]; then printf 'Enter remote server IP: '; else printf '输入对方服务器 IP：'; fi
+      ng_read_line remote_ip || return 130
+    fi
   else
-    printf '输入对方服务器 IP：'
+    if [[ "${NG_LANG}" == "en" ]]; then printf 'Enter remote server IP: '; else printf '输入对方服务器 IP：'; fi
+    ng_read_line remote_ip || return 130
   fi
-  ng_read_line remote_ip || return 130
+
   if [[ -z "${remote_ip}" ]]; then
     if [[ "${NG_LANG}" == "en" ]]; then ng_log "ERROR" "IP is required."; else ng_log "ERROR" "IP 不能为空。"; fi
     return 1
@@ -236,8 +276,41 @@ ng_setup_mutual_nodes() {
         [[ -f "${kf}" ]] && available_keys+=("${kf}")
       done
       if [[ "${#available_keys[@]}" -eq 0 ]]; then
-        if [[ "${NG_LANG}" == "en" ]]; then printf 'No SSH keys found. Generate one first.\n'; else printf '未找到 SSH 密钥，请先生成。\n'; fi
-        return 1
+        if [[ "${NG_LANG}" == "en" ]]; then
+          printf 'No SSH keys found.\n'
+          printf '  [1] Generate a new key (ssh-keygen)\n'
+          printf '  [2] Use password instead\n'
+          printf '  [0] Cancel\n'
+        else
+          printf '未找到 SSH 密钥。\n'
+          printf '  [1] 生成新密钥（ssh-keygen）\n'
+          printf '  [2] 改用密码认证\n'
+          printf '  [0] 取消\n'
+        fi
+        local key_action
+        ng_read_line key_action || return 130
+        case "${key_action}" in
+          1)
+            ssh-keygen -t ed25519 -f ~/.ssh/id_ed25519 -N "" -q 2>/dev/null || ssh-keygen -t rsa -f ~/.ssh/id_rsa -N "" -q 2>/dev/null
+            if [[ -f ~/.ssh/id_ed25519 ]]; then
+              key="$HOME/.ssh/id_ed25519"
+            elif [[ -f ~/.ssh/id_rsa ]]; then
+              key="$HOME/.ssh/id_rsa"
+            else
+              if [[ "${NG_LANG}" == "en" ]]; then printf 'Key generation failed.\n'; else printf '密钥生成失败。\n'; fi
+              return 1
+            fi
+            ;;
+          2)
+            auth_method="password"
+            if [[ "${NG_LANG}" == "en" ]]; then printf 'Enter SSH password: '; else printf '输入 SSH 密码：'; fi
+            IFS= read -rs key < /dev/tty
+            printf '\n'
+            ;;
+          *)
+            return 0
+            ;;
+        esac
       fi
       if [[ "${#available_keys[@]}" -eq 1 ]]; then
         key="${available_keys[0]}"
@@ -659,31 +732,6 @@ ng_remote_execute() {
     return 1
   fi
 
-  if [[ "${NG_LANG}" == "en" ]]; then
-    printf '\nRemote execute on %s (%s):\n' "${node_name}" "${node_host}"
-    printf '  [1] Custom command\n'
-    printf '  [2] Install base packages (curl, wget, sudo, iptables)\n'
-    printf '  [3] Install Docker\n'
-    printf '  [4] bbrv3-lite network tuning\n'
-    printf '  [5] vps-tcp-tune network tuning\n'
-    printf '  [6] System status\n'
-    printf '  [0] Cancel\n'
-  else
-    printf '\n在 %s (%s) 上远程执行：\n' "${node_name}" "${node_host}"
-    printf '  [1] 自定义命令\n'
-    printf '  [2] 基础软件安装（curl、wget、sudo、iptables）\n'
-    printf '  [3] Docker 安装\n'
-    printf '  [4] bbrv3-lite 网络调优\n'
-    printf '  [5] vps-tcp-tune 网络调优\n'
-    printf '  [6] 系统状态查看\n'
-    printf '  [0] 取消\n'
-  fi
-
-  printf '\n'
-  ng_t select
-  local op_choice
-  ng_read_line op_choice || return 130
-
   local -a ssh_opts=(-o ConnectTimeout=10 -o StrictHostKeyChecking=accept-new -p "${node_port}")
   local use_sshpass=0
 
@@ -694,73 +742,111 @@ ng_remote_execute() {
     ssh_opts+=(-i "${node_key}")
   fi
 
-  local cmd=""
+  export TERM=xterm
 
-  case "${op_choice}" in
-    1)
-      if [[ "${NG_LANG}" == "en" ]]; then printf 'Enter command: '; else printf '输入命令：'; fi
-      ng_read_line cmd || return 130
-      ;;
-    2)
-      cmd="apt-get update -y && apt-get install -y curl wget sudo iptables || yum install -y curl wget sudo iptables"
-      ;;
-    3)
-      local country
-      country=$("${run_ssh[@]}" "curl -s --connect-timeout 5 ipinfo.io/country 2>/dev/null" || echo "unknown")
-      country=$(echo "${country}" | tr -d '\r\n')
-      if [[ "${country}" == "CN" ]]; then
-        cmd="curl -fsSL https://get.docker.com | bash -s docker --mirror Aliyun"
+  while true; do
+    clear || true
+    if [[ "${NG_LANG}" == "en" ]]; then
+      printf '\nRemote execute on %s (%s):\n\n' "${node_name}" "${node_host}"
+      printf '  [1] Custom command\n'
+      printf '  [2] Install base packages (curl, wget, sudo, iptables)\n'
+      printf '  [3] Install Docker\n'
+      printf '  [4] bbrv3-lite network tuning\n'
+      printf '  [5] vps-tcp-tune network tuning\n'
+      printf '  [6] System status\n'
+      printf '  [0] Back\n'
+    else
+      printf '\n在 %s (%s) 上远程执行：\n\n' "${node_name}" "${node_host}"
+      printf '  [1] 自定义命令\n'
+      printf '  [2] 基础软件安装（curl、wget、sudo、iptables）\n'
+      printf '  [3] Docker 安装\n'
+      printf '  [4] bbrv3-lite 网络调优\n'
+      printf '  [5] vps-tcp-tune 网络调优\n'
+      printf '  [6] 系统状态查看\n'
+      printf '  [0] 返回\n'
+    fi
+
+    printf '\n'
+    ng_t select
+    local op_choice
+    ng_read_line op_choice || return 130
+
+    [[ "${op_choice}" == "0" ]] && return 0
+
+    local cmd=""
+
+    case "${op_choice}" in
+      1)
+        if [[ "${NG_LANG}" == "en" ]]; then printf 'Enter command: '; else printf '输入命令：'; fi
+        ng_read_line cmd || return 130
+        ;;
+      2)
+        cmd="apt-get update -y && apt-get install -y curl wget sudo iptables || yum install -y curl wget sudo iptables"
+        ;;
+      3)
+        local country
+        if [[ "${use_sshpass}" -eq 1 ]]; then
+          country=$(sshpass -e ssh "${ssh_opts[@]}" "${node_user}@${node_host}" "curl -s --connect-timeout 5 ipinfo.io/country" 2>/dev/null || echo "unknown")
+        else
+          country=$(ssh "${ssh_opts[@]}" "${node_user}@${node_host}" "curl -s --connect-timeout 5 ipinfo.io/country" 2>/dev/null || echo "unknown")
+        fi
+        country=$(echo "${country}" | tr -d '\r\n')
+        if [[ "${country}" == "CN" ]]; then
+          cmd="curl -fsSL https://get.docker.com | bash -s docker --mirror Aliyun"
+        else
+          cmd="curl -fsSL https://get.docker.com | sh"
+        fi
+        ;;
+      4)
+        cmd="bash <(curl -fsSL https://raw.githubusercontent.com/ike-sh/bbrv3-lite/main/net-tcp-tune.sh)"
+        ;;
+      5)
+        cmd="bash <(curl -fsSL https://raw.githubusercontent.com/Eric86777/vps-tcp-tune/main/net-tcp-tune.sh)"
+        ;;
+      6)
+        cmd="echo '=== System Info ==='; hostname; uname -r; uptime; echo ''; echo '=== CPU ==='; nproc; grep 'model name' /proc/cpuinfo | head -1; echo ''; echo '=== Memory ==='; free -h; echo ''; echo '=== Disk ==='; df -h /; echo ''; echo '=== Network ==='; hostname -I; echo ''; echo '=== Docker ==='; docker --version 2>/dev/null || echo 'Not installed'"
+        ;;
+      *)
+        ng_t invalid_option
+        ng_press_enter || return 130
+        continue
+        ;;
+    esac
+
+    if [[ -z "${cmd}" ]]; then
+      continue
+    fi
+
+    if [[ "${NG_LANG}" == "en" ]]; then
+      printf '\nExecuting on %s ...\n\n' "${node_name}"
+    else
+      printf '\n正在 %s 上执行 ...\n\n' "${node_name}"
+    fi
+
+    if [[ "${use_sshpass}" -eq 1 ]]; then
+      sshpass -e ssh "${ssh_opts[@]}" "${node_user}@${node_host}" "bash -c '${cmd}'"
+    else
+      ssh "${ssh_opts[@]}" "${node_user}@${node_host}" "bash -c '${cmd}'"
+    fi
+    local rc=$?
+
+    printf '\n'
+    if [[ "${rc}" -eq 0 ]]; then
+      if [[ "${NG_LANG}" == "en" ]]; then
+        printf '✓ Completed on %s\n' "${node_name}"
       else
-        cmd="curl -fsSL https://get.docker.com | sh"
+        printf '✓ %s 执行完成\n' "${node_name}"
       fi
-      ;;
-    4)
-      cmd="bash <(curl -fsSL https://raw.githubusercontent.com/ike-sh/bbrv3-lite/main/net-tcp-tune.sh)"
-      ;;
-    5)
-      cmd="bash <(curl -fsSL https://raw.githubusercontent.com/Eric86777/vps-tcp-tune/main/net-tcp-tune.sh)"
-      ;;
-    6)
-      cmd="echo '=== System Info ==='; hostname; uname -r; uptime; echo ''; echo '=== CPU ==='; nproc; grep 'model name' /proc/cpuinfo | head -1; echo ''; echo '=== Memory ==='; free -h; echo ''; echo '=== Disk ==='; df -h /; echo ''; echo '=== Network ==='; hostname -I; echo ''; echo '=== Docker ==='; docker --version 2>/dev/null || echo 'Not installed'"
-      ;;
-    0) return 0 ;;
-    *)
-      ng_t invalid_option
-      return 0
-      ;;
-  esac
-
-  if [[ -z "${cmd}" ]]; then
-    return 1
-  fi
-
-  if [[ "${NG_LANG}" == "en" ]]; then
-    printf '\nExecuting on %s ...\n\n' "${node_name}"
-  else
-    printf '\n正在 %s 上执行 ...\n\n' "${node_name}"
-  fi
-
-  if [[ "${use_sshpass}" -eq 1 ]]; then
-    sshpass -e ssh "${ssh_opts[@]}" "${node_user}@${node_host}" "bash -c '${cmd}'"
-  else
-    ssh "${ssh_opts[@]}" "${node_user}@${node_host}" "bash -c '${cmd}'"
-  fi
-  local rc=$?
-
-  printf '\n'
-  if [[ "${rc}" -eq 0 ]]; then
-    if [[ "${NG_LANG}" == "en" ]]; then
-      printf '✓ Completed on %s\n' "${node_name}"
     else
-      printf '✓ %s 执行完成\n' "${node_name}"
+      if [[ "${NG_LANG}" == "en" ]]; then
+        printf '✗ Failed on %s (exit code: %d)\n' "${node_name}" "${rc}"
+      else
+        printf '✗ %s 执行失败（退出码: %d）\n' "${node_name}" "${rc}"
+      fi
     fi
-  else
-    if [[ "${NG_LANG}" == "en" ]]; then
-      printf '✗ Failed on %s (exit code: %d)\n' "${node_name}" "${rc}"
-    else
-      printf '✗ %s 执行失败（退出码: %d）\n' "${node_name}" "${rc}"
-    fi
-  fi
+
+    ng_press_enter || return 130
+  done
 }
 
 ng_node_menu() {
