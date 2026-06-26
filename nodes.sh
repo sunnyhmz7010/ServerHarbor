@@ -584,8 +584,10 @@ ng_node_manage() {
             e|E)
               if [[ "${NG_LANG}" == "en" ]]; then
                 printf 'New name (current: %s): ' "${target_name}"
+                printf '\nNote: To change IP, port, user, or auth method, delete and re-add the node.\n'
               else
                 printf '新名称（当前: %s）：' "${target_name}"
+                printf '\n提示：如需修改 IP、端口、用户或认证方式，请删除节点后重新添加。\n'
               fi
               local new_name
               ng_read_line new_name || return 130
