@@ -351,100 +351,6 @@ ng_run_on_all_nodes() {
   fi
 }
 
-ng_sync_to_all_nodes() {
-  local source_file="$1"
-  local remote_path="$2"
-
-  if [[ ! -f "${source_file}" ]]; then
-    if [[ "${NG_LANG}" == "en" ]]; then
-      ng_log "ERROR" "Source file not found: ${source_file}"
-    else
-      ng_log "ERROR" "源文件不存在: ${source_file}"
-    fi
-    return 1
-  fi
-
-  if ! command -v jq >/dev/null 2>&1; then
-    if [[ "${NG_LANG}" == "en" ]]; then
-      ng_log "ERROR" "jq is required."
-    else
-      ng_log "ERROR" "需要 jq。"
-    fi
-    return 1
-  fi
-
-  local count
-  count=$(jq '.servers | length' "${NG_NODES_FILE}" 2>/dev/null || echo 0)
-
-  if [[ "${count}" -eq 0 ]]; then
-    if [[ "${NG_LANG}" == "en" ]]; then
-      printf 'No nodes configured.\n'
-    else
-      printf '未配置节点。\n'
-    fi
-    return 0
-  fi
-
-  if [[ "${NG_LANG}" == "en" ]]; then
-    ng_print_header "Configuration Sync"
-    printf 'Source: %s\n' "${source_file}"
-    printf 'Target: %s\n\n' "${remote_path}"
-    printf 'Syncing to all nodes...\n'
-  else
-    ng_print_header "配置文件同步"
-    printf '源文件: %s\n' "${source_file}"
-    printf '目标路径: %s\n\n' "${remote_path}"
-    printf '正在同步到所有节点...\n'
-  fi
-
-  local success=0
-  local failed=0
-
-  while read -r node; do
-    local name host user port auth key
-    name=$(echo "${node}" | jq -r '.name')
-    host=$(echo "${node}" | jq -r '.host')
-    user=$(echo "${node}" | jq -r '.ssh.user // "root"')
-    port=$(echo "${node}" | jq -r '.ssh.port // 22')
-    auth=$(echo "${node}" | jq -r '.ssh.auth // "key"')
-    key=$(echo "${node}" | jq -r '.ssh.key // "~/.ssh/id_ed25519"')
-
-    local -a scp_opts=(-o ConnectTimeout=5 -o StrictHostKeyChecking=accept-new -P "${port}")
-    if [[ "${auth}" == "key" ]]; then
-      scp_opts+=(-i "${key}")
-    fi
-
-    local scp_ok=0
-    if [[ "${auth}" == "password" ]] && command -v sshpass >/dev/null 2>&1; then
-      sshpass -p "${key}" scp "${scp_opts[@]}" "${source_file}" "${user}@${host}:${remote_path}" 2>/dev/null && scp_ok=1
-    else
-      scp "${scp_opts[@]}" "${source_file}" "${user}@${host}:${remote_path}" 2>/dev/null && scp_ok=1
-    fi
-
-    if [[ "${scp_ok}" -eq 1 ]]; then
-      if [[ "${NG_LANG}" == "en" ]]; then
-        printf '  ✓ %s: synced\n' "${name}"
-      else
-        printf '  ✓ %s: 同步成功\n' "${name}"
-      fi
-      ((success++)) || true
-    else
-      if [[ "${NG_LANG}" == "en" ]]; then
-        printf '  ✗ %s: failed\n' "${name}"
-      else
-        printf '  ✗ %s: 失败\n' "${name}"
-      fi
-      ((failed++)) || true
-    fi
-  done < <(jq -c '.servers[]' "${NG_NODES_FILE}" 2>/dev/null)
-
-  if [[ "${NG_LANG}" == "en" ]]; then
-    printf '\nSync completed: %d success, %d failed\n' "${success}" "${failed}"
-  else
-    printf '\n同步完成: %d 成功, %d 失败\n' "${success}" "${failed}"
-  fi
-}
-
 ng_collect_local_probe() {
   local state_file="${NG_STATE_DIR}/${NG_HOSTNAME}-local.state"
   local tmp_file="${state_file}.tmp"
@@ -552,8 +458,19 @@ ng_select_nodes() {
     return 1
   fi
 
+  if [[ ! -f "${NG_NODES_FILE}" ]]; then
+    if [[ "${NG_LANG}" == "en" ]]; then
+      printf 'No nodes file found.\n' >&2
+    else
+      printf '未找到节点配置文件。\n' >&2
+    fi
+    return 1
+  fi
+
   local count
-  count=$(jq '.servers | length' "${NG_NODES_FILE}" 2>/dev/null || echo 0)
+  count=$(jq '.servers | length' "${NG_NODES_FILE}" 2>/dev/null || echo "0")
+  count=$(echo "${count}" | tr -d '[:space:]')
+  : "${count:=0}"
 
   if [[ "${count}" -eq 0 ]]; then
     if [[ "${NG_LANG}" == "en" ]]; then
@@ -843,7 +760,6 @@ ng_node_menu() {
       ng_print_option "2" "🔍" "Test SSH" "Test SSH connectivity to selected nodes"
       ng_print_option "3" "📡" "Probe nodes" "Check ICMP, SSH, latency and local health"
       ng_print_option "4" "⚡" "Batch execute" "Run command on selected nodes"
-      ng_print_option "5" "📁" "Sync config" "Sync config file to selected nodes"
       ng_print_option "0" "↩" "Back"
     else
       ng_print_title_box "🛰 节点管理" "基于 SSH 的多服务器管理"
@@ -851,7 +767,6 @@ ng_node_menu() {
       ng_print_option "2" "🔍" "测试 SSH" "测试选中节点的 SSH 连接"
       ng_print_option "3" "📡" "探测节点" "检查 ICMP、SSH、延迟和本机健康"
       ng_print_option "4" "⚡" "批量执行" "在选中节点上执行命令"
-      ng_print_option "5" "📁" "配置同步" "将配置文件同步到选中节点"
       ng_print_option "0" "↩" "返回"
     fi
 
@@ -968,75 +883,6 @@ ng_node_menu() {
                 output=$(ssh "${ssh_opts[@]}" "${node_user}@${node_host}" "${cmd}" 2>&1) && status="OK" || status="FAIL"
               fi
               printf '%-20s %-10s %s\n' "${node_name}" "${status}" "$(echo "${output}" | head -1)"
-            done
-          fi
-        fi
-        ;;
-      5)
-        local src_file remote_path
-        if [[ "${NG_LANG}" == "en" ]]; then
-          printf 'Enter source file path: '
-        else
-          printf '输入源文件路径：'
-        fi
-        ng_read_line src_file || return 130
-
-        if [[ -n "${src_file}" ]]; then
-          local -a target_nodes=()
-          local selection
-          selection="$(ng_select_nodes)" || continue
-          if [[ "${selection}" == "all" ]]; then
-            if [[ "${NG_LANG}" == "en" ]]; then
-              printf 'Enter remote target path: '
-            else
-              printf '输入远程目标路径：'
-            fi
-            ng_read_line remote_path || return 130
-            if [[ -n "${remote_path}" ]]; then
-              ng_sync_to_all_nodes "${src_file}" "${remote_path}"
-            fi
-          else
-            while IFS=',' read -r num; do
-              num=$(echo "${num}" | tr -d ' ')
-              if [[ "${num}" =~ ^[0-9]+$ ]]; then
-                target_nodes+=("${num}")
-              fi
-            done <<< "${selection}"
-
-            for node_idx in "${target_nodes[@]}"; do
-              local node_name node_host
-              node_name=$(jq -r ".servers[$((node_idx-1))].name" "${NG_NODES_FILE}" 2>/dev/null)
-              node_host=$(jq -r ".servers[$((node_idx-1))].host" "${NG_NODES_FILE}" 2>/dev/null)
-              if [[ -z "${node_name}" || "${node_name}" == "null" ]]; then
-                continue
-              fi
-
-              if [[ "${NG_LANG}" == "en" ]]; then
-                printf '\nNode %s (%s):\n' "${node_name}" "${node_host}"
-                printf '  Remote target path: '
-              else
-                printf '\n节点 %s (%s)：\n' "${node_name}" "${node_host}"
-                printf '  远程目标路径：'
-              fi
-              ng_read_line remote_path || return 130
-              remote_path="${remote_path:-/tmp/$(basename "${src_file}")}"
-
-              local node_user node_port node_auth node_key
-              node_user=$(jq -r ".servers[$((node_idx-1))].ssh.user // \"root\"" "${NG_NODES_FILE}" 2>/dev/null)
-              node_port=$(jq -r ".servers[$((node_idx-1))].ssh.port // 22" "${NG_NODES_FILE}" 2>/dev/null)
-              node_auth=$(jq -r ".servers[$((node_idx-1))].ssh.auth // \"key\"" "${NG_NODES_FILE}" 2>/dev/null)
-              node_key=$(jq -r ".servers[$((node_idx-1))].ssh.key // \"~/.ssh/id_ed25519\"" "${NG_NODES_FILE}" 2>/dev/null)
-
-              local -a scp_opts=(-o ConnectTimeout=5 -o StrictHostKeyChecking=accept-new -P "${node_port}")
-              if [[ "${node_auth}" == "key" ]]; then
-                scp_opts+=(-i "${node_key}")
-              fi
-
-              if scp "${scp_opts[@]}" "${src_file}" "${node_user}@${node_host}:${remote_path}" 2>/dev/null; then
-                printf '  ✓ %s\n' "$( [[ "${NG_LANG}" == "en" ]] && echo "Synced" || echo "同步成功" )"
-              else
-                printf '  ✗ %s\n' "$( [[ "${NG_LANG}" == "en" ]] && echo "Failed" || echo "失败" )"
-              fi
             done
           fi
         fi
