@@ -209,21 +209,19 @@ ng_test_node_ssh() {
   local auth="$5"
   local key="$6"
 
-  local -a ssh_opts=(-o ConnectTimeout=5 -o BatchMode=yes -o StrictHostKeyChecking=accept-new -p "${port}")
-
   local output
+
   if [[ "${auth}" == "password" ]]; then
     if ! command -v sshpass >/dev/null 2>&1; then
       printf '%s\n' "AUTH_FAILED"
       return 1
     fi
-    output=$(sshpass -p "${key}" ssh "${ssh_opts[@]}" "${user}@${host}" "echo 'SSH_OK'" 2>&1) && {
+    output=$(sshpass -p "${key}" ssh -o ConnectTimeout=5 -o StrictHostKeyChecking=accept-new -p "${port}" "${user}@${host}" "echo 'SSH_OK'" 2>&1) && {
       printf '%s\n' "OK"
       return 0
     }
   else
-    ssh_opts+=(-i "${key}")
-    output=$(ssh "${ssh_opts[@]}" "${user}@${host}" "echo 'SSH_OK'" 2>&1) && {
+    output=$(ssh -o ConnectTimeout=5 -o BatchMode=yes -o StrictHostKeyChecking=accept-new -p "${port}" -i "${key}" "${user}@${host}" "echo 'SSH_OK'" 2>&1) && {
       printf '%s\n' "OK"
       return 0
     }
