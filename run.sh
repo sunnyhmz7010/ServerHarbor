@@ -284,23 +284,17 @@ main() {
 
   if [[ -d "${DATA_ROOT}" ]]; then
     if [[ "${LANGUAGE}" == "en" ]]; then
-      printf '\nPersistent data directory: %s\n' "${DATA_ROOT}"
-      printf '  [y] Delete data directory\n'
-      printf '  [n] Keep (default)\n'
-      printf 'Choose [y/N]: '
+      printf 'Delete data dir %s? [y/N]: ' "${DATA_ROOT}"
     else
-      printf '\n持久化数据目录: %s\n' "${DATA_ROOT}"
-      printf '  [y] 删除数据目录\n'
-      printf '  [n] 保留（默认）\n'
-      printf '请选择 [y/N]: '
+      printf '删除数据目录 %s？[y/N]：' "${DATA_ROOT}"
     fi
     local answer
     if IFS= read -r answer < /dev/tty; then
       if [[ "${answer}" =~ ^[Yy] ]]; then
         if [[ "${LANGUAGE}" == "en" ]]; then
-          printf 'Removing data directory: %s\n' "${DATA_ROOT}"
+          printf 'Removing: %s\n' "${DATA_ROOT}"
         else
-          printf '正在删除数据目录: %s\n' "${DATA_ROOT}"
+          printf '正在删除: %s\n' "${DATA_ROOT}"
         fi
         rm -rf "${DATA_ROOT}"
       fi

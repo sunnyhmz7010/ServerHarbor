@@ -146,6 +146,7 @@ ng_firewall_summary() {
       status="active"
     fi
     rule_count="$(echo "${ufw_output}" | grep -c "^[0-9]" 2>/dev/null || echo 0)"
+    rule_count=$(echo "${rule_count}" | tr -d '[:space:]')
     ng_report_detail "$([[ "${NG_LANG}" == "en" ]] && echo "Backend" || echo "后端")" "ufw"
     ng_report_detail "$([[ "${NG_LANG}" == "en" ]] && echo "Status" || echo "状态")" "${status}"
     ng_report_separator
@@ -167,8 +168,12 @@ ng_firewall_summary() {
   elif command -v iptables >/dev/null 2>&1; then
     backend="iptables"
     local ipt_output
-    ipt_output="$(iptables -L -n --line-numbers 2>/dev/null | head -20 || true)"
-    rule_count="$(iptables -L -n 2>/dev/null | grep -c "^Chain\|^[0-9]" 2>/dev/null || echo 0)"
+    ipt_output="$(iptables -L -n --line-numbers 2>/dev/null | head -30 || true)"
+    rule_count="$(iptables -L -n 2>/dev/null | grep -c "^[0-9]" 2>/dev/null || echo 0)"
+    rule_count=$(echo "${rule_count}" | tr -d '[:space:]')
+    if [[ "${rule_count}" -gt 0 ]]; then
+      status="active"
+    fi
     ng_report_detail "$([[ "${NG_LANG}" == "en" ]] && echo "Backend" || echo "后端")" "iptables"
     ng_report_separator
     printf '%s\n' "${ipt_output}" | while IFS= read -r line; do
