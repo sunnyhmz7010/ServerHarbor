@@ -300,7 +300,7 @@ ng_setup_mutual_nodes() {
   local register_cmd="mkdir -p \$(dirname ${remote_nodes_file}) && [[ -f ${remote_nodes_file} ]] || cat > ${remote_nodes_file} <<'EOFCFG'
 {\"defaults\":{\"ssh\":{\"user\":\"root\",\"port\":22,\"key\":\"~/.ssh/id_ed25519\"}},\"servers\":[]}
 EOFCFG
-jq --arg name '${my_alias}' --arg host '${my_ip}' --arg user 'root' --arg port '22' --arg auth 'key' --arg key '~/.ssh/id_ed25519' '.servers += [{name:\$name,host:\$host,ssh:{user:\$user,port:(\$port|tonumber),auth:\$auth,key:\$key},tags:[],enabled:true}]' ${remote_nodes_file} > ${remote_nodes_file}.tmp && mv -f ${remote_nodes_file}.tmp ${remote_nodes_file}"
+jq --arg name '${my_alias}' --arg host '${my_ip}' --arg user '${ssh_user}' --arg port '${ssh_port}' --arg auth '${auth_method}' --arg key '${key}' '.servers += [{name:\$name,host:\$host,ssh:{user:\$user,port:(\$port|tonumber),auth:\$auth,key:\$key},tags:[],enabled:true}]' ${remote_nodes_file} > ${remote_nodes_file}.tmp && mv -f ${remote_nodes_file}.tmp ${remote_nodes_file}"
 
   if "${run_ssh[@]}" "bash -c '${register_cmd}'" >/dev/null 2>&1; then
     if [[ "${NG_LANG}" == "en" ]]; then printf '  ✓ Self registered on remote\n'; else printf '  ✓ 本机已注册到对方服务器\n'; fi
@@ -664,16 +664,16 @@ ng_remote_execute() {
     while true; do
       if [[ "${NG_LANG}" == "en" ]]; then
         printf '\nRemote execute on %s (%s):\n\n' "${node_name}" "${node_host}"
-        printf '  [1] Run ServerHarbor online (curl | bash)\n'
-        printf '  [2] Install ServerHarbor (install.sh)\n'
-        printf '  [3] Run installed ServerHarbor (shr)\n'
+        printf '  [1] Run ServerHarbor online\n'
+        printf '  [2] Install ServerHarbor\n'
+        printf '  [3] Run installed ServerHarbor\n'
         printf '  [4] Custom command\n'
         printf '  [0] Back to node selection\n'
       else
         printf '\n在 %s (%s) 上远程执行：\n\n' "${node_name}" "${node_host}"
-        printf '  [1] 运行在线版 ServerHarbor（curl | bash）\n'
-        printf '  [2] 安装 ServerHarbor（install.sh）\n'
-        printf '  [3] 运行安装版 ServerHarbor（shr）\n'
+        printf '  [1] 运行在线版 ServerHarbor\n'
+        printf '  [2] 安装 ServerHarbor\n'
+        printf '  [3] 运行安装版 ServerHarbor\n'
         printf '  [4] 自定义命令\n'
         printf '  [0] 返回选择节点\n'
       fi
