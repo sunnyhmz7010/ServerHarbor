@@ -592,36 +592,36 @@ ng_select_nodes() {
 
   if [[ "${count}" -eq 0 ]]; then
     if [[ "${NG_LANG}" == "en" ]]; then
-      printf 'No nodes configured.\n'
+      printf 'No nodes configured.\n' >&2
     else
-      printf '未配置节点。\n'
+      printf '未配置节点。\n' >&2
     fi
     return 1
   fi
 
   if [[ "${NG_LANG}" == "en" ]]; then
-    printf '\nConfigured nodes:\n'
+    printf '\nConfigured nodes:\n' >&2
   else
-    printf '\n已配置的节点：\n'
+    printf '\n已配置的节点：\n' >&2
   fi
 
   local idx=1
-  while IFS=$'\t' read -r name host user port; do
-    printf '  [%d] %s (%s)\n' "${idx}" "${name}" "${host}"
+  while IFS=$'\t' read -r name host; do
+    printf '  [%d] %s (%s)\n' "${idx}" "${name}" "${host}" >&2
     ((idx++)) || true
-  done < <(jq -r '.servers[] | select(.enabled != false) | "\(.name)\t\(.host)\t\(.ssh.user // "root")\t\(.ssh.port // 22)"' "${NG_NODES_FILE}" 2>/dev/null)
+  done < <(jq -r '.servers[] | select(.enabled != false) | "\(.name)\t\(.host)"' "${NG_NODES_FILE}" 2>/dev/null)
 
-  printf '  [a] %s\n' "$( [[ "${NG_LANG}" == "en" ]] && echo "All" || echo "全部" )"
-  printf '\n'
+  printf '  [a] %s\n' "$( [[ "${NG_LANG}" == "en" ]] && echo "All" || echo "全部" )" >&2
+  printf '\n' >&2
 
   if [[ "${NG_LANG}" == "en" ]]; then
-    printf 'Select nodes (comma-separated, e.g. 1,3 or a): '
+    printf 'Select nodes (comma-separated, e.g. 1,3 or a): ' >&2
   else
-    printf '选择节点（逗号分隔，如 1,3 或 a）：'
+    printf '选择节点（逗号分隔，如 1,3 或 a）：' >&2
   fi
 
   local selection
-  ng_read_line selection || return 130
+  read -r selection < /dev/tty
 
   if [[ "${selection}" == "a" ]] || [[ "${selection}" == "A" ]] || [[ -z "${selection}" ]]; then
     printf '%s\n' "all"
