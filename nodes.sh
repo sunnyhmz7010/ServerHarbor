@@ -216,8 +216,29 @@ ng_setup_mutual_nodes() {
         if [[ "${NG_LANG}" == "en" ]]; then printf 'Enter remote server IP: '; else printf '输入对方服务器 IP：'; fi
         ng_read_line remote_ip || return 130
       elif [[ "${node_sel}" =~ ^[0-9]+$ ]] && [[ "${node_sel}" -ge 1 ]] && [[ "${node_sel}" -lt "${ni}" ]]; then
+        # Existing node - use stored SSH info
+        local sel_name="${existing_names[$((node_sel-1))]}"
         remote_ip="${existing_hosts[$((node_sel-1))]}"
-        if [[ "${NG_LANG}" == "en" ]]; then printf 'Selected: %s (%s)\n' "${existing_names[$((node_sel-1))]}" "${remote_ip}"; else printf '已选择: %s (%s)\n' "${existing_names[$((node_sel-1))]}" "${remote_ip}"; fi
+        ssh_port=$(jq -r --arg n "${sel_name}" '.servers[] | select(.name == $n) | .ssh.port // 22' "${NG_NODES_FILE}" 2>/dev/null)
+        ssh_user=$(jq -r --arg n "${sel_name}" '.servers[] | select(.name == $n) | .ssh.user // "root"' "${NG_NODES_FILE}" 2>/dev/null)
+        auth_method=$(jq -r --arg n "${sel_name}" '.servers[] | select(.name == $n) | .ssh.auth // "key"' "${NG_NODES_FILE}" 2>/dev/null)
+        key=$(jq -r --arg n "${sel_name}" '.servers[] | select(.name == $n) | .ssh.key // "~/.ssh/id_ed25519"' "${NG_NODES_FILE}" 2>/dev/null)
+
+        if [[ "${NG_LANG}" == "en" ]]; then
+          printf 'Selected: %s (%s)\n' "${sel_name}" "${remote_ip}"
+        else
+          printf '已选择: %s (%s)\n' "${sel_name}" "${remote_ip}"
+        fi
+
+        if [[ "${auth_method}" == "password" ]] && ! command -v sshpass >/dev/null 2>&1; then
+          if [[ "${EUID}" -eq 0 ]]; then
+            if command -v apt-get >/dev/null 2>&1; then apt-get install -y -qq sshpass 2>/dev/null || true
+            elif command -v yum >/dev/null 2>&1; then yum install -y sshpass 2>/dev/null || true
+            elif command -v dnf >/dev/null 2>&1; then dnf install -y sshpass 2>/dev/null || true
+            fi
+          fi
+        fi
+
       else
         if [[ "${NG_LANG}" == "en" ]]; then printf 'Invalid selection.\n'; else printf '无效选择。\n'; fi
         return 0
@@ -251,8 +272,6 @@ ng_setup_mutual_nodes() {
   fi
   local auth_choice
   ng_read_line auth_choice || return 130
-
-  local -a ssh_opts=(-o ConnectTimeout=5 -o StrictHostKeyChecking=accept-new -p "${ssh_port}")
 
   case "${auth_choice}" in
     2)
@@ -328,6 +347,7 @@ ng_setup_mutual_nodes() {
       ;;
   esac
 
+  local -a ssh_opts=(-o ConnectTimeout=5 -o StrictHostKeyChecking=accept-new -p "${ssh_port}")
   local -a run_ssh=()
   if [[ "${auth_method}" == "password" ]] && command -v sshpass >/dev/null 2>&1; then
     export SSHPASS="${key}"
@@ -698,157 +718,158 @@ ng_remote_execute() {
     return 1
   fi
 
-  if [[ "${NG_LANG}" == "en" ]]; then printf '\nSelect target node:\n'; else printf '\n选择目标节点：\n'; fi
-  local idx=1
-  local -a node_names=()
-  while IFS=$'\t' read -r name host; do
-    local node_status
-    node_status=$(ng_check_node_status "${host}")
-    printf '  [%d] %-20s %-20s %s\n' "${idx}" "${name}" "${host}" "${node_status}"
-    node_names+=("${name}")
-    ((idx++)) || true
-  done < <(jq -r '.servers[] | select(.enabled != false) | "\(.name)\t\(.host)"' "${NG_NODES_FILE}" 2>/dev/null)
-  printf '  [0] %s\n' "$( [[ "${NG_LANG}" == "en" ]] && echo "Back" || echo "返回" )"
-
-  printf '\n'
-  if [[ "${NG_LANG}" == "en" ]]; then printf 'Select node (number): '; else printf '选择节点（输入编号）：'; fi
-  local sel
-  ng_read_line sel || return 130
-
-  if [[ "${sel}" == "0" ]]; then return 0; fi
-
-  if [[ -z "${sel}" ]] || ! [[ "${sel}" =~ ^[0-9]+$ ]] || [[ "${sel}" -lt 1 ]] || [[ "${sel}" -gt "${idx}" ]]; then
-    if [[ "${NG_LANG}" == "en" ]]; then printf 'Invalid selection.\n'; else printf '无效选择。\n'; fi
-    return 0
-  fi
-
-  local node_name="${node_names[$((sel-1))]}"
-  local node_host node_user node_port node_auth node_key
-  node_host=$(jq -r --arg n "${node_name}" '.servers[] | select(.name == $n) | .host' "${NG_NODES_FILE}" 2>/dev/null)
-  node_user=$(jq -r --arg n "${node_name}" '.servers[] | select(.name == $n) | .ssh.user // "root"' "${NG_NODES_FILE}" 2>/dev/null)
-  node_port=$(jq -r --arg n "${node_name}" '.servers[] | select(.name == $n) | .ssh.port // 22' "${NG_NODES_FILE}" 2>/dev/null)
-  node_auth=$(jq -r --arg n "${node_name}" '.servers[] | select(.name == $n) | .ssh.auth // "key"' "${NG_NODES_FILE}" 2>/dev/null)
-  node_key=$(jq -r --arg n "${node_name}" '.servers[] | select(.name == $n) | .ssh.key // "~/.ssh/id_ed25519"' "${NG_NODES_FILE}" 2>/dev/null)
-
-  if [[ -z "${node_host}" || "${node_host}" == "null" ]]; then
-    if [[ "${NG_LANG}" == "en" ]]; then ng_log "ERROR" "Node not found."; else ng_log "ERROR" "节点不存在。"; fi
-    return 1
-  fi
-
-  local -a ssh_opts=(-o ConnectTimeout=10 -o StrictHostKeyChecking=accept-new -p "${node_port}")
-  local use_sshpass=0
-
-  if [[ "${node_auth}" == "password" ]] && command -v sshpass >/dev/null 2>&1; then
-    use_sshpass=1
-    export SSHPASS="${node_key}"
-  else
-    ssh_opts+=(-i "${node_key}")
-  fi
-
   export TERM=xterm
 
   while true; do
-    clear || true
-    if [[ "${NG_LANG}" == "en" ]]; then
-      printf '\nRemote execute on %s (%s):\n\n' "${node_name}" "${node_host}"
-      printf '  [1] Custom command\n'
-      printf '  [2] Install base packages (curl, wget, sudo, iptables)\n'
-      printf '  [3] Install Docker\n'
-      printf '  [4] bbrv3-lite network tuning\n'
-      printf '  [5] vps-tcp-tune network tuning\n'
-      printf '  [6] System status\n'
-      printf '  [0] Back\n'
-    else
-      printf '\n在 %s (%s) 上远程执行：\n\n' "${node_name}" "${node_host}"
-      printf '  [1] 自定义命令\n'
-      printf '  [2] 基础软件安装（curl、wget、sudo、iptables）\n'
-      printf '  [3] Docker 安装\n'
-      printf '  [4] bbrv3-lite 网络调优\n'
-      printf '  [5] vps-tcp-tune 网络调优\n'
-      printf '  [6] 系统状态查看\n'
-      printf '  [0] 返回\n'
-    fi
+    if [[ "${NG_LANG}" == "en" ]]; then printf '\nSelect target node:\n'; else printf '\n选择目标节点：\n'; fi
+    local idx=1
+    local -a node_names=()
+    while IFS=$'\t' read -r name host; do
+      local node_status
+      node_status=$(ng_check_node_status "${host}")
+      printf '  [%d] %-20s %-20s %s\n' "${idx}" "${name}" "${host}" "${node_status}"
+      node_names+=("${name}")
+      ((idx++)) || true
+    done < <(jq -r '.servers[] | select(.enabled != false) | "\(.name)\t\(.host)"' "${NG_NODES_FILE}" 2>/dev/null)
+    printf '  [0] %s\n' "$( [[ "${NG_LANG}" == "en" ]] && echo "Back" || echo "返回" )"
 
     printf '\n'
-    ng_t select
-    local op_choice
-    ng_read_line op_choice || return 130
+    if [[ "${NG_LANG}" == "en" ]]; then printf 'Select node (number): '; else printf '选择节点（输入编号）：'; fi
+    local sel
+    ng_read_line sel || return 130
 
-    [[ "${op_choice}" == "0" ]] && return 0
+    [[ "${sel}" == "0" ]] && return 0
 
-    local cmd=""
-
-    case "${op_choice}" in
-      1)
-        if [[ "${NG_LANG}" == "en" ]]; then printf 'Enter command: '; else printf '输入命令：'; fi
-        ng_read_line cmd || return 130
-        ;;
-      2)
-        cmd="apt-get update -y && apt-get install -y curl wget sudo iptables || yum install -y curl wget sudo iptables"
-        ;;
-      3)
-        local country
-        if [[ "${use_sshpass}" -eq 1 ]]; then
-          country=$(sshpass -e ssh "${ssh_opts[@]}" "${node_user}@${node_host}" "curl -s --connect-timeout 5 ipinfo.io/country" 2>/dev/null || echo "unknown")
-        else
-          country=$(ssh "${ssh_opts[@]}" "${node_user}@${node_host}" "curl -s --connect-timeout 5 ipinfo.io/country" 2>/dev/null || echo "unknown")
-        fi
-        country=$(echo "${country}" | tr -d '\r\n')
-        if [[ "${country}" == "CN" ]]; then
-          cmd="curl -fsSL https://get.docker.com | bash -s docker --mirror Aliyun"
-        else
-          cmd="curl -fsSL https://get.docker.com | sh"
-        fi
-        ;;
-      4)
-        cmd="bash <(curl -fsSL https://raw.githubusercontent.com/ike-sh/bbrv3-lite/main/net-tcp-tune.sh)"
-        ;;
-      5)
-        cmd="bash <(curl -fsSL https://raw.githubusercontent.com/Eric86777/vps-tcp-tune/main/net-tcp-tune.sh)"
-        ;;
-      6)
-        cmd="echo '=== System Info ==='; hostname; uname -r; uptime; echo ''; echo '=== CPU ==='; nproc; grep 'model name' /proc/cpuinfo | head -1; echo ''; echo '=== Memory ==='; free -h; echo ''; echo '=== Disk ==='; df -h /; echo ''; echo '=== Network ==='; hostname -I; echo ''; echo '=== Docker ==='; docker --version 2>/dev/null || echo 'Not installed'"
-        ;;
-      *)
-        ng_t invalid_option
-        ng_press_enter || return 130
-        continue
-        ;;
-    esac
-
-    if [[ -z "${cmd}" ]]; then
+    if [[ -z "${sel}" ]] || ! [[ "${sel}" =~ ^[0-9]+$ ]] || [[ "${sel}" -lt 1 ]] || [[ "${sel}" -ge "${idx}" ]]; then
+      if [[ "${NG_LANG}" == "en" ]]; then printf 'Invalid selection.\n'; else printf '无效选择。\n'; fi
       continue
     fi
 
-    if [[ "${NG_LANG}" == "en" ]]; then
-      printf '\nExecuting on %s ...\n\n' "${node_name}"
-    else
-      printf '\n正在 %s 上执行 ...\n\n' "${node_name}"
+    local node_name="${node_names[$((sel-1))]}"
+    local node_host node_user node_port node_auth node_key
+    node_host=$(jq -r --arg n "${node_name}" '.servers[] | select(.name == $n) | .host' "${NG_NODES_FILE}" 2>/dev/null)
+    node_user=$(jq -r --arg n "${node_name}" '.servers[] | select(.name == $n) | .ssh.user // "root"' "${NG_NODES_FILE}" 2>/dev/null)
+    node_port=$(jq -r --arg n "${node_name}" '.servers[] | select(.name == $n) | .ssh.port // 22' "${NG_NODES_FILE}" 2>/dev/null)
+    node_auth=$(jq -r --arg n "${node_name}" '.servers[] | select(.name == $n) | .ssh.auth // "key"' "${NG_NODES_FILE}" 2>/dev/null)
+    node_key=$(jq -r --arg n "${node_name}" '.servers[] | select(.name == $n) | .ssh.key // "~/.ssh/id_ed25519"' "${NG_NODES_FILE}" 2>/dev/null)
+
+    if [[ -z "${node_host}" || "${node_host}" == "null" ]]; then
+      if [[ "${NG_LANG}" == "en" ]]; then ng_log "ERROR" "Node not found."; else ng_log "ERROR" "节点不存在。"; fi
+      continue
     fi
 
-    if [[ "${use_sshpass}" -eq 1 ]]; then
-      sshpass -e ssh "${ssh_opts[@]}" "${node_user}@${node_host}" "bash -c '${cmd}'"
-    else
-      ssh "${ssh_opts[@]}" "${node_user}@${node_host}" "bash -c '${cmd}'"
-    fi
-    local rc=$?
+    local -a ssh_opts=(-o ConnectTimeout=10 -o StrictHostKeyChecking=accept-new -p "${node_port}")
+    local use_sshpass=0
 
-    printf '\n'
-    if [[ "${rc}" -eq 0 ]]; then
+    if [[ "${node_auth}" == "password" ]] && command -v sshpass >/dev/null 2>&1; then
+      use_sshpass=1
+      export SSHPASS="${node_key}"
+    else
+      ssh_opts+=(-i "${node_key}")
+    fi
+
+    # Inner loop: operation selection
+    while true; do
       if [[ "${NG_LANG}" == "en" ]]; then
-        printf '✓ Completed on %s\n' "${node_name}"
+        printf '\nRemote execute on %s (%s):\n\n' "${node_name}" "${node_host}"
+        printf '  [1] Custom command\n'
+        printf '  [2] Install base packages (curl, wget, sudo, iptables)\n'
+        printf '  [3] Install Docker\n'
+        printf '  [4] bbrv3-lite network tuning\n'
+        printf '  [5] vps-tcp-tune network tuning\n'
+        printf '  [6] System status\n'
+        printf '  [0] Back to node selection\n'
       else
-        printf '✓ %s 执行完成\n' "${node_name}"
+        printf '\n在 %s (%s) 上远程执行：\n\n' "${node_name}" "${node_host}"
+        printf '  [1] 自定义命令\n'
+        printf '  [2] 基础软件安装（curl、wget、sudo、iptables）\n'
+        printf '  [3] Docker 安装\n'
+        printf '  [4] bbrv3-lite 网络调优\n'
+        printf '  [5] vps-tcp-tune 网络调优\n'
+        printf '  [6] 系统状态查看\n'
+        printf '  [0] 返回选择节点\n'
       fi
-    else
-      if [[ "${NG_LANG}" == "en" ]]; then
-        printf '✗ Failed on %s (exit code: %d)\n' "${node_name}" "${rc}"
-      else
-        printf '✗ %s 执行失败（退出码: %d）\n' "${node_name}" "${rc}"
-      fi
-    fi
 
-    ng_press_enter || return 130
+      printf '\n'
+      ng_t select
+      local op_choice
+      ng_read_line op_choice || return 130
+
+      [[ "${op_choice}" == "0" ]] && break
+
+      local cmd=""
+
+      case "${op_choice}" in
+        1)
+          if [[ "${NG_LANG}" == "en" ]]; then printf 'Enter command: '; else printf '输入命令：'; fi
+          ng_read_line cmd || return 130
+          ;;
+        2)
+          cmd="apt-get update -y && apt-get install -y curl wget sudo iptables || yum install -y curl wget sudo iptables"
+          ;;
+        3)
+          local country
+          if [[ "${use_sshpass}" -eq 1 ]]; then
+            country=$(sshpass -e ssh "${ssh_opts[@]}" "${node_user}@${node_host}" "curl -s --connect-timeout 5 ipinfo.io/country" 2>/dev/null || echo "unknown")
+          else
+            country=$(ssh "${ssh_opts[@]}" "${node_user}@${node_host}" "curl -s --connect-timeout 5 ipinfo.io/country" 2>/dev/null || echo "unknown")
+          fi
+          country=$(echo "${country}" | tr -d '\r\n')
+          if [[ "${country}" == "CN" ]]; then
+            cmd="curl -fsSL https://get.docker.com | bash -s docker --mirror Aliyun"
+          else
+            cmd="curl -fsSL https://get.docker.com | sh"
+          fi
+          ;;
+        4)
+          cmd="bash <(curl -fsSL https://raw.githubusercontent.com/ike-sh/bbrv3-lite/main/net-tcp-tune.sh)"
+          ;;
+        5)
+          cmd="bash <(curl -fsSL https://raw.githubusercontent.com/Eric86777/vps-tcp-tune/main/net-tcp-tune.sh)"
+          ;;
+        6)
+          cmd="echo '=== System Info ==='; hostname; uname -r; uptime; echo ''; echo '=== CPU ==='; nproc; grep 'model name' /proc/cpuinfo | head -1; echo ''; echo '=== Memory ==='; free -h; echo ''; echo '=== Disk ==='; df -h /; echo ''; echo '=== Network ==='; hostname -I; echo ''; echo '=== Docker ==='; docker --version 2>/dev/null || echo 'Not installed'"
+          ;;
+        *)
+          ng_t invalid_option
+          continue
+          ;;
+      esac
+
+      if [[ -z "${cmd}" ]]; then
+        continue
+      fi
+
+      if [[ "${NG_LANG}" == "en" ]]; then
+        printf '\nExecuting on %s ...\n\n' "${node_name}"
+      else
+        printf '\n正在 %s 上执行 ...\n\n' "${node_name}"
+      fi
+
+      if [[ "${use_sshpass}" -eq 1 ]]; then
+        sshpass -e ssh "${ssh_opts[@]}" "${node_user}@${node_host}" "bash -c '${cmd}'"
+      else
+        ssh "${ssh_opts[@]}" "${node_user}@${node_host}" "bash -c '${cmd}'"
+      fi
+      local rc=$?
+
+      printf '\n'
+      if [[ "${rc}" -eq 0 ]]; then
+        if [[ "${NG_LANG}" == "en" ]]; then
+          printf '✓ Completed on %s\n' "${node_name}"
+        else
+          printf '✓ %s 执行完成\n' "${node_name}"
+        fi
+      else
+        if [[ "${NG_LANG}" == "en" ]]; then
+          printf '✗ Failed on %s (exit code: %d)\n' "${node_name}" "${rc}"
+        else
+          printf '✗ %s 执行失败（退出码: %d）\n' "${node_name}" "${rc}"
+        fi
+      fi
+
+      ng_press_enter || return 130
+    done
   done
 }
 
