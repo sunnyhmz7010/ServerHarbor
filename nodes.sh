@@ -185,167 +185,60 @@ ng_check_node_status() {
 ng_setup_mutual_nodes() {
   local remote_ip ssh_port ssh_user auth_method key
 
-  local remote_ip ssh_port ssh_user
-
-  if [[ -f "${NG_NODES_FILE}" ]] && command -v jq >/dev/null 2>&1; then
-    local node_count
-    node_count=$(jq '.servers | length' "${NG_NODES_FILE}" 2>/dev/null || echo "0")
-    if [[ "${node_count}" -gt 0 ]]; then
-      if [[ "${NG_LANG}" == "en" ]]; then
-        printf '\nSelect from existing nodes or enter new IP:\n'
-      else
-        printf '\n从已有节点选择或输入新 IP：\n'
-      fi
-      local ni=1
-      local -a existing_names=()
-      local -a existing_hosts=()
-      while IFS=$'\t' read -r n h; do
-        printf '  [%d] %s (%s)\n' "${ni}" "${n}" "${h}"
-        existing_names+=("${n}")
-        existing_hosts+=("${h}")
-        ((ni++)) || true
-      done < <(jq -r '.servers[] | select(.enabled != false) | "\(.name)\t\(.host)"' "${NG_NODES_FILE}" 2>/dev/null)
-      printf '  [n] %s\n' "$( [[ "${NG_LANG}" == "en" ]] && echo "Enter new IP" || echo "输入新 IP" )"
-
-      printf '\n'
-      if [[ "${NG_LANG}" == "en" ]]; then printf 'Select: '; else printf '选择：'; fi
-      local node_sel
-      ng_read_line node_sel || return 130
-
-      if [[ "${node_sel}" == "n" ]] || [[ "${node_sel}" == "N" ]]; then
-        if [[ "${NG_LANG}" == "en" ]]; then printf 'Enter remote server IP: '; else printf '输入对方服务器 IP：'; fi
-        ng_read_line remote_ip || return 130
-      elif [[ "${node_sel}" =~ ^[0-9]+$ ]] && [[ "${node_sel}" -ge 1 ]] && [[ "${node_sel}" -lt "${ni}" ]]; then
-        # Existing node - use stored SSH info
-        local sel_name="${existing_names[$((node_sel-1))]}"
-        remote_ip="${existing_hosts[$((node_sel-1))]}"
-        ssh_port=$(jq -r --arg n "${sel_name}" '.servers[] | select(.name == $n) | .ssh.port // 22' "${NG_NODES_FILE}" 2>/dev/null)
-        ssh_user=$(jq -r --arg n "${sel_name}" '.servers[] | select(.name == $n) | .ssh.user // "root"' "${NG_NODES_FILE}" 2>/dev/null)
-        auth_method=$(jq -r --arg n "${sel_name}" '.servers[] | select(.name == $n) | .ssh.auth // "key"' "${NG_NODES_FILE}" 2>/dev/null)
-        key=$(jq -r --arg n "${sel_name}" '.servers[] | select(.name == $n) | .ssh.key // "~/.ssh/id_ed25519"' "${NG_NODES_FILE}" 2>/dev/null)
-
-        if [[ "${NG_LANG}" == "en" ]]; then
-          printf 'Selected: %s (%s)\n' "${sel_name}" "${remote_ip}"
-        else
-          printf '已选择: %s (%s)\n' "${sel_name}" "${remote_ip}"
-        fi
-
-        if [[ "${auth_method}" == "password" ]] && ! command -v sshpass >/dev/null 2>&1; then
-          if [[ "${EUID}" -eq 0 ]]; then
-            if command -v apt-get >/dev/null 2>&1; then apt-get install -y -qq sshpass 2>/dev/null || true
-            elif command -v yum >/dev/null 2>&1; then yum install -y sshpass 2>/dev/null || true
-            elif command -v dnf >/dev/null 2>&1; then dnf install -y sshpass 2>/dev/null || true
-            fi
-          fi
-        fi
-
-      else
-        if [[ "${NG_LANG}" == "en" ]]; then printf 'Invalid selection.\n'; else printf '无效选择。\n'; fi
-        return 0
-      fi
-    else
-      if [[ "${NG_LANG}" == "en" ]]; then printf 'Enter remote server IP: '; else printf '输入对方服务器 IP：'; fi
-      ng_read_line remote_ip || return 130
-    fi
-  else
-    if [[ "${NG_LANG}" == "en" ]]; then printf 'Enter remote server IP: '; else printf '输入对方服务器 IP：'; fi
-    ng_read_line remote_ip || return 130
-  fi
-
-  if [[ -z "${remote_ip}" ]]; then
-    if [[ "${NG_LANG}" == "en" ]]; then printf 'IP is required.\n'; else printf 'IP 不能为空。\n'; fi
+  if ! ng_ensure_jq; then return 1; fi
+  if [[ ! -f "${NG_NODES_FILE}" ]]; then
+    if [[ "${NG_LANG}" == "en" ]]; then printf 'No nodes configured. Add a node first.\n'; else printf '未配置节点，请先添加节点。\n'; fi
     return 0
   fi
 
-  if [[ "${NG_LANG}" == "en" ]]; then printf 'SSH port (default 22): '; else printf 'SSH 端口（默认 22）：'; fi
-  ng_read_line ssh_port || return 130
-  ssh_port="${ssh_port:-22}"
-
-  if [[ "${NG_LANG}" == "en" ]]; then printf 'SSH user (default root): '; else printf 'SSH 用户（默认 root）：'; fi
-  ng_read_line ssh_user || return 130
-  ssh_user="${ssh_user:-root}"
-
-  if [[ "${NG_LANG}" == "en" ]]; then
-    printf 'Authentication method:\n  [1] SSH key [2] Password: '
-  else
-    printf '认证方式：\n  [1] SSH 密钥 [2] 密码：'
+  local node_count
+  node_count=$(jq '.servers | length' "${NG_NODES_FILE}" 2>/dev/null || echo "0")
+  if [[ "${node_count}" -eq 0 ]]; then
+    if [[ "${NG_LANG}" == "en" ]]; then printf 'No nodes configured. Add a node first.\n'; else printf '未配置节点，请先添加节点。\n'; fi
+    return 0
   fi
-  local auth_choice
-  ng_read_line auth_choice || return 130
 
-  case "${auth_choice}" in
-    2)
-      auth_method="password"
-      if [[ "${NG_LANG}" == "en" ]]; then printf 'Enter password: '; else printf '输入密码：'; fi
-      IFS= read -rs key < /dev/tty
-      printf '\n'
-      if ! command -v sshpass >/dev/null 2>&1; then
-        if [[ "${EUID}" -eq 0 ]]; then
-          if command -v apt-get >/dev/null 2>&1; then apt-get install -y -qq sshpass 2>/dev/null || true
-          elif command -v yum >/dev/null 2>&1; then yum install -y sshpass 2>/dev/null || true
-          elif command -v dnf >/dev/null 2>&1; then dnf install -y sshpass 2>/dev/null || true
-          fi
-        fi
+  if [[ "${NG_LANG}" == "en" ]]; then printf '\nSelect a node for mutual trust:\n'; else printf '\n选择要建立互信的节点：\n'; fi
+  local ni=1
+  local -a existing_names=()
+  local -a existing_hosts=()
+  while IFS=$'\t' read -r n h; do
+    local node_status
+    node_status=$(ng_check_node_status "${h}")
+    printf '  [%d] %-20s %-20s %s\n' "${ni}" "${n}" "${h}" "${node_status}"
+    existing_names+=("${n}")
+    existing_hosts+=("${h}")
+    ((ni++)) || true
+  done < <(jq -r '.servers[] | select(.enabled != false) | "\(.name)\t\(.host)"' "${NG_NODES_FILE}" 2>/dev/null)
+  printf '  [0] %s\n' "$( [[ "${NG_LANG}" == "en" ]] && echo "Back" || echo "返回" )"
+
+  printf '\n'
+  if [[ "${NG_LANG}" == "en" ]]; then printf 'Select: '; else printf '选择：'; fi
+  local node_sel
+  ng_read_line node_sel || return 130
+
+  [[ "${node_sel}" == "0" ]] && return 0
+
+  if [[ -z "${node_sel}" ]] || ! [[ "${node_sel}" =~ ^[0-9]+$ ]] || [[ "${node_sel}" -lt 1 ]] || [[ "${node_sel}" -ge "${ni}" ]]; then
+    if [[ "${NG_LANG}" == "en" ]]; then printf 'Invalid selection.\n'; else printf '无效选择。\n'; fi
+    return 0
+  fi
+
+  local sel_name="${existing_names[$((node_sel-1))]}"
+  remote_ip="${existing_hosts[$((node_sel-1))]}"
+  ssh_port=$(jq -r --arg n "${sel_name}" '.servers[] | select(.name == $n) | .ssh.port // 22' "${NG_NODES_FILE}" 2>/dev/null)
+  ssh_user=$(jq -r --arg n "${sel_name}" '.servers[] | select(.name == $n) | .ssh.user // "root"' "${NG_NODES_FILE}" 2>/dev/null)
+  auth_method=$(jq -r --arg n "${sel_name}" '.servers[] | select(.name == $n) | .ssh.auth // "key"' "${NG_NODES_FILE}" 2>/dev/null)
+  key=$(jq -r --arg n "${sel_name}" '.servers[] | select(.name == $n) | .ssh.key // "~/.ssh/id_ed25519"' "${NG_NODES_FILE}" 2>/dev/null)
+
+  if [[ "${auth_method}" == "password" ]] && ! command -v sshpass >/dev/null 2>&1; then
+    if [[ "${EUID}" -eq 0 ]]; then
+      if command -v apt-get >/dev/null 2>&1; then apt-get install -y -qq sshpass 2>/dev/null || true
+      elif command -v yum >/dev/null 2>&1; then yum install -y sshpass 2>/dev/null || true
+      elif command -v dnf >/dev/null 2>&1; then dnf install -y sshpass 2>/dev/null || true
       fi
-      ;;
-    *)
-      auth_method="key"
-      local -a available_keys=()
-      for kf in ~/.ssh/id_ed25519 ~/.ssh/id_rsa ~/.ssh/id_ecdsa ~/.ssh/id_dsa; do
-        [[ -f "${kf}" ]] && available_keys+=("${kf}")
-      done
-      if [[ "${#available_keys[@]}" -eq 0 ]]; then
-        if [[ "${NG_LANG}" == "en" ]]; then
-          printf 'No SSH keys found.\n'
-          printf '  [1] Generate a new key (ssh-keygen)\n'
-          printf '  [2] Use password instead\n'
-          printf '  [0] Cancel\n'
-        else
-          printf '未找到 SSH 密钥。\n'
-          printf '  [1] 生成新密钥（ssh-keygen）\n'
-          printf '  [2] 改用密码认证\n'
-          printf '  [0] 取消\n'
-        fi
-        local key_action
-        ng_read_line key_action || return 130
-        case "${key_action}" in
-          1)
-            ssh-keygen -t ed25519 -f ~/.ssh/id_ed25519 -N "" -q 2>/dev/null || ssh-keygen -t rsa -f ~/.ssh/id_rsa -N "" -q 2>/dev/null
-            if [[ -f ~/.ssh/id_ed25519 ]]; then
-              key="$HOME/.ssh/id_ed25519"
-            elif [[ -f ~/.ssh/id_rsa ]]; then
-              key="$HOME/.ssh/id_rsa"
-            else
-              if [[ "${NG_LANG}" == "en" ]]; then printf 'Key generation failed.\n'; else printf '密钥生成失败。\n'; fi
-              return 1
-            fi
-            ;;
-          2)
-            auth_method="password"
-            if [[ "${NG_LANG}" == "en" ]]; then printf 'Enter SSH password: '; else printf '输入 SSH 密码：'; fi
-            IFS= read -rs key < /dev/tty
-            printf '\n'
-            ;;
-          *)
-            return 0
-            ;;
-        esac
-      fi
-      if [[ "${#available_keys[@]}" -eq 1 ]]; then
-        key="${available_keys[0]}"
-      else
-        if [[ "${NG_LANG}" == "en" ]]; then printf 'Available SSH keys:\n'; else printf '可用 SSH 密钥：\n'; fi
-        local ki=1; for kf in "${available_keys[@]}"; do printf '  [%d] %s\n' "${ki}" "${kf}"; ((ki++)) || true; done
-        if [[ "${NG_LANG}" == "en" ]]; then printf 'Select key (default 1): '; else printf '选择密钥（默认 1）：'; fi
-        local key_choice; ng_read_line key_choice || return 130; key_choice="${key_choice:-1}"
-        if [[ "${key_choice}" =~ ^[0-9]+$ ]] && [[ "${key_choice}" -ge 1 ]] && [[ "${key_choice}" -le "${#available_keys[@]}" ]]; then
-          key="${available_keys[$((key_choice-1))]}"
-        else
-          key="${available_keys[0]}"
-        fi
-      fi
-      ;;
-  esac
+    fi
+  fi
 
   local -a ssh_opts=(-o ConnectTimeout=5 -o StrictHostKeyChecking=accept-new -p "${ssh_port}")
   local -a run_ssh=()
@@ -377,7 +270,6 @@ ng_setup_mutual_nodes() {
   remote_alias=$("${run_ssh[@]}" "hostname" 2>/dev/null || echo "node-${remote_ip##*.}")
   remote_alias=$(echo "${remote_alias}" | tr -d '\r\n')
   ng_init_nodes
-  if ! ng_ensure_jq; then return 1; fi
 
   if ! jq -e --arg n "${remote_alias}" '.servers[] | select(.name == $n)' "${NG_NODES_FILE}" >/dev/null 2>&1; then
     local tmp="${NG_NODES_FILE}.tmp"
