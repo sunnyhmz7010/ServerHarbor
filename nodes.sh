@@ -166,376 +166,19 @@ ng_remove_node() {
   fi
 }
 
-ng_test_node_ssh() {
-  local name="$1"
-  local host="$2"
-  local user="$3"
-  local port="$4"
-  local auth="$5"
-  local key="$6"
 
-  local output
+ng_check_node_status() {
+  local host="$1"
+  local port="${2:-22}"
 
-  if [[ "${auth}" == "password" ]]; then
-    if ! command -v sshpass >/dev/null 2>&1; then
-      printf '%s\n' "AUTH_FAILED"
-      return 1
-    fi
-    output=$(SSHPASS="${key}" sshpass -e ssh -o ConnectTimeout=5 -o StrictHostKeyChecking=accept-new -p "${port}" "${user}@${host}" "echo 'SSH_OK'" 2>&1) && {
-      printf '%s\n' "OK"
-      return 0
-    }
-  else
-    output=$(ssh -o ConnectTimeout=5 -o BatchMode=yes -o StrictHostKeyChecking=accept-new -p "${port}" -i "${key}" "${user}@${host}" "echo 'SSH_OK'" 2>&1) && {
-      printf '%s\n' "OK"
-      return 0
-    }
-  fi
-
-  {
-    if [[ "${output}" == *"connection refused"* ]]; then
-      printf '%s\n' "CONN_REFUSED"
-    elif [[ "${output}" == *"connection timed out"* ]] || [[ "${output}" == *"no route to host"* ]]; then
-      printf '%s\n' "TIMEOUT"
-    elif [[ "${output}" == *"permission denied"* ]]; then
-      printf '%s\n' "AUTH_FAILED"
-    elif [[ "${output}" == *"host key verification failed"* ]]; then
-      printf '%s\n' "KEY_MISMATCH"
-    elif [[ "${output}" == *"no such file"* ]] || [[ "${output}" == *"not found"* ]]; then
-      printf '%s\n' "KEY_NOT_FOUND"
+  if ping -c 1 -W 2 "${host}" >/dev/null 2>&1; then
+    if nc -z -w 2 "${host}" "${port}" 2>/dev/null; then
+      printf '%s' "ok"
     else
-      printf '%s\n' "UNKNOWN"
+      printf '%s' "ssh"
     fi
-    return 1
-  }
-}
-
-ng_test_all_nodes() {
-  if ! ng_ensure_jq; then
-    return 1
-  fi
-
-  local count
-  count=$(jq '.servers | length' "${NG_NODES_FILE}" 2>/dev/null || echo 0)
-
-  if [[ "${count}" -eq 0 ]]; then
-    if [[ "${NG_LANG}" == "en" ]]; then
-      printf 'No nodes to test.\n'
-    else
-      printf '没有可测试的节点。\n'
-    fi
-    return 0
-  fi
-
-  if [[ "${NG_LANG}" == "en" ]]; then
-    ng_report_header "🔍 SSH Connectivity Test"
-    ng_report_meta "Generated At" "$(ng_timestamp)"
-    ng_report_meta "Host" "${NG_HOSTNAME}"
-    ng_report_section_start "Test Results"
   else
-    ng_report_header "🔍 SSH 连接测试"
-    ng_report_meta "生成时间" "$(ng_timestamp)"
-    ng_report_meta "主机" "${NG_HOSTNAME}"
-    ng_report_section_start "测试结果"
-  fi
-
-  local total=0 passed=0 failed=0
-
-  while read -r node; do
-    local node_name node_host node_user node_port node_auth node_key
-    node_name=$(echo "${node}" | jq -r '.name')
-    node_host=$(echo "${node}" | jq -r '.host')
-    node_user=$(echo "${node}" | jq -r '.ssh.user // "root"')
-    node_port=$(echo "${node}" | jq -r '.ssh.port // 22')
-    node_auth=$(echo "${node}" | jq -r '.ssh.auth // "key"')
-    node_key=$(echo "${node}" | jq -r '.ssh.key // "~/.ssh/id_ed25519"')
-
-    local status detail
-    status=$(ng_test_node_ssh "${node_name}" "${node_host}" "${node_user}" "${node_port}" "${node_auth}" "${node_key}") || true
-
-    case "${status}" in
-      OK) if [[ "${NG_LANG}" == "en" ]]; then detail="✓ Connected"; else detail="✓ 已连接"; fi; ((passed++)) || true ;;
-      CONN_REFUSED) if [[ "${NG_LANG}" == "en" ]]; then detail="SSH port closed"; else detail="SSH 端口关闭"; fi; ((failed++)) || true ;;
-      TIMEOUT) if [[ "${NG_LANG}" == "en" ]]; then detail="Connection timeout"; else detail="连接超时"; fi; ((failed++)) || true ;;
-      AUTH_FAILED) if [[ "${NG_LANG}" == "en" ]]; then detail="Authentication failed"; else detail="认证失败"; fi; ((failed++)) || true ;;
-      KEY_MISMATCH) if [[ "${NG_LANG}" == "en" ]]; then detail="Host key mismatch"; else detail="主机密钥不匹配"; fi; ((failed++)) || true ;;
-      KEY_NOT_FOUND) if [[ "${NG_LANG}" == "en" ]]; then detail="SSH key not found"; else detail="SSH 密钥未找到"; fi; ((failed++)) || true ;;
-      *) if [[ "${NG_LANG}" == "en" ]]; then detail="Unknown error"; else detail="未知错误"; fi; ((failed++)) || true ;;
-    esac
-    ((total++)) || true
-
-    printf '%s   %-20s %-20s %-15s %s\n' "$(ng_color "${NG_C_PANEL}" "║")" "${node_name}" "${node_host}" "${status}" "${detail}"
-  done < <(jq -c '.servers[]' "${NG_NODES_FILE}" 2>/dev/null)
-
-  ng_report_summary_start "$( [[ "${NG_LANG}" == "en" ]] && echo "Summary" || echo "摘要" )"
-  ng_report_summary_kv "$([[ "${NG_LANG}" == "en" ]] && echo "Tested:" || echo "测试:")" "${total}"
-  ng_report_summary_kv "$([[ "${NG_LANG}" == "en" ]] && echo "Passed:" || echo "通过:")" "${passed}"
-  ng_report_summary_kv "$([[ "${NG_LANG}" == "en" ]] && echo "Failed:" || echo "失败:")" "${failed}"
-  if [[ "${failed}" -gt 0 ]]; then
-    ng_report_summary_kv "$([[ "${NG_LANG}" == "en" ]] && echo "Status:" || echo "状态:")" "$(ng_color "${NG_C_WARN}" "⚠️  $( [[ "${NG_LANG}" == "en" ]] && echo "Some connections failed" || echo "部分连接失败" )")"
-  else
-    ng_report_summary_kv "$([[ "${NG_LANG}" == "en" ]] && echo "Status:" || echo "状态:")" "$(ng_color "${NG_C_OK}" "✅ $( [[ "${NG_LANG}" == "en" ]] && echo "All passed" || echo "全部通过" )")"
-  fi
-  ng_report_footer
-}
-
-ng_run_on_all_nodes() {
-  local command="$1"
-  local output_file="${NG_STATE_DIR}/${NG_HOSTNAME}-batch-exec.state"
-
-  if ! command -v jq >/dev/null 2>&1; then
-    if [[ "${NG_LANG}" == "en" ]]; then
-      ng_log "ERROR" "jq is required."
-    else
-      ng_log "ERROR" "需要 jq。"
-    fi
-    return 1
-  fi
-
-  local count
-  count=$(jq '.servers | length' "${NG_NODES_FILE}" 2>/dev/null || echo 0)
-
-  if [[ "${count}" -eq 0 ]]; then
-    if [[ "${NG_LANG}" == "en" ]]; then
-      printf 'No nodes configured.\n'
-    else
-      printf '未配置节点。\n'
-    fi
-    return 0
-  fi
-
-  if [[ "${NG_LANG}" == "en" ]]; then
-    ng_report_header "⚡ Batch Execute"
-    ng_report_meta "Generated At" "$(ng_timestamp)"
-    ng_report_meta "Host" "${NG_HOSTNAME}"
-    ng_report_meta "Command" "${command}"
-    ng_report_section_start "Results"
-  else
-    ng_report_header "⚡ 批量执行"
-    ng_report_meta "生成时间" "$(ng_timestamp)"
-    ng_report_meta "主机" "${NG_HOSTNAME}"
-    ng_report_meta "命令" "${command}"
-    ng_report_section_start "执行结果"
-  fi
-
-  local total=0 passed=0 failed=0
-
-  local -a lines=()
-  while read -r node; do
-    local name host user port auth key
-    name=$(echo "${node}" | jq -r '.name')
-    host=$(echo "${node}" | jq -r '.host')
-    user=$(echo "${node}" | jq -r '.ssh.user // "root"')
-    port=$(echo "${node}" | jq -r '.ssh.port // 22')
-    auth=$(echo "${node}" | jq -r '.ssh.auth // "key"')
-    key=$(echo "${node}" | jq -r '.ssh.key // "~/.ssh/id_ed25519"')
-
-    local -a ssh_opts=(-o ConnectTimeout=10 -o StrictHostKeyChecking=accept-new -p "${port}")
-    if [[ "${auth}" == "key" ]]; then
-      ssh_opts+=(-i "${key}")
-    fi
-
-    local output status
-    if [[ "${auth}" == "password" ]] && command -v sshpass >/dev/null 2>&1; then
-      output=$(SSHPASS="${key}" sshpass -e ssh "${ssh_opts[@]}" "${user}@${host}" "${command}" 2>&1) && status="OK" || status="FAIL"
-    else
-      output=$(ssh "${ssh_opts[@]}" "${user}@${host}" "${command}" 2>&1) && status="OK" || status="FAIL"
-    fi
-    local first_line
-    first_line=$(echo "${output}" | head -1)
-    local line
-    line=$(printf '%s   %-20s %-10s %s\n' "$(ng_color "${NG_C_PANEL}" "║")" "${name}" "${status}" "${first_line}")
-    printf '%s' "${line}"
-    lines+=("${line}")
-
-    if [[ "${status}" == "OK" ]]; then ((passed++)) || true; else ((failed++)) || true; fi
-    ((total++)) || true
-  done < <(jq -c '.servers[]' "${NG_NODES_FILE}" 2>/dev/null)
-
-  printf '%s\n' "${lines[@]}" > "${output_file}"
-
-  ng_report_summary_start "$( [[ "${NG_LANG}" == "en" ]] && echo "Summary" || echo "摘要" )"
-  ng_report_summary_kv "$([[ "${NG_LANG}" == "en" ]] && echo "Total:" || echo "总计:")" "${total}"
-  ng_report_summary_kv "$([[ "${NG_LANG}" == "en" ]] && echo "Passed:" || echo "通过:")" "${passed}"
-  ng_report_summary_kv "$([[ "${NG_LANG}" == "en" ]] && echo "Failed:" || echo "失败:")" "${failed}"
-  ng_report_footer
-}
-
-ng_collect_local_probe() {
-  local state_file="${NG_STATE_DIR}/${NG_HOSTNAME}-local.state"
-  local tmp_file="${state_file}.tmp"
-
-  {
-    printf 'timestamp=%s\n' "$(date '+%s')"
-    printf 'host=%s\n' "${NG_HOSTNAME}"
-    printf 'uptime=%s\n' "$(uptime -p 2>/dev/null || uptime)"
-    printf 'load=%s\n' "$(ng_system_load)"
-    printf 'disk_root=%s\n' "$(df -h / 2>/dev/null | awk 'NR==2 {print $5}' || echo unknown)"
-    printf 'mem_used=%s\n' "$(free -m 2>/dev/null | awk '/Mem:/ {printf "%s/%sMB", $3, $2}' || echo unknown)"
-    printf 'ssh=%s\n' "$(ng_service_state sshd)"
-  } > "${tmp_file}"
-
-  if mv -f "${tmp_file}" "${state_file}" 2>/dev/null; then
-    printf '%s\n' "${state_file}"
-  else
-    rm -f "${tmp_file}" 2>/dev/null
-    ng_log "ERROR" "$( [[ "${NG_LANG}" == "en" ]] && echo "Failed to write state file" || echo "写入状态文件失败" )"
-    return 1
-  fi
-}
-
-ng_probe_single_peer() {
-  local peer_host="$1"
-  local peer_alias="$2"
-  local ping_result ssh_result latency
-  local ping_output
-
-  ping_output="$(ping -c 1 -W "${NG_PROBE_TIMEOUT}" "${peer_host}" 2>/dev/null)" || true
-
-  if [[ -n "${ping_output}" ]] && [[ "${ping_output}" == *"bytes from"* ]]; then
-    if [[ "${NG_LANG}" == "en" ]]; then ping_result="up"; else ping_result="通"; fi
-    latency="$(echo "${ping_output}" | awk -F'time=' 'END {print $2}' | awk '{print $1}' || echo n/a)"
-  else
-    if [[ "${NG_LANG}" == "en" ]]; then ping_result="down"; else ping_result="断"; fi
-    latency="-"
-  fi
-
-  if nc -z -w "${NG_PROBE_TIMEOUT}" "${peer_host}" 22 2>/dev/null; then
-    if [[ "${NG_LANG}" == "en" ]]; then ssh_result="open"; else ssh_result="开"; fi
-  elif timeout "${NG_PROBE_TIMEOUT}" bash -c "cat < /dev/null > /dev/tcp/${peer_host}/22" >/dev/null 2>&1; then
-    if [[ "${NG_LANG}" == "en" ]]; then ssh_result="open"; else ssh_result="开"; fi
-  else
-    if [[ "${NG_LANG}" == "en" ]]; then ssh_result="closed"; else ssh_result="关"; fi
-  fi
-
-  printf '%-16s %-24s %-8s %-10s %s\n' "${peer_alias}" "${peer_host}" "${ping_result}" "${ssh_result}" "${latency}"
-}
-
-ng_probe_all_peers() {
-  local output_file="${NG_STATE_DIR}/${NG_HOSTNAME}-peers.state"
-
-  {
-    if [[ "${NG_LANG}" == "en" ]]; then
-      printf 'Peer Alias       Peer Host                ICMP     SSH Port   Latency\n'
-      printf '%s\n' '---------------------------------------------------------------------'
-    else
-      printf '节点别名           主机地址                 ICMP     SSH端口    延迟\n'
-      printf '%s\n' '---------------------------------------------------------------------'
-    fi
-
-    if [[ -f "${NG_NODES_FILE}" ]] && command -v jq >/dev/null 2>&1; then
-      jq -r '.servers[] | select(.enabled != false) | "\(.name),\(.host)"' "${NG_NODES_FILE}" 2>/dev/null | while IFS=',' read -r peer_alias peer_host; do
-        [[ -n "${peer_alias}" && -n "${peer_host}" ]] || continue
-        ng_probe_single_peer "${peer_host}" "${peer_alias}"
-      done
-    fi
-  } | tee "${output_file}"
-
-  local state_file
-  state_file="$(ng_collect_local_probe)"
-
-  if [[ "${NG_LANG}" == "en" ]]; then
-    ng_report_header "🛰 ServerHarbor Probe Report"
-    ng_report_meta "Generated At" "$(ng_timestamp)"
-    ng_report_meta "Host" "${NG_HOSTNAME}"
-    ng_report_section_start "Peer Matrix"
-    while IFS= read -r line; do
-      ng_report_line "  ${line}"
-    done < "${output_file}"
-    ng_report_section_start "Local Snapshot"
-    while IFS= read -r line; do
-      ng_report_line "  ${line}"
-    done < "${state_file}"
-    ng_report_footer
-  else
-    ng_report_header "🛰 ServerHarbor 节点探测报告"
-    ng_report_meta "生成时间" "$(ng_timestamp)"
-    ng_report_meta "主机" "${NG_HOSTNAME}"
-    ng_report_section_start "节点矩阵"
-    while IFS= read -r line; do
-      ng_report_line "  ${line}"
-    done < "${output_file}"
-    ng_report_section_start "本机快照"
-    while IFS= read -r line; do
-      ng_report_line "  ${line}"
-    done < "${state_file}"
-    ng_report_footer
-  fi
-}
-
-ng_select_nodes() {
-  if ! ng_ensure_jq; then
-    return 1
-  fi
-
-  if [[ ! -f "${NG_NODES_FILE}" ]]; then
-    if [[ "${NG_LANG}" == "en" ]]; then
-      printf 'No nodes file found.\n' >&2
-    else
-      printf '未找到节点配置文件。\n' >&2
-    fi
-    return 1
-  fi
-
-  local count
-  count=$(jq '.servers | length' "${NG_NODES_FILE}" 2>/dev/null || echo "0")
-  count=$(echo "${count}" | tr -d '[:space:]')
-  : "${count:=0}"
-
-  if [[ "${count}" -eq 0 ]]; then
-    if [[ "${NG_LANG}" == "en" ]]; then
-      printf 'No nodes configured.\n' >&2
-    else
-      printf '未配置节点。\n' >&2
-    fi
-    return 1
-  fi
-
-  if [[ "${NG_LANG}" == "en" ]]; then
-    printf '\nConfigured nodes:\n' >&2
-  else
-    printf '\n已配置的节点：\n' >&2
-  fi
-
-  local idx=1
-  while IFS=$'\t' read -r name host; do
-    printf '  [%d] %s (%s)\n' "${idx}" "${name}" "${host}" >&2
-    ((idx++)) || true
-  done < <(jq -r '.servers[] | select(.enabled != false) | "\(.name)\t\(.host)"' "${NG_NODES_FILE}" 2>/dev/null)
-
-  printf '  [a] %s\n' "$( [[ "${NG_LANG}" == "en" ]] && echo "All" || echo "全部" )" >&2
-  printf '\n' >&2
-
-  if [[ "${NG_LANG}" == "en" ]]; then
-    printf 'Select nodes (comma-separated, e.g. 1,3 or a): ' >&2
-  else
-    printf '选择节点（逗号分隔，如 1,3 或 a）：' >&2
-  fi
-
-  local selection
-  read -r selection < /dev/tty
-
-  if [[ "${selection}" == "a" ]] || [[ "${selection}" == "A" ]] || [[ -z "${selection}" ]]; then
-    printf '%s\n' "all"
-    return 0
-  fi
-
-  local -a selected_names=()
-  while IFS=',' read -r num; do
-    num=$(echo "${num}" | tr -d ' ')
-    if [[ "${num}" =~ ^[0-9]+$ ]] && [[ "${num}" -ge 1 ]] && [[ "${num}" -le "${idx}" ]]; then
-      local sel_name
-      sel_name=$(jq -r "[.servers[] | select(.enabled != false)][${num} - 1].name" "${NG_NODES_FILE}" 2>/dev/null)
-      if [[ -n "${sel_name}" && "${sel_name}" != "null" ]]; then
-        selected_names+=("${sel_name}")
-      fi
-    fi
-  done <<< "${selection}"
-
-  if [[ "${#selected_names[@]}" -eq 0 ]]; then
-    printf '%s\n' "all"
-  else
-    printf '%s\n' "${selected_names[*]}"
+    printf '%s' "down"
   fi
 }
 
@@ -553,15 +196,25 @@ ng_node_manage() {
     printf '\n'
     local -a node_names=()
     local -a node_hosts=()
+    local -a node_ports=()
     local idx=1
 
     if command -v jq >/dev/null 2>&1 && [[ -f "${NG_NODES_FILE}" ]]; then
-      while IFS=$'\t' read -r name host; do
-        printf '  [%d] %-20s %s\n' "${idx}" "${name}" "${host}"
+      while IFS=$'\t' read -r name host port; do
+        local status_icon
+        local node_status
+        node_status=$(ng_check_node_status "${host}" "${port}")
+        case "${node_status}" in
+          ok) status_icon="$(ng_color "${NG_C_OK}" "✓")" ;;
+          ssh) status_icon="$(ng_color "${NG_C_WARN}" "⚠")" ;;
+          *) status_icon="$(ng_color "${NG_C_ERR}" "✗")" ;;
+        esac
+        printf '  [%d] %-20s %-20s %s\n' "${idx}" "${name}" "${host}" "${status_icon}"
         node_names+=("${name}")
         node_hosts+=("${host}")
+        node_ports+=("${port}")
         ((idx++)) || true
-      done < <(jq -r '.servers[] | select(.enabled != false) | "\(.name)\t\(.host)"' "${NG_NODES_FILE}" 2>/dev/null)
+      done < <(jq -r '.servers[] | select(.enabled != false) | "\(.name)\t\(.host)\t\(.ssh.port // 22)"' "${NG_NODES_FILE}" 2>/dev/null)
     fi
 
     if [[ "${idx}" -eq 1 ]]; then
@@ -595,6 +248,14 @@ ng_node_manage() {
       0) return 0 ;;
 
       a|A)
+        if [[ "${NG_LANG}" == "en" ]]; then
+          printf '\n⚠️  Registration only records node info locally.\n'
+          printf '   No software is installed or modified on the remote server.\n\n'
+        else
+          printf '\n⚠️  注册仅在本地记录节点信息，\n'
+          printf '   不会在远程服务器上安装或修改任何内容。\n\n'
+        fi
+
         local alias host user port auth key
         if [[ "${NG_LANG}" == "en" ]]; then
           printf 'Enter node alias (e.g., hk-01): '
@@ -782,17 +443,13 @@ ng_node_menu() {
     clear || true
     if [[ "${NG_LANG}" == "en" ]]; then
       ng_print_title_box "🛰 Node Management" "Multi-server management with SSH"
-      ng_print_option "1" "📋" "Node list" "List / add / remove nodes"
-      ng_print_option "2" "🔍" "Test SSH" "Test SSH connectivity to selected nodes"
-      ng_print_option "3" "📡" "Probe nodes" "Check ICMP, SSH, latency and local health"
-      ng_print_option "4" "⚡" "Batch execute" "Run command on selected nodes"
+      ng_print_option "1" "📋" "Node list" "List / add / remove nodes with connectivity status"
+      ng_print_option "2" "⚡" "Batch execute" "Run command on selected nodes"
       ng_print_option "0" "↩" "Back"
     else
       ng_print_title_box "🛰 节点管理" "基于 SSH 的多服务器管理"
-      ng_print_option "1" "📋" "节点列表" "列出 / 添加 / 删除节点"
-      ng_print_option "2" "🔍" "测试 SSH" "测试选中节点的 SSH 连接"
-      ng_print_option "3" "📡" "探测节点" "检查 ICMP、SSH、延迟和本机健康"
-      ng_print_option "4" "⚡" "批量执行" "在选中节点上执行命令"
+      ng_print_option "1" "📋" "节点列表" "列出 / 添加 / 删除节点（含连通状态）"
+      ng_print_option "2" "⚡" "批量执行" "在选中节点上执行命令"
       ng_print_option "0" "↩" "返回"
     fi
 
@@ -804,120 +461,7 @@ ng_node_menu() {
 
     case "${choice}" in
       1) ng_node_manage ;;
-
       2)
-        local selection
-        selection="$(ng_select_nodes)" || continue
-        if [[ "${selection}" == "all" ]]; then
-          ng_test_all_nodes
-        else
-          if [[ "${NG_LANG}" == "en" ]]; then
-            ng_report_header "🔍 SSH Connectivity Test"
-            ng_report_meta "Generated At" "$(ng_timestamp)"
-            ng_report_meta "Host" "${NG_HOSTNAME}"
-            ng_report_section_start "Test Results"
-          else
-            ng_report_header "🔍 SSH 连接测试"
-            ng_report_meta "生成时间" "$(ng_timestamp)"
-            ng_report_meta "主机" "${NG_HOSTNAME}"
-            ng_report_section_start "测试结果"
-          fi
-
-          local total=0 passed=0 failed=0
-
-          for node_name in ${selection}; do
-            local node_host node_user node_port node_auth node_key
-            node_host=$(jq -r --arg n "${node_name}" '.servers[] | select(.name == $n) | .host' "${NG_NODES_FILE}" 2>/dev/null)
-            node_user=$(jq -r --arg n "${node_name}" '.servers[] | select(.name == $n) | .ssh.user // "root"' "${NG_NODES_FILE}" 2>/dev/null)
-            node_port=$(jq -r --arg n "${node_name}" '.servers[] | select(.name == $n) | .ssh.port // 22' "${NG_NODES_FILE}" 2>/dev/null)
-            node_auth=$(jq -r --arg n "${node_name}" '.servers[] | select(.name == $n) | .ssh.auth // "key"' "${NG_NODES_FILE}" 2>/dev/null)
-            node_key=$(jq -r --arg n "${node_name}" '.servers[] | select(.name == $n) | .ssh.key // "~/.ssh/id_ed25519"' "${NG_NODES_FILE}" 2>/dev/null)
-            if [[ -z "${node_host}" || "${node_host}" == "null" ]]; then continue; fi
-
-            local status detail
-            status=$(ng_test_node_ssh "${node_name}" "${node_host}" "${node_user}" "${node_port}" "${node_auth}" "${node_key}") || true
-
-            case "${status}" in
-              OK) if [[ "${NG_LANG}" == "en" ]]; then detail="✓ Connected"; else detail="✓ 已连接"; fi; ((passed++)) || true ;;
-              CONN_REFUSED) if [[ "${NG_LANG}" == "en" ]]; then detail="SSH port closed"; else detail="SSH 端口关闭"; fi; ((failed++)) || true ;;
-              TIMEOUT) if [[ "${NG_LANG}" == "en" ]]; then detail="Connection timeout"; else detail="连接超时"; fi; ((failed++)) || true ;;
-              AUTH_FAILED) if [[ "${NG_LANG}" == "en" ]]; then detail="Authentication failed"; else detail="认证失败"; fi; ((failed++)) || true ;;
-              KEY_MISMATCH) if [[ "${NG_LANG}" == "en" ]]; then detail="Host key mismatch"; else detail="主机密钥不匹配"; fi; ((failed++)) || true ;;
-              KEY_NOT_FOUND) if [[ "${NG_LANG}" == "en" ]]; then detail="SSH key not found"; else detail="SSH 密钥未找到"; fi; ((failed++)) || true ;;
-              *) if [[ "${NG_LANG}" == "en" ]]; then detail="Unknown error"; else detail="未知错误"; fi; ((failed++)) || true ;;
-            esac
-            ((total++)) || true
-
-            printf '%s   %-20s %-20s %-15s %s\n' "$(ng_color "${NG_C_PANEL}" "║")" "${node_name}" "${node_host}" "${status}" "${detail}"
-          done
-
-          ng_report_summary_start "$( [[ "${NG_LANG}" == "en" ]] && echo "Summary" || echo "摘要" )"
-          ng_report_summary_kv "$([[ "${NG_LANG}" == "en" ]] && echo "Tested:" || echo "测试:")" "${total}"
-          ng_report_summary_kv "$([[ "${NG_LANG}" == "en" ]] && echo "Passed:" || echo "通过:")" "${passed}"
-          ng_report_summary_kv "$([[ "${NG_LANG}" == "en" ]] && echo "Failed:" || echo "失败:")" "${failed}"
-          if [[ "${failed}" -gt 0 ]]; then
-            ng_report_summary_kv "$([[ "${NG_LANG}" == "en" ]] && echo "Status:" || echo "状态:")" "$(ng_color "${NG_C_WARN}" "⚠️  $( [[ "${NG_LANG}" == "en" ]] && echo "Some connections failed" || echo "部分连接失败" )")"
-          else
-            ng_report_summary_kv "$([[ "${NG_LANG}" == "en" ]] && echo "Status:" || echo "状态:")" "$(ng_color "${NG_C_OK}" "✅ $( [[ "${NG_LANG}" == "en" ]] && echo "All passed" || echo "全部通过" )")"
-          fi
-          ng_report_footer
-        fi
-        ;;
-      3)
-        local selection
-        selection="$(ng_select_nodes)" || continue
-        if [[ "${selection}" == "all" ]]; then
-          ng_probe_all_peers
-        else
-          if [[ "${NG_LANG}" == "en" ]]; then
-            ng_report_header "🛰 ServerHarbor Probe Report"
-            ng_report_meta "Generated At" "$(ng_timestamp)"
-            ng_report_meta "Host" "${NG_HOSTNAME}"
-            ng_report_section_start "Peer Matrix"
-          else
-            ng_report_header "🛰 ServerHarbor 节点探测报告"
-            ng_report_meta "生成时间" "$(ng_timestamp)"
-            ng_report_meta "主机" "${NG_HOSTNAME}"
-            ng_report_section_start "节点矩阵"
-          fi
-
-          for node_name in ${selection}; do
-            local node_host
-            node_host=$(jq -r --arg n "${node_name}" '.servers[] | select(.name == $n) | .host' "${NG_NODES_FILE}" 2>/dev/null)
-            if [[ -z "${node_host}" || "${node_host}" == "null" ]]; then continue; fi
-
-            local ping_output ping_result ssh_result latency
-            ping_output="$(ping -c 1 -W "${NG_PROBE_TIMEOUT}" "${node_host}" 2>/dev/null)" || true
-            if [[ -n "${ping_output}" ]] && [[ "${ping_output}" == *"bytes from"* ]]; then
-              ping_result="up"
-              latency="$(echo "${ping_output}" | awk -F'time=' 'END {print $2}' | awk '{print $1}' || echo n/a)"
-            else
-              ping_result="down"
-              latency="timeout"
-            fi
-
-            if nc -z -w "${NG_PROBE_TIMEOUT}" "${node_host}" 22 2>/dev/null; then
-              ssh_result="open"
-            elif timeout "${NG_PROBE_TIMEOUT}" bash -c "cat < /dev/null > /dev/tcp/${node_host}/22" >/dev/null 2>&1; then
-              ssh_result="open"
-            else
-              ssh_result="closed"
-            fi
-
-            printf '%s   %-16s %-24s %-8s %-10s %s\n' "$(ng_color "${NG_C_PANEL}" "║")" "${node_name}" "${node_host}" "${ping_result}" "${ssh_result}" "${latency}"
-          done
-
-          local state_file
-          state_file="$(ng_collect_local_probe)"
-
-          ng_report_section_start "$( [[ "${NG_LANG}" == "en" ]] && echo "Local Snapshot" || echo "本机快照" )"
-          while IFS= read -r line; do
-            printf '%s   %s\n' "$(ng_color "${NG_C_PANEL}" "║")" "${line}"
-          done < "${state_file}"
-          ng_report_footer
-        fi
-        ;;
-      4)
         if [[ "${NG_LANG}" == "en" ]]; then
           printf 'Enter command to execute: '
         else

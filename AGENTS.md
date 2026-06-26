@@ -68,7 +68,7 @@ This repository is `ServerHarbor`, a Bash-based Linux multi-server operations to
 Main menu:
 - `[1]` System bootstrap — base packages, Docker, network tuning, system status, report, data migration
 - `[2]` Security — security report, failed logins, web requests, firewall, integrity baseline/verify, watch paths, security score
-- `[3]` Node management — list/add/remove, test SSH, probe, batch execute
+- `[3]` Node management — node list with connectivity status, add/remove, batch execute
 - `[4]` Update
 - `[5]` Uninstall (installed mode only)
 - `[0]` Exit
