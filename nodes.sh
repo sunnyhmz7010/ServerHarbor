@@ -251,9 +251,9 @@ ng_setup_mutual_nodes() {
   fi
 
   if [[ "${NG_LANG}" == "en" ]]; then
-    printf '\n[1/4] Testing SSH to %s ...\n' "${remote_ip}"
+    printf '[1/3] Testing SSH to %s ...\n' "${remote_ip}"
   else
-    printf '\n[1/4] 测试 SSH 连接 %s ...\n' "${remote_ip}"
+    printf '[1/3] 测试 SSH 连接 %s ...\n' "${remote_ip}"
   fi
   if ! "${run_ssh[@]}" "echo OK" >/dev/null 2>&1; then
     if [[ "${NG_LANG}" == "en" ]]; then ng_log "ERROR" "SSH connection failed."; else ng_log "ERROR" "SSH 连接失败。"; fi
@@ -262,35 +262,20 @@ ng_setup_mutual_nodes() {
   if [[ "${NG_LANG}" == "en" ]]; then printf '  ✓ SSH connected\n'; else printf '  ✓ SSH 连接成功\n'; fi
 
   if [[ "${NG_LANG}" == "en" ]]; then
-    printf '[2/4] Registering remote as local node ...\n'
+    printf '[2/3] Registering self on remote server ...\n'
   else
-    printf '[2/4] 注册对方为本机节点 ...\n'
-  fi
-  local remote_alias
-  remote_alias=$("${run_ssh[@]}" "hostname" 2>/dev/null || echo "node-${remote_ip##*.}")
-  remote_alias=$(echo "${remote_alias}" | tr -d '\r\n')
-  ng_init_nodes
-
-  if ! jq -e --arg h "${remote_ip}" '.servers[] | select(.host == $h)' "${NG_NODES_FILE}" >/dev/null 2>&1; then
-    local tmp="${NG_NODES_FILE}.tmp"
-    jq --arg name "${remote_alias}" --arg host "${remote_ip}" --arg user "${ssh_user}" --arg port "${ssh_port}" --arg auth "${auth_method}" --arg key "${key}" \
-      '.servers += [{name:$name,host:$host,ssh:{user:$user,port:($port|tonumber),auth:$auth,key:$key},tags:[],enabled:true}]' \
-      "${NG_NODES_FILE}" > "${tmp}" && mv -f "${tmp}" "${NG_NODES_FILE}"
-    if [[ "${NG_LANG}" == "en" ]]; then printf '  ✓ Node "%s" added\n' "${remote_alias}"; else printf '  ✓ 节点 "%s" 已添加\n' "${remote_alias}"; fi
-  else
-    local existing_name
-    existing_name=$(jq -r --arg h "${remote_ip}" '.servers[] | select(.host == $h) | .name' "${NG_NODES_FILE}" 2>/dev/null)
-    if [[ "${NG_LANG}" == "en" ]]; then printf '  ⚠ Node "%s" already exists for this IP\n' "${existing_name}"; else printf '  ⚠ 该 IP 已有节点 "%s"\n' "${existing_name}"; fi
-  fi
-
-  if [[ "${NG_LANG}" == "en" ]]; then
-    printf '[3/4] Registering self on remote server ...\n'
-  else
-    printf '[3/4] 在对方服务器上注册本机 ...\n'
+    printf '[2/3] 在对方服务器上注册本机 ...\n'
   fi
   local my_ip
   my_ip=$(hostname -I 2>/dev/null | awk '{print $1}' || hostname)
   local my_alias="${NG_HOSTNAME}"
+
+  # Read local SSH info from the selected node entry (the connection we're using)
+  local local_ssh_user local_ssh_port local_ssh_auth local_ssh_key
+  local_ssh_user=$(jq -r --arg n "${sel_name}" '.servers[] | select(.name == $n) | .ssh.user // "root"' "${NG_NODES_FILE}" 2>/dev/null)
+  local_ssh_port=$(jq -r --arg n "${sel_name}" '.servers[] | select(.name == $n) | .ssh.port // 22' "${NG_NODES_FILE}" 2>/dev/null)
+  local_ssh_auth=$(jq -r --arg n "${sel_name}" '.servers[] | select(.name == $n) | .ssh.auth // "key"' "${NG_NODES_FILE}" 2>/dev/null)
+  local_ssh_key=$(jq -r --arg n "${sel_name}" '.servers[] | select(.name == $n) | .ssh.key // "~/.ssh/id_ed25519"' "${NG_NODES_FILE}" 2>/dev/null)
 
   local remote_nodes_file
   remote_nodes_file=$("${run_ssh[@]}" "bash -c 'echo \${SERVERHARBOR_HOME:-\${XDG_CONFIG_HOME:-\$HOME/.config}/serverharbor}/servers.json'" 2>/dev/null || echo "")
@@ -302,7 +287,7 @@ ng_setup_mutual_nodes() {
   local register_cmd="mkdir -p \$(dirname ${remote_nodes_file}) && [[ -f ${remote_nodes_file} ]] || cat > ${remote_nodes_file} <<'EOFCFG'
 {\"defaults\":{\"ssh\":{\"user\":\"root\",\"port\":22,\"key\":\"~/.ssh/id_ed25519\"}},\"servers\":[]}
 EOFCFG
-jq --arg name '${my_alias}' --arg host '${my_ip}' --arg user '${ssh_user}' --arg port '${ssh_port}' --arg auth '${auth_method}' --arg key '${key}' '.servers += [{name:\$name,host:\$host,ssh:{user:\$user,port:(\$port|tonumber),auth:\$auth,key:\$key},tags:[],enabled:true}]' ${remote_nodes_file} > ${remote_nodes_file}.tmp && mv -f ${remote_nodes_file}.tmp ${remote_nodes_file}"
+jq --arg name '${my_alias}' --arg host '${my_ip}' --arg user '${local_ssh_user}' --arg port '${local_ssh_port}' --arg auth '${local_ssh_auth}' --arg key '${local_ssh_key}' '.servers += [{name:\$name,host:\$host,ssh:{user:\$user,port:(\$port|tonumber),auth:\$auth,key:\$key},tags:[],enabled:true}]' ${remote_nodes_file} > ${remote_nodes_file}.tmp && mv -f ${remote_nodes_file}.tmp ${remote_nodes_file}"
 
   if "${run_ssh[@]}" "bash -c '${register_cmd}'" >/dev/null 2>&1; then
     if [[ "${NG_LANG}" == "en" ]]; then printf '  ✓ Self registered on remote\n'; else printf '  ✓ 本机已注册到对方服务器\n'; fi
@@ -311,9 +296,9 @@ jq --arg name '${my_alias}' --arg host '${my_ip}' --arg user '${ssh_user}' --arg
   fi
 
   if [[ "${NG_LANG}" == "en" ]]; then
-    printf '[4/4] Verifying bidirectional connectivity ...\n'
+    printf '[3/3] Verifying bidirectional connectivity ...\n'
   else
-    printf '[4/4] 验证双向连通性 ...\n'
+    printf '[3/3] 验证双向连通性 ...\n'
   fi
 
   local ok_a=0 ok_b=0
@@ -694,7 +679,7 @@ ng_remote_execute() {
           cmd="echo 'y' | bash <(curl -q -fsSL 'https://raw.githubusercontent.com/sunnyhmz7010/ServerHarbor/main/run.sh?$(date +%s)')"
           ;;
         2)
-          cmd="curl -q -fsSL 'https://raw.githubusercontent.com/sunnyhmz7010/ServerHarbor/main/install.sh?$(date +%s)' | sudo bash"
+          cmd="echo 'y' | curl -q -fsSL 'https://raw.githubusercontent.com/sunnyhmz7010/ServerHarbor/main/install.sh?$(date +%s)' | sudo bash"
           ;;
         3)
           cmd="shr"
