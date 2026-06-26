@@ -631,30 +631,22 @@ ng_select_nodes() {
   printf '%s\n' "${selection}"
 }
 
-ng_node_menu() {
+ng_node_manage() {
   local choice
 
   while true; do
     clear || true
     if [[ "${NG_LANG}" == "en" ]]; then
-      ng_print_title_box "🛰 Node Management" "Multi-server management with SSH"
+      ng_print_title_box "📋 Node List" "Manage node configurations"
       ng_print_option "1" "📋" "List nodes" "Show all configured nodes"
       ng_print_option "2" "➕" "Add node" "Add a new server node"
       ng_print_option "3" "➖" "Remove node" "Remove a server node"
-      ng_print_option "4" "🔍" "Test SSH" "Test SSH connectivity to selected nodes"
-      ng_print_option "5" "📡" "Probe nodes" "Check ICMP, SSH, latency and local health"
-      ng_print_option "6" "⚡" "Batch execute" "Run command on selected nodes"
-      ng_print_option "7" "📁" "Sync config" "Sync config file to selected nodes"
       ng_print_option "0" "↩" "Back"
     else
-      ng_print_title_box "🛰 节点管理" "基于 SSH 的多服务器管理"
+      ng_print_title_box "📋 节点列表" "管理节点配置"
       ng_print_option "1" "📋" "列出节点" "显示所有已配置的节点"
       ng_print_option "2" "➕" "添加节点" "添加新的服务器节点"
       ng_print_option "3" "➖" "删除节点" "删除服务器节点"
-      ng_print_option "4" "🔍" "测试 SSH" "测试选中节点的 SSH 连接"
-      ng_print_option "5" "📡" "探测节点" "检查 ICMP、SSH、延迟和本机健康"
-      ng_print_option "6" "⚡" "批量执行" "在选中节点上执行命令"
-      ng_print_option "7" "📁" "配置同步" "将配置文件同步到选中节点"
       ng_print_option "0" "↩" "返回"
     fi
 
@@ -666,6 +658,7 @@ ng_node_menu() {
 
     case "${choice}" in
       1) ng_list_nodes ;;
+
       2)
         local alias host user port auth key
         if [[ "${NG_LANG}" == "en" ]]; then
@@ -823,6 +816,7 @@ ng_node_menu() {
           fi
         fi
         ;;
+
       3)
         if [[ "${NG_LANG}" == "en" ]]; then
           printf 'Enter node alias to remove: '
@@ -835,7 +829,48 @@ ng_node_menu() {
           ng_remove_node "${remove_alias}"
         fi
         ;;
-      4)
+
+      0) return 0 ;;
+      *) ng_t invalid_option ;;
+    esac
+
+    ng_press_enter || return 130
+  done
+}
+
+ng_node_menu() {
+  local choice
+
+  while true; do
+    clear || true
+    if [[ "${NG_LANG}" == "en" ]]; then
+      ng_print_title_box "🛰 Node Management" "Multi-server management with SSH"
+      ng_print_option "1" "📋" "Node list" "List / add / remove nodes"
+      ng_print_option "2" "🔍" "Test SSH" "Test SSH connectivity to selected nodes"
+      ng_print_option "3" "📡" "Probe nodes" "Check ICMP, SSH, latency and local health"
+      ng_print_option "4" "⚡" "Batch execute" "Run command on selected nodes"
+      ng_print_option "5" "📁" "Sync config" "Sync config file to selected nodes"
+      ng_print_option "0" "↩" "Back"
+    else
+      ng_print_title_box "🛰 节点管理" "基于 SSH 的多服务器管理"
+      ng_print_option "1" "📋" "节点列表" "列出 / 添加 / 删除节点"
+      ng_print_option "2" "🔍" "测试 SSH" "测试选中节点的 SSH 连接"
+      ng_print_option "3" "📡" "探测节点" "检查 ICMP、SSH、延迟和本机健康"
+      ng_print_option "4" "⚡" "批量执行" "在选中节点上执行命令"
+      ng_print_option "5" "📁" "配置同步" "将配置文件同步到选中节点"
+      ng_print_option "0" "↩" "返回"
+    fi
+
+    printf '\n'
+    ng_print_menu_hint
+    printf '\n'
+    ng_t select
+    ng_read_line choice || return 130
+
+    case "${choice}" in
+      1) ng_node_manage ;;
+
+      2)
         local selection
         selection="$(ng_select_nodes)" || continue
         if [[ "${selection}" == "all" ]]; then
@@ -884,8 +919,8 @@ ng_node_menu() {
           done
         fi
         ;;
-      5) ng_probe_all_peers ;;
-      6)
+      3) ng_probe_all_peers ;;
+      4)
         if [[ "${NG_LANG}" == "en" ]]; then
           printf 'Enter command to execute: '
         else
@@ -943,7 +978,7 @@ ng_node_menu() {
           fi
         fi
         ;;
-      7)
+      5)
         local src_file remote_path
         if [[ "${NG_LANG}" == "en" ]]; then
           printf 'Enter source file path: '
