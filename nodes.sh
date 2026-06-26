@@ -211,15 +211,25 @@ ng_test_node_ssh() {
 
   local -a ssh_opts=(-o ConnectTimeout=5 -o BatchMode=yes -o StrictHostKeyChecking=accept-new -p "${port}")
 
-  if [[ "${auth}" == "key" ]]; then
+  local output
+  if [[ "${auth}" == "password" ]]; then
+    if ! command -v sshpass >/dev/null 2>&1; then
+      printf '%s\n' "AUTH_FAILED"
+      return 1
+    fi
+    output=$(sshpass -p "${key}" ssh "${ssh_opts[@]}" "${user}@${host}" "echo 'SSH_OK'" 2>&1) && {
+      printf '%s\n' "OK"
+      return 0
+    }
+  else
     ssh_opts+=(-i "${key}")
+    output=$(ssh "${ssh_opts[@]}" "${user}@${host}" "echo 'SSH_OK'" 2>&1) && {
+      printf '%s\n' "OK"
+      return 0
+    }
   fi
 
-  local output
-  output=$(ssh "${ssh_opts[@]}" "${user}@${host}" "echo 'SSH_OK'" 2>&1) && {
-    printf '%s\n' "OK"
-    return 0
-  } || {
+  {
     if [[ "${output}" == *"connection refused"* ]]; then
       printf '%s\n' "CONN_REFUSED"
     elif [[ "${output}" == *"connection timed out"* ]] || [[ "${output}" == *"no route to host"* ]]; then
@@ -362,7 +372,11 @@ ng_run_on_all_nodes() {
       fi
 
       local output status
-      output=$(ssh "${ssh_opts[@]}" "${user}@${host}" "${command}" 2>&1) && status="OK" || status="FAIL"
+      if [[ "${auth}" == "password" ]] && command -v sshpass >/dev/null 2>&1; then
+        output=$(sshpass -p "${key}" ssh "${ssh_opts[@]}" "${user}@${host}" "${command}" 2>&1) && status="OK" || status="FAIL"
+      else
+        output=$(ssh "${ssh_opts[@]}" "${user}@${host}" "${command}" 2>&1) && status="OK" || status="FAIL"
+      fi
       printf '%-20s %-10s %s\n' "${name}" "${status}" "$(echo "${output}" | head -1)"
     done
   } | tee "${output_file}"
@@ -437,7 +451,14 @@ ng_sync_to_all_nodes() {
       scp_opts+=(-i "${key}")
     fi
 
-    if scp "${scp_opts[@]}" "${source_file}" "${user}@${host}:${remote_path}" 2>/dev/null; then
+    local scp_ok=0
+    if [[ "${auth}" == "password" ]] && command -v sshpass >/dev/null 2>&1; then
+      sshpass -p "${key}" scp "${scp_opts[@]}" "${source_file}" "${user}@${host}:${remote_path}" 2>/dev/null && scp_ok=1
+    else
+      scp "${scp_opts[@]}" "${source_file}" "${user}@${host}:${remote_path}" 2>/dev/null && scp_ok=1
+    fi
+
+    if [[ "${scp_ok}" -eq 1 ]]; then
       if [[ "${NG_LANG}" == "en" ]]; then
         printf '  ✓ %s: synced\n' "${name}"
       else
