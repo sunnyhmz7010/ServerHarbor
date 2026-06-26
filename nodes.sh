@@ -828,7 +828,47 @@ ng_node_menu() {
           done
         fi
         ;;
-      3) ng_probe_all_peers ;;
+      3)
+        local selection
+        selection="$(ng_select_nodes)" || continue
+        if [[ "${selection}" == "all" ]]; then
+          ng_probe_all_peers
+        else
+          local -a target_nodes=()
+          while IFS=',' read -r num; do
+            num=$(echo "${num}" | tr -d ' ')
+            if [[ "${num}" =~ ^[0-9]+$ ]]; then
+              target_nodes+=("${num}")
+            fi
+          done <<< "${selection}"
+
+          if [[ "${NG_LANG}" == "en" ]]; then
+            ng_print_header "Node Probe"
+            printf '%-16s %-24s %-8s %-10s %s\n' "Alias" "Host" "ICMP" "SSH" "Latency"
+            printf '%s\n' '---------------------------------------------------------------------'
+          else
+            ng_print_header "节点探测"
+            printf '%-16s %-24s %-8s %-10s %s\n' "别名" "主机" "ICMP" "SSH" "延迟"
+            printf '%s\n' '---------------------------------------------------------------------'
+          fi
+
+          for node_idx in "${target_nodes[@]}"; do
+            local node_name node_host
+            node_name=$(jq -r ".servers[$((node_idx-1))].name" "${NG_NODES_FILE}" 2>/dev/null)
+            node_host=$(jq -r ".servers[$((node_idx-1))].host" "${NG_NODES_FILE}" 2>/dev/null)
+            if [[ -z "${node_name}" || "${node_name}" == "null" ]]; then continue; fi
+            ng_probe_single_peer "${node_host}" "${node_name}"
+          done
+
+          local state_file
+          state_file="$(ng_collect_local_probe)"
+          if [[ "${NG_LANG}" == "en" ]]; then
+            printf '\nLocal snapshot saved to: %s\n' "${state_file}"
+          else
+            printf '\n本机快照已保存至: %s\n' "${state_file}"
+          fi
+        fi
+        ;;
       4)
         if [[ "${NG_LANG}" == "en" ]]; then
           printf 'Enter command to execute: '
