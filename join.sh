@@ -48,6 +48,7 @@ AUTH_CHOICE="${AUTH_CHOICE:-1}"
 
 SSH_AUTH="key"
 SSH_PASS=""
+SSH_KEY=""
 
 if [[ "${AUTH_CHOICE}" == "2" ]]; then
   SSH_AUTH="password"
@@ -66,6 +67,36 @@ if [[ "${AUTH_CHOICE}" == "2" ]]; then
     elif command -v dnf >/dev/null 2>&1; then dnf install -y sshpass 2>/dev/null || true
     fi
   fi
+else
+  AVAILABLE_KEYS=()
+  for kf in ~/.ssh/id_ed25519 ~/.ssh/id_rsa ~/.ssh/id_ecdsa ~/.ssh/id_dsa; do
+    [[ -f "${kf}" ]] && AVAILABLE_KEYS+=("${kf}")
+  done
+
+  if [[ "${#AVAILABLE_KEYS[@]}" -eq 0 ]]; then
+    if [[ "${LANG_CHOICE}" == "en" ]]; then printf 'No SSH keys found. Generate one first: ssh-keygen\n'; else printf '未找到 SSH 密钥，请先生成：ssh-keygen\n'; fi
+    exit 1
+  fi
+
+  if [[ "${#AVAILABLE_KEYS[@]}" -eq 1 ]]; then
+    SSH_KEY="${AVAILABLE_KEYS[0]}"
+    if [[ "${LANG_CHOICE}" == "en" ]]; then printf 'Using SSH key: %s\n' "${SSH_KEY}"; else printf '使用 SSH 密钥：%s\n' "${SSH_KEY}"; fi
+  else
+    if [[ "${LANG_CHOICE}" == "en" ]]; then printf 'Available SSH keys:\n'; else printf '可用 SSH 密钥：\n'; fi
+    ki=1
+    for kf in "${AVAILABLE_KEYS[@]}"; do
+      printf '  [%d] %s\n' "${ki}" "${kf}"
+      ((ki++)) || true
+    done
+    if [[ "${LANG_CHOICE}" == "en" ]]; then printf 'Select key (default 1): '; else printf '选择密钥（默认 1）：'; fi
+    read -r KEY_CHOICE < /dev/tty
+    KEY_CHOICE="${KEY_CHOICE:-1}"
+    if [[ "${KEY_CHOICE}" =~ ^[0-9]+$ ]] && [[ "${KEY_CHOICE}" -ge 1 ]] && [[ "${KEY_CHOICE}" -le "${#AVAILABLE_KEYS[@]}" ]]; then
+      SSH_KEY="${AVAILABLE_KEYS[$((KEY_CHOICE-1))]}"
+    else
+      SSH_KEY="${AVAILABLE_KEYS[0]}"
+    fi
+  fi
 fi
 
 if [[ "${LANG_CHOICE}" == "en" ]]; then
@@ -77,6 +108,10 @@ fi
 SSH_TEST_OK=0
 if [[ "${SSH_AUTH}" == "password" ]] && command -v sshpass >/dev/null 2>&1; then
   if sshpass -p "${SSH_PASS}" ssh -o ConnectTimeout=5 -o StrictHostKeyChecking=accept-new -p "${SSH_PORT}" "${SSH_USER}@${NEW_IP}" "echo OK" >/dev/null 2>&1; then
+    SSH_TEST_OK=1
+  fi
+elif [[ -n "${SSH_KEY}" ]]; then
+  if ssh -o ConnectTimeout=5 -o StrictHostKeyChecking=accept-new -p "${SSH_PORT}" -i "${SSH_KEY}" "${SSH_USER}@${NEW_IP}" "echo OK" >/dev/null 2>&1; then
     SSH_TEST_OK=1
   fi
 else
@@ -127,7 +162,7 @@ jq --arg name "${ALIAS}" \
    --arg user "${SSH_USER}" \
    --arg port "${SSH_PORT}" \
    --arg auth "${SSH_AUTH}" \
-   --arg key "$( [[ "${SSH_AUTH}" == "key" ]] && echo "~/.ssh/id_ed25519" || echo "" )" \
+   --arg key "$( [[ "${SSH_AUTH}" == "key" ]] && echo "${SSH_KEY}" || echo "" )" \
    '.servers += [{name:$name,host:$host,ssh:{user:$user,port:($port|number),auth:$auth,key:$key},tags:[],enabled:true}]' \
    "${NODES_FILE}" > "${TMP}" && mv -f "${TMP}" "${NODES_FILE}"
 

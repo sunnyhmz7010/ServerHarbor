@@ -794,14 +794,60 @@ ng_register_node() {
       ;;
     *)
       ssh_auth="key"
-      ssh_key="~/.ssh/id_ed25519"
+      local -a available_keys=()
+      for kf in ~/.ssh/id_ed25519 ~/.ssh/id_rsa ~/.ssh/id_ecdsa ~/.ssh/id_dsa; do
+        [[ -f "${kf}" ]] && available_keys+=("${kf}")
+      done
 
-      if [[ "${NG_LANG}" == "en" ]]; then
-        printf '\nTesting SSH to %s@%s:%s ...\n' "${ssh_user}" "${new_ip}" "${ssh_port}"
-      else
-        printf '\n正在测试 SSH 连接 %s@%s:%s ...\n' "${ssh_user}" "${new_ip}" "${ssh_port}"
+      if [[ "${#available_keys[@]}" -eq 0 ]]; then
+        if [[ "${NG_LANG}" == "en" ]]; then
+          printf 'No SSH keys found in ~/.ssh/. Generate one first (ssh-keygen).\n'
+        else
+          printf '~/.ssh/ 中未找到密钥，请先生成（ssh-keygen）。\n'
+        fi
+        return 1
       fi
 
+      if [[ "${#available_keys[@]}" -eq 1 ]]; then
+        ssh_key="${available_keys[0]}"
+        if [[ "${NG_LANG}" == "en" ]]; then
+          printf 'Using SSH key: %s\n' "${ssh_key}"
+        else
+          printf '使用 SSH 密钥：%s\n' "${ssh_key}"
+        fi
+      else
+        if [[ "${NG_LANG}" == "en" ]]; then
+          printf 'Available SSH keys:\n'
+        else
+          printf '可用 SSH 密钥：\n'
+        fi
+        local ki=1
+        for kf in "${available_keys[@]}"; do
+          printf '  [%d] %s\n' "${ki}" "${kf}"
+          ((ki++)) || true
+        done
+        if [[ "${NG_LANG}" == "en" ]]; then
+          printf 'Select key (default 1): '
+        else
+          printf '选择密钥（默认 1）：'
+        fi
+        local key_choice
+        ng_read_line key_choice || return 130
+        key_choice="${key_choice:-1}"
+        if [[ "${key_choice}" =~ ^[0-9]+$ ]] && [[ "${key_choice}" -ge 1 ]] && [[ "${key_choice}" -le "${#available_keys[@]}" ]]; then
+          ssh_key="${available_keys[$((key_choice-1))]}"
+        else
+          ssh_key="${available_keys[0]}"
+        fi
+      fi
+
+      if [[ "${NG_LANG}" == "en" ]]; then
+        printf '\nTesting SSH to %s@%s:%s (key: %s) ...\n' "${ssh_user}" "${new_ip}" "${ssh_port}" "${ssh_key}"
+      else
+        printf '\n正在测试 SSH 连接 %s@%s:%s（密钥: %s）...\n' "${ssh_user}" "${new_ip}" "${ssh_port}" "${ssh_key}"
+      fi
+
+      ssh_opts+=(-i "${ssh_key}")
       if ssh "${ssh_opts[@]}" "${ssh_user}@${new_ip}" "echo OK" >/dev/null 2>&1; then
         if [[ "${NG_LANG}" == "en" ]]; then
           printf '✓ SSH connected.\n'
@@ -810,7 +856,7 @@ ng_register_node() {
         fi
       else
         if [[ "${NG_LANG}" == "en" ]]; then
-          ng_log "ERROR" "SSH connection failed. Check key auth or try password."
+          ng_log "ERROR" "SSH connection failed. Check key or try password."
         else
           ng_log "ERROR" "SSH 连接失败，请检查密钥或尝试密码认证。"
         fi
