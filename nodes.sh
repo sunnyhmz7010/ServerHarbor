@@ -680,28 +680,119 @@ ng_select_nodes() {
   printf '%s\n' "${selection}"
 }
 
-ng_generate_join_command() {
-  local main_host
-  main_host=$(hostname -I 2>/dev/null | awk '{print $1}' || hostname)
+ng_register_node() {
+  local new_ip new_alias ssh_port ssh_user
 
   if [[ "${NG_LANG}" == "en" ]]; then
-    ng_print_header "Register New Node"
-    printf 'On this server, run:\n\n'
-    printf '%s\n' "$(ng_color "${NG_C_ACCENT}" "bash join.sh")"
-    printf '\n'
-    printf '%s\n' "$(ng_color "${NG_C_DIM}" "Or if installed:")"
-    printf '%s\n' "$(ng_color "${NG_C_ACCENT}" "shr → [3] Node Management → [9] Register new node")"
-    printf '\n'
-    printf '%s\n' "$(ng_color "${NG_C_DIM}" "Requires SSH access from this server to the new server.")"
+    printf 'Enter new server IP: '
   else
-    ng_print_header "注册新节点"
-    printf '在本服务器上执行：\n\n'
-    printf '%s\n' "$(ng_color "${NG_C_ACCENT}" "bash join.sh")"
+    printf '输入新服务器 IP：'
+  fi
+  ng_read_line new_ip || return 130
+  if [[ -z "${new_ip}" ]]; then
+    if [[ "${NG_LANG}" == "en" ]]; then
+      ng_log "ERROR" "IP is required."
+    else
+      ng_log "ERROR" "IP 不能为空。"
+    fi
+    return 1
+  fi
+
+  if [[ "${NG_LANG}" == "en" ]]; then
+    printf 'Enter node alias (e.g. hk-01): '
+  else
+    printf '输入节点别名（如 hk-01）：'
+  fi
+  ng_read_line new_alias || return 130
+  new_alias="${new_alias:-node-${new_ip##*.}}"
+
+  if [[ "${NG_LANG}" == "en" ]]; then
+    printf 'Enter SSH port (default 22): '
+  else
+    printf '输入 SSH 端口（默认 22）：'
+  fi
+  ng_read_line ssh_port || return 130
+  ssh_port="${ssh_port:-22}"
+
+  if [[ "${NG_LANG}" == "en" ]]; then
+    printf 'Enter SSH user (default root): '
+  else
+    printf '输入 SSH 用户（默认 root）：'
+  fi
+  ng_read_line ssh_user || return 130
+  ssh_user="${ssh_user:-root}"
+
+  if [[ "${NG_LANG}" == "en" ]]; then
+    printf '\nTesting SSH to %s@%s:%s ...\n' "${ssh_user}" "${new_ip}" "${ssh_port}"
+  else
+    printf '\n正在测试 SSH 连接 %s@%s:%s ...\n' "${ssh_user}" "${new_ip}" "${ssh_port}"
+  fi
+
+  if ! ssh -o ConnectTimeout=5 -o StrictHostKeyChecking=accept-new -p "${ssh_port}" "${ssh_user}@${new_ip}" "echo OK" >/dev/null 2>&1; then
+    if [[ "${NG_LANG}" == "en" ]]; then
+      ng_log "ERROR" "SSH connection failed. Check credentials and try again."
+    else
+      ng_log "ERROR" "SSH 连接失败，请检查凭据后重试。"
+    fi
+    return 1
+  fi
+
+  if [[ "${NG_LANG}" == "en" ]]; then
+    printf '✓ SSH connected.\n'
+  else
+    printf '✓ SSH 连接成功。\n'
+  fi
+
+  ng_init_nodes
+
+  if ! ng_ensure_jq; then
+    return 1
+  fi
+
+  if jq -e --arg n "${new_alias}" '.servers[] | select(.name == $n)' "${NG_NODES_FILE}" >/dev/null 2>&1; then
+    if [[ "${NG_LANG}" == "en" ]]; then
+      ng_log "WARN" "Node '${new_alias}' already exists."
+    else
+      ng_log "WARN" "节点 '${new_alias}' 已存在。"
+    fi
+    return 1
+  fi
+
+  local tmp_file="${NG_NODES_FILE}.tmp"
+  jq --arg name "${new_alias}" \
+     --arg host "${new_ip}" \
+     --arg user "${ssh_user}" \
+     --arg port "${ssh_port}" \
+     '.servers += [{name:$name,host:$host,ssh:{user:$user,port:($port|number),auth:"key",key:"~/.ssh/id_ed25519"},tags:[],enabled:true}]' \
+     "${NG_NODES_FILE}" > "${tmp_file}" && mv -f "${tmp_file}" "${NG_NODES_FILE}"
+
+  if [[ "${NG_LANG}" == "en" ]]; then
+    printf '✓ Node "%s" (%s@%s:%s) registered!\n' "${new_alias}" "${ssh_user}" "${new_ip}" "${ssh_port}"
+  else
+    printf '✓ 节点 "%s" (%s@%s:%s) 注册成功！\n' "${new_alias}" "${ssh_user}" "${new_ip}" "${ssh_port}"
+  fi
+}
+
+ng_generate_join_command() {
+  local join_script_path
+  if [[ -f "${PROJECT_ROOT}/join.sh" ]]; then
+    join_script_path="${PROJECT_ROOT}/join.sh"
+  else
+    join_script_path="join.sh"
+  fi
+
+  if [[ "${NG_LANG}" == "en" ]]; then
+    ng_print_header "Register via Script"
+    printf 'Run on this server (or copy join.sh to it):\n\n'
+    printf '%s\n' "$(ng_color "${NG_C_ACCENT}" "bash ${join_script_path}")"
     printf '\n'
-    printf '%s\n' "$(ng_color "${NG_C_DIM}" "或安装版：")"
-    printf '%s\n' "$(ng_color "${NG_C_ACCENT}" "shr → [3] 节点管理 → [9] 注册新节点")"
+    printf '%s\n' "$(ng_color "${NG_C_DIM}" "The script will prompt for IP, alias, port, and user.")"
+  else
+    ng_print_header "通过脚本注册"
+    printf '在本服务器上执行（或将 join.sh 复制到本机）：\n\n'
+    printf '%s\n' "$(ng_color "${NG_C_ACCENT}" "bash ${join_script_path}")"
     printf '\n'
-    printf '%s\n' "$(ng_color "${NG_C_DIM}" "需要从本服务器 SSH 到新服务器。")"
+    printf '%s\n' "$(ng_color "${NG_C_DIM}" "脚本会交互式询问 IP、别名、端口和用户。")"
   fi
 }
 
@@ -721,6 +812,7 @@ ng_node_menu() {
       ng_print_option "7" "📁" "Sync config" "Sync config file to selected nodes"
       ng_print_option "8" "🔑" "Deploy SSH keys" "Deploy SSH keys to selected nodes"
       ng_print_option "9" "🔗" "Register new node" "Register a new server via SSH from this server"
+      ng_print_option "10" "📜" "Register via script" "Show standalone join script command"
       ng_print_option "0" "↩" "Back"
     else
       ng_print_title_box "🛰 节点管理" "基于 SSH 的多服务器管理"
@@ -733,6 +825,7 @@ ng_node_menu() {
       ng_print_option "7" "📁" "配置同步" "将配置文件同步到选中节点"
       ng_print_option "8" "🔑" "部署 SSH 密钥" "部署 SSH 密钥到选中节点"
       ng_print_option "9" "🔗" "注册新节点" "从本服务器通过 SSH 注册新服务器"
+      ng_print_option "10" "📜" "脚本注册" "显示独立注册脚本命令"
       ng_print_option "0" "↩" "返回"
     fi
 
@@ -911,7 +1004,8 @@ ng_node_menu() {
         fi
         ;;
       8) ng_deploy_ssh_keys ;;
-      9) ng_generate_join_command ;;
+      9) ng_register_node ;;
+      10) ng_generate_join_command ;;
       0) return 0 ;;
       *) ng_t invalid_option ;;
     esac
