@@ -279,7 +279,7 @@ main() {
     exec bash "${refresh_script}" "$@"
   fi
 
-  if confirm_remove_data; then
+  if [[ -f "/opt/serverharbor/.serverharbor-install" ]] && [[ -d "${DATA_ROOT}" ]] && confirm_remove_data; then
     t removing_data
     rm -rf "${DATA_ROOT}"
   fi

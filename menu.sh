@@ -106,7 +106,7 @@ ng_uninstall() {
   fi
 
   chmod +x "${uninstaller}" 2>/dev/null || true
-  bash "${uninstaller}"
+  SERVERHARBOR_LANG="${NG_LANG}" bash "${uninstaller}"
   exit 0
 }
 

@@ -62,6 +62,9 @@ ng_trigger_migration() {
 
   local has_data=0
   [[ -f "${source_dir}/config/servers.json" ]] && has_data=1
+  [[ -f "${source_dir}/config/peers.conf" ]] && has_data=1
+  [[ -f "${source_dir}/config/app.conf" ]] && has_data=1
+  [[ -f "${source_dir}/config/watch.conf" ]] && has_data=1
   [[ -d "${source_dir}/state" ]] && [[ -n "$(ls -A "${source_dir}/state" 2>/dev/null)" ]] && has_data=1
   [[ -d "${source_dir}/reports" ]] && [[ -n "$(ls -A "${source_dir}/reports" 2>/dev/null)" ]] && has_data=1
   [[ -d "${source_dir}/backups" ]] && [[ -n "$(ls -A "${source_dir}/backups" 2>/dev/null)" ]] && has_data=1
@@ -90,6 +93,10 @@ ng_trigger_migration() {
   if [[ -f "${source_dir}/config/servers.json" ]]; then
     cp -f "${source_dir}/config/servers.json" "${target_dir}/config/servers.json" 2>/dev/null || true
     printf '  %s servers.json\n' "$(ng_color "${NG_C_OK}" "✓")"
+  fi
+  if [[ -f "${source_dir}/config/app.conf" ]]; then
+    cp -f "${source_dir}/config/app.conf" "${target_dir}/config/app.conf" 2>/dev/null || true
+    printf '  %s app.conf\n' "$(ng_color "${NG_C_OK}" "✓")"
   fi
   if [[ -f "${source_dir}/config/peers.conf" ]]; then
     cp -f "${source_dir}/config/peers.conf" "${target_dir}/config/peers.conf" 2>/dev/null || true
