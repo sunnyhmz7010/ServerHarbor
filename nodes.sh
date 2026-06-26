@@ -681,7 +681,7 @@ ng_select_nodes() {
 }
 
 ng_register_node() {
-  local new_ip new_alias ssh_port ssh_user
+  local new_ip new_alias ssh_port ssh_user ssh_auth ssh_key
 
   if [[ "${NG_LANG}" == "en" ]]; then
     printf 'Enter new server IP: '
@@ -723,25 +723,101 @@ ng_register_node() {
   ssh_user="${ssh_user:-root}"
 
   if [[ "${NG_LANG}" == "en" ]]; then
-    printf '\nTesting SSH to %s@%s:%s ...\n' "${ssh_user}" "${new_ip}" "${ssh_port}"
+    printf 'Authentication method:\n'
+    printf '  [1] SSH key (default)\n'
+    printf '  [2] Password\n'
   else
-    printf '\n正在测试 SSH 连接 %s@%s:%s ...\n' "${ssh_user}" "${new_ip}" "${ssh_port}"
+    printf '认证方式：\n'
+    printf '  [1] SSH 密钥（默认）\n'
+    printf '  [2] 密码\n'
   fi
+  local auth_choice
+  ng_read_line auth_choice || return 130
 
-  if ! ssh -o ConnectTimeout=5 -o StrictHostKeyChecking=accept-new -p "${ssh_port}" "${ssh_user}@${new_ip}" "echo OK" >/dev/null 2>&1; then
-    if [[ "${NG_LANG}" == "en" ]]; then
-      ng_log "ERROR" "SSH connection failed. Check credentials and try again."
-    else
-      ng_log "ERROR" "SSH 连接失败，请检查凭据后重试。"
-    fi
-    return 1
-  fi
+  local -a ssh_opts=(-o ConnectTimeout=5 -o StrictHostKeyChecking=accept-new -p "${ssh_port}")
 
-  if [[ "${NG_LANG}" == "en" ]]; then
-    printf '✓ SSH connected.\n'
-  else
-    printf '✓ SSH 连接成功。\n'
-  fi
+  case "${auth_choice}" in
+    2)
+      ssh_auth="password"
+      if [[ "${NG_LANG}" == "en" ]]; then
+        printf 'Enter SSH password: '
+      else
+        printf '输入 SSH 密码：'
+      fi
+      IFS= read -rs ssh_key < /dev/tty
+      printf '\n'
+
+      if ! command -v sshpass >/dev/null 2>&1; then
+        if [[ "${NG_LANG}" == "en" ]]; then
+          printf 'Installing sshpass...\n'
+        else
+          printf '正在安装 sshpass...\n'
+        fi
+        if command -v apt-get >/dev/null 2>&1; then
+          apt-get install -y -qq sshpass 2>/dev/null || true
+        elif command -v yum >/dev/null 2>&1; then
+          yum install -y sshpass 2>/dev/null || true
+        elif command -v dnf >/dev/null 2>&1; then
+          dnf install -y sshpass 2>/dev/null || true
+        fi
+      fi
+
+      if command -v sshpass >/dev/null 2>&1; then
+        ssh_opts=(-o ConnectTimeout=5 -o StrictHostKeyChecking=accept-new -p "${ssh_port}")
+        if [[ "${NG_LANG}" == "en" ]]; then
+          printf '\nTesting SSH to %s@%s:%s ...\n' "${ssh_user}" "${new_ip}" "${ssh_port}"
+        else
+          printf '\n正在测试 SSH 连接 %s@%s:%s ...\n' "${ssh_user}" "${new_ip}" "${ssh_port}"
+        fi
+        if sshpass -p "${ssh_key}" ssh "${ssh_opts[@]}" "${ssh_user}@${new_ip}" "echo OK" >/dev/null 2>&1; then
+          if [[ "${NG_LANG}" == "en" ]]; then
+            printf '✓ SSH connected.\n'
+          else
+            printf '✓ SSH 连接成功。\n'
+          fi
+        else
+          if [[ "${NG_LANG}" == "en" ]]; then
+            ng_log "ERROR" "SSH connection failed. Check password and try again."
+          else
+            ng_log "ERROR" "SSH 连接失败，请检查密码后重试。"
+          fi
+          return 1
+        fi
+      else
+        if [[ "${NG_LANG}" == "en" ]]; then
+          ng_log "ERROR" "sshpass not available. Install it or use key auth."
+        else
+          ng_log "ERROR" "sshpass 不可用，请安装或使用密钥认证。"
+        fi
+        return 1
+      fi
+      ;;
+    *)
+      ssh_auth="key"
+      ssh_key="~/.ssh/id_ed25519"
+
+      if [[ "${NG_LANG}" == "en" ]]; then
+        printf '\nTesting SSH to %s@%s:%s ...\n' "${ssh_user}" "${new_ip}" "${ssh_port}"
+      else
+        printf '\n正在测试 SSH 连接 %s@%s:%s ...\n' "${ssh_user}" "${new_ip}" "${ssh_port}"
+      fi
+
+      if ssh "${ssh_opts[@]}" "${ssh_user}@${new_ip}" "echo OK" >/dev/null 2>&1; then
+        if [[ "${NG_LANG}" == "en" ]]; then
+          printf '✓ SSH connected.\n'
+        else
+          printf '✓ SSH 连接成功。\n'
+        fi
+      else
+        if [[ "${NG_LANG}" == "en" ]]; then
+          ng_log "ERROR" "SSH connection failed. Check key auth or try password."
+        else
+          ng_log "ERROR" "SSH 连接失败，请检查密钥或尝试密码认证。"
+        fi
+        return 1
+      fi
+      ;;
+  esac
 
   ng_init_nodes
 
@@ -763,7 +839,9 @@ ng_register_node() {
      --arg host "${new_ip}" \
      --arg user "${ssh_user}" \
      --arg port "${ssh_port}" \
-     '.servers += [{name:$name,host:$host,ssh:{user:$user,port:($port|number),auth:"key",key:"~/.ssh/id_ed25519"},tags:[],enabled:true}]' \
+     --arg auth "${ssh_auth}" \
+     --arg key "${ssh_key}" \
+     '.servers += [{name:$name,host:$host,ssh:{user:$user,port:($port|number),auth:$auth,key:$key},tags:[],enabled:true}]' \
      "${NG_NODES_FILE}" > "${tmp_file}" && mv -f "${tmp_file}" "${NG_NODES_FILE}"
 
   if [[ "${NG_LANG}" == "en" ]]; then
