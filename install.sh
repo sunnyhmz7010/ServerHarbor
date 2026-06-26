@@ -316,7 +316,7 @@ EOF
 }
 
 seed_data_root() {
-  mkdir -p "${DATA_ROOT}/logs" "${DATA_ROOT}/reports" "${DATA_ROOT}/state" "${DATA_ROOT}/tmp"
+  mkdir -p "${DATA_ROOT}/logs" "${DATA_ROOT}/reports" "${DATA_ROOT}/state"
   if [[ ! -f "${DATA_ROOT}/serverharbor.conf" ]]; then
     cp "${APP_ROOT}/serverharbor.conf" "${DATA_ROOT}/serverharbor.conf"
   fi

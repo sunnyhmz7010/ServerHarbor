@@ -151,7 +151,7 @@ ng_bootstrap_report() {
 
   ng_report_summary_start "$( [[ "${NG_LANG}" == "en" ]] && echo "Summary" || echo "摘要" )"
   ng_report_summary_kv "$([[ "${NG_LANG}" == "en" ]] && echo "Status:" || echo "状态:")" "$(ng_color "${status_color}" "${status_text}")"
-  ng_report_summary_kv "$([[ "${NG_LANG}" == "en" ]] && echo "CPU:" || echo "CPU:")" "${cpu_usage}% | $([[ "${NG_LANG}" == "en" ]] && echo "Mem:" || echo "内存:")" "${mem_num}% | $([[ "${NG_LANG}" == "en" ]] && echo "Disk:" || echo "磁盘:")" "${disk_num}%"
+  ng_report_summary_kv "$([[ "${NG_LANG}" == "en" ]] && echo "CPU/Mem/Disk:" || echo "CPU/内存/磁盘:")" "${cpu_usage}% / ${mem_num}% / ${disk_num}%"
   ng_report_summary_kv "$([[ "${NG_LANG}" == "en" ]] && echo "SSH:" || echo "SSH:")" "$(ng_service_state sshd)"
   ng_report_summary_kv "$([[ "${NG_LANG}" == "en" ]] && echo "Docker:" || echo "Docker:")" "$(ng_service_state docker)"
   ng_report_footer

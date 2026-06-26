@@ -27,7 +27,23 @@ else
   printf '别名:     %s\n\n' "${ALIAS}"
 fi
 
+if [[ "${EUID}" -ne 0 ]]; then
+  if [[ "${LANG_CHOICE}" == "en" ]]; then
+    printf 'WARNING: Not running as root. jq auto-install may fail.\n\n'
+  else
+    printf 'WARNING: 未以 root 身份运行，jq 自动安装可能失败。\n\n'
+  fi
+fi
+
 if ! command -v jq >/dev/null 2>&1; then
+  if [[ "${EUID}" -ne 0 ]]; then
+    if [[ "${LANG_CHOICE}" == "en" ]]; then
+      printf 'ERROR: jq is required. Please install it first: apt install jq\n'
+    else
+      printf 'ERROR: 需要 jq，请先安装: apt install jq\n'
+    fi
+    exit 1
+  fi
   if [[ "${LANG_CHOICE}" == "en" ]]; then
     printf 'Installing jq...\n'
   else
@@ -59,13 +75,13 @@ else
   printf '正在注册到主服务器...\n\n'
 fi
 
-NODES_FILE="/opt/serverharbor/data/servers.json"
+ALIAS_B64=$(printf '%s' "${ALIAS}" | base64 2>/dev/null || printf '%s' "${ALIAS}" | base64encode 2>/dev/null || printf '%s' "${ALIAS}")
 
 REMOTE_SCRIPT=$(cat <<'REMOTE_EOF'
 #!/bin/bash
 NODES="$1"
-ALIAS="$2"
-IP="$3"
+IP="$2"
+ALIAS=$(echo "$3" | base64 -d 2>/dev/null || echo "$3")
 
 if [[ ! -f "${NODES}" ]]; then
   mkdir -p "$(dirname "${NODES}")"
@@ -88,8 +104,13 @@ echo "OK:${ALIAS}:${IP}"
 REMOTE_EOF
 )
 
+DETECTED_NODES_FILE="/opt/serverharbor/data/servers.json"
+if [[ ! -d "/opt/serverharbor" ]]; then
+  DETECTED_NODES_FILE="${HOME}/.config/serverharbor/servers.json"
+fi
+
 OUTPUT=$(ssh -o ConnectTimeout=10 -o StrictHostKeyChecking=accept-new root@"${MAIN_SERVER}" \
-  "bash -s -- '${NODES_FILE}' '${ALIAS}' '${MY_IP}'" <<< "${REMOTE_SCRIPT}" 2>&1) || true
+  "bash -s -- '${DETECTED_NODES_FILE}' '${MY_IP}' '${ALIAS_B64}'" <<< "${REMOTE_SCRIPT}" 2>&1) || true
 
 if echo "${OUTPUT}" | grep -q "^OK:"; then
   if [[ "${LANG_CHOICE}" == "en" ]]; then

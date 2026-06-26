@@ -276,17 +276,20 @@ ng_init_environment() {
   fi
 
   if [[ -f "${NG_CONFIG_FILE}" ]]; then
-    if grep -qEv '^\s*(#|$|NG_[A-Z_]+=)' "${NG_CONFIG_FILE}" 2>/dev/null \
-      || grep -qE '`|\$\(' "${NG_CONFIG_FILE}" 2>/dev/null; then
-      if [[ "${NG_LANG}" == "en" ]]; then
-        ng_log "WARN" "Config file contains unexpected syntax or dangerous patterns. Using defaults."
-      else
-        ng_log "WARN" "配置文件包含异常语法或危险模式，已使用默认值。"
+    local _line _key _val
+    while IFS= read -r _line; do
+      [[ "${_line}" =~ ^[[:space:]]*NG_[A-Z_]+= ]] || continue
+      _key="${_line%%=*}"
+      _key="${_key#"${_key%%[![:space:]]*}"}"
+      _val="${_line#*=}"
+      _val="${_val#\"}"
+      _val="${_val%\"}"
+      _val="${_val#\'}"
+      _val="${_val%\'}"
+      if [[ "${_val}" =~ ^[a-zA-Z0-9_/.:~\ @,+-]*$ ]]; then
+        printf -v "${_key}" '%s' "${_val}"
       fi
-    else
-      # shellcheck disable=SC1090
-      source "${NG_CONFIG_FILE}"
-    fi
+    done < "${NG_CONFIG_FILE}"
   fi
 
   : "${NG_PROBE_TIMEOUT:=2}"
@@ -392,22 +395,6 @@ ng_print_menu_hint() {
   printf '%s\n' "$(ng_color "${NG_C_DIM}" "$(ng_t menu_hint)")"
 }
 
-ng_report_section() {
-  local title="$1"
-  printf '\n[%s]\n' "${title}"
-  printf '%s\n' '----------------------------------------------------------------------'
-}
-
-ng_report_kv() {
-  local key="$1"
-  local value="$2"
-  printf '%-14s %s\n' "${key}" "${value}"
-}
-
-ng_report_note() {
-  printf '  %s\n' "$1"
-}
-
 ng_report_footer() {
   local width=68
   printf '%s\n' "$(ng_color "${NG_C_PANEL}" "╚$(ng_repeat '═' "${width}")")"
@@ -416,9 +403,17 @@ ng_report_footer() {
 ng_service_state() {
   local service_name="$1"
   if command -v systemctl >/dev/null 2>&1; then
-    systemctl is-active "${service_name}" 2>/dev/null || echo "inactive"
+    local state
+    state=$(systemctl is-active "${service_name}" 2>/dev/null || true)
+    if [[ "${state}" == "active" ]]; then
+      echo "active"
+    elif [[ "${state}" == "inactive" || "${state}" == "failed" ]]; then
+      if [[ "${NG_LANG}" == "en" ]]; then echo "inactive"; else echo "未运行"; fi
+    else
+      if [[ "${NG_LANG}" == "en" ]]; then echo "unknown"; else echo "未知"; fi
+    fi
   else
-    echo "unknown"
+    if [[ "${NG_LANG}" == "en" ]]; then echo "unknown"; else echo "未知"; fi
   fi
 }
 
@@ -445,12 +440,6 @@ ng_report_section_start() {
 
 ng_report_line() {
   printf '%s %s\n' "$(ng_color "${NG_C_PANEL}" "║")" "$1"
-}
-
-ng_report_kv_styled() {
-  local key="$1"
-  local value="$2"
-  printf '%s %-14s %s\n' "$(ng_color "${NG_C_PANEL}" "║")" "$(ng_color "${NG_C_DIM}" "${key}")" "${value}"
 }
 
 ng_t() {
@@ -1029,21 +1018,5 @@ ng_report_advice_start() {
 ng_get_baseline_file() {
   local name="${1:-default}"
   printf '%s' "${NG_STATE_DIR}/integrity-${name}.sha256"
-}
-
-ng_list_baselines() {
-  local count=0
-  for f in "${NG_STATE_DIR}"/integrity-*.sha256; do
-    [[ -f "${f}" ]] || continue
-    local basename="${f##*/integrity-}"
-    basename="${basename%.sha256}"
-    local file_count
-    file_count=$(wc -l < "${f}" 2>/dev/null | tr -d ' ')
-    local mtime
-    mtime=$(date -r "${f}" '+%Y-%m-%d %H:%M' 2>/dev/null || stat -c '%y' "${f}" 2>/dev/null | cut -d. -f1 || echo "unknown")
-    printf '  %-20s %5s files   %s\n' "${basename}" "${file_count}" "${mtime}"
-    ((count++)) || true
-  done
-  return "${count}"
 }
 

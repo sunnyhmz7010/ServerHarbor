@@ -263,7 +263,7 @@ ng_test_all_nodes() {
   fi
 
   local node_name node_host node_user node_port node_auth node_key
-  jq -c '.servers[]' "${NG_NODES_FILE}" 2>/dev/null | while read -r node; do
+  while read -r node; do
     node_name=$(echo "${node}" | jq -r '.name')
     node_host=$(echo "${node}" | jq -r '.host')
     node_user=$(echo "${node}" | jq -r '.ssh.user // "root"')
@@ -306,7 +306,7 @@ ng_test_all_nodes() {
     esac
 
     printf '%-20s %-20s %-15s %s\n' "${node_name}" "${node_host}" "${status}" "${detail}"
-  done
+  done < <(jq -c '.servers[]' "${NG_NODES_FILE}" 2>/dev/null)
 }
 
 ng_run_on_all_nodes() {
@@ -658,7 +658,7 @@ ng_select_nodes() {
   while IFS=$'\t' read -r name host user port; do
     printf '  [%d] %s (%s)\n' "${idx}" "${name}" "${host}"
     ((idx++)) || true
-  done < <(jq -r '.servers[] | select(.enabled != false) | "\(.name)\t\(.host)\t(.ssh.user // "root")\t(.ssh.port // 22)"' "${NG_NODES_FILE}" 2>/dev/null)
+  done < <(jq -r '.servers[] | select(.enabled != false) | "\(.name)\t\(.host)\t\(.ssh.user // "root")\t\(.ssh.port // 22)"' "${NG_NODES_FILE}" 2>/dev/null)
 
   printf '  [a] %s\n' "$( [[ "${NG_LANG}" == "en" ]] && echo "All" || echo "全部" )"
   printf '\n'

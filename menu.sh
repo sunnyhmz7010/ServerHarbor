@@ -58,6 +58,7 @@ run_cli_mode() {
       exit 0
       ;;
     --cron-alerts)
+      set +e
       ng_check_alerts
       exit $?
       ;;

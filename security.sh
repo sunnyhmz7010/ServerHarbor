@@ -33,7 +33,7 @@ ng_scan_auth_failures() {
   fi
 
   if [[ -z "${auth_log}" ]]; then
-    ng_report_detail "日志文件" "$( [[ "${NG_LANG}" == "en" ]] && echo "Not found" || echo "未找到" )"
+    ng_report_detail "$([[ "${NG_LANG}" == "en" ]] && echo "Log file" || echo "日志文件")" "$( [[ "${NG_LANG}" == "en" ]] && echo "Not found" || echo "未找到" )"
   else
     ng_report_detail "$([[ "${NG_LANG}" == "en" ]] && echo "Log file" || echo "日志文件")" "${auth_log}"
     ng_report_separator
@@ -338,7 +338,8 @@ ng_integrity_create_baseline() {
 
   ng_report_separator
 
-  : > "${baseline_file}"
+  local tmp_baseline="${baseline_file}.tmp"
+  : > "${tmp_baseline}"
   local total_files=0
   local skipped_paths=0
 
@@ -347,7 +348,7 @@ ng_integrity_create_baseline() {
       if [[ -r "${watch_path}" ]]; then
         local file_count
         file_count=$(find "${watch_path}" -type f 2>/dev/null | wc -l)
-        find "${watch_path}" -type f -exec sha256sum {} \; >> "${baseline_file}" 2>/dev/null || true
+        find "${watch_path}" -type f -exec sha256sum {} \; >> "${tmp_baseline}" 2>/dev/null || true
         printf '%s   ✓ %s' "$(ng_color "${NG_C_PANEL}" "║")" "${watch_path}"
         if [[ "${NG_LANG}" == "en" ]]; then
           printf '  (%d files)\n' "${file_count}"
@@ -374,6 +375,8 @@ ng_integrity_create_baseline() {
       ((skipped_paths++)) || true
     fi
   done
+
+  mv -f "${tmp_baseline}" "${baseline_file}" 2>/dev/null || true
 
   ng_report_summary_start "$( [[ "${NG_LANG}" == "en" ]] && echo "Summary" || echo "摘要" )"
   ng_report_summary_kv "$([[ "${NG_LANG}" == "en" ]] && echo "Baseline name:" || echo "基线名称:")" "${baseline_name}"
@@ -541,7 +544,7 @@ ng_manage_watch_paths() {
 
           NG_WATCH_PATHS=$(echo "${NG_WATCH_PATHS}" | sed 's/^ *//')
           if grep -q '^NG_WATCH_PATHS=' "${NG_CONFIG_FILE}" 2>/dev/null; then
-            sed -i "s#^NG_WATCH_PATHS=.*#NG_WATCH_PATHS=\"${NG_WATCH_PATHS}\"#" "${NG_CONFIG_FILE}"
+            awk -v val="NG_WATCH_PATHS=\"${NG_WATCH_PATHS}\"" '/^NG_WATCH_PATHS=/{print val;next}{print}' "${NG_CONFIG_FILE}" > "${NG_CONFIG_FILE}.tmp" && mv -f "${NG_CONFIG_FILE}.tmp" "${NG_CONFIG_FILE}"
           else
             echo "NG_WATCH_PATHS=\"${NG_WATCH_PATHS}\"" >> "${NG_CONFIG_FILE}"
           fi
@@ -593,7 +596,7 @@ ng_manage_watch_paths() {
               done
 
               if grep -q '^NG_WATCH_PATHS=' "${NG_CONFIG_FILE}" 2>/dev/null; then
-                sed -i "s#^NG_WATCH_PATHS=.*#NG_WATCH_PATHS=\"${NG_WATCH_PATHS}\"#" "${NG_CONFIG_FILE}"
+                awk -v val="NG_WATCH_PATHS=\"${NG_WATCH_PATHS}\"" '/^NG_WATCH_PATHS=/{print val;next}{print}' "${NG_CONFIG_FILE}" > "${NG_CONFIG_FILE}.tmp" && mv -f "${NG_CONFIG_FILE}.tmp" "${NG_CONFIG_FILE}"
               fi
 
               if [[ "${NG_LANG}" == "en" ]]; then

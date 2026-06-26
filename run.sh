@@ -26,8 +26,10 @@ select_language() {
   local choice
 
   if [[ -z "${LANGUAGE}" && -f "${LANG_CONFIG_FILE}" ]]; then
-    # shellcheck disable=SC1090
-    source "${LANG_CONFIG_FILE}"
+    if grep -qE '^LANGUAGE="(en|zh)"$' "${LANG_CONFIG_FILE}" 2>/dev/null; then
+      # shellcheck disable=SC1090
+      source "${LANG_CONFIG_FILE}"
+    fi
   fi
 
   if [[ -n "${LANGUAGE}" ]]; then
@@ -58,8 +60,6 @@ t() {
       case "${key}" in
         missing_cmd) printf 'Missing required command: %s\n' "$2" ;;
         continue) printf 'Continue? [Y/n]: ' ;;
-        remove_data) printf 'Remove persistent data directory %s? [y/N]: ' "${DATA_ROOT}" ;;
-        removing_data) printf 'Removing persistent data directory: %s\n' "${DATA_ROOT}" ;;
         plan_title) printf '%s online run will perform these actions:\n' "${PROJECT_NAME}" ;;
         plan_tmp) printf '  1. Use a temporary directory under %s\n' "${TMP_ROOT%/}" ;;
         plan_download) printf '  2. Download source archive from %s\n' "${ARCHIVE_URL}" ;;
@@ -82,8 +82,6 @@ t() {
       case "${key}" in
         missing_cmd) printf '缺少必要命令：%s\n' "$2" ;;
         continue) printf '是否继续？[Y/n]: ' ;;
-        remove_data) printf '是否删除持久化数据目录 %s？[y/N]: ' "${DATA_ROOT}" ;;
-        removing_data) printf '正在删除持久化数据目录：%s\n' "${DATA_ROOT}" ;;
         plan_title) printf '%s 在线运行将执行以下操作：\n' "${PROJECT_NAME}" ;;
         plan_tmp) printf '  1. 使用临时目录根 %s\n' "${TMP_ROOT%/}" ;;
         plan_download) printf '  2. 从 %s 下载源码压缩包\n' "${ARCHIVE_URL}" ;;
@@ -132,15 +130,6 @@ confirm() {
     return 130
   fi
   [[ -z "${answer}" || "${answer}" =~ ^[Yy]([Ee][Ss])?$ ]]
-}
-
-confirm_remove_data() {
-  local answer
-  t remove_data
-  if ! IFS= read -r answer < /dev/tty; then
-    return 1
-  fi
-  [[ "${answer}" =~ ^[Yy]([Ee][Ss])?$ ]]
 }
 
 detect_pkg_manager() {
@@ -291,11 +280,6 @@ main() {
     curl -q -fsSL "https://raw.githubusercontent.com/sunnyhmz7010/ServerHarbor/main/run.sh?$(date +%s)" -o "${refresh_script}"
     chmod +x "${refresh_script}"
     exec bash "${refresh_script}" "$@"
-  fi
-
-  if [[ -d "${DATA_ROOT}" ]] && confirm_remove_data; then
-    t removing_data
-    rm -rf "${DATA_ROOT}"
   fi
 
   exit "${menu_exit_code}"
