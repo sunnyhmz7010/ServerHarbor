@@ -338,7 +338,7 @@ ng_repeat() {
   printf '%s' "${output}"
 }
 
-ng_print_menu_hint() {
+ng_print_title_box() {
   local title="$1"
   local subtitle="${2:-}"
   local width=68
@@ -349,6 +349,10 @@ ng_print_menu_hint() {
     printf '%s  %s\n' "$(ng_color "${NG_C_PANEL}" "│")" "$(ng_color "${NG_C_DIM}" "${subtitle}")"
   fi
   printf '%s\n' "$(ng_color "${NG_C_PANEL}" "└$(ng_repeat '─' "${width}")")"
+}
+
+ng_print_menu_hint() {
+  printf '%s\n' "$(ng_color "${NG_C_DIM}" "$(ng_t menu_hint)")"
 }
 
 ng_print_option() {
