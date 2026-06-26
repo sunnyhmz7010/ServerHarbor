@@ -18,6 +18,7 @@ ng_scan_auth_failures() {
       | grep -Eo '([0-9]{1,3}\.){3}[0-9]{1,3}' \
       | sort | uniq -c | sort -nr | head -10 || true)"
     total="$(grep -ciE 'Failed password|authentication failure' "${auth_log}" 2>/dev/null || echo 0)"
+    total=$(echo "${total}" | tr -d '[:space:]')
   fi
 
   if [[ "${NG_LANG}" == "en" ]]; then
@@ -91,6 +92,7 @@ ng_scan_web_attacks() {
     summary="$(grep -Ei 'wp-admin|phpmyadmin|\.env|select.+from|union.+select|/etc/passwd|\.\./' "${access_log}" 2>/dev/null \
       | awk '{print $1}' | sort | uniq -c | sort -nr | head -10 || true)"
     total="$(grep -ciE 'wp-admin|phpmyadmin|\.env|select.+from|union.+select|/etc/passwd|\.\./' "${access_log}" 2>/dev/null || echo 0)"
+    total=$(echo "${total}" | tr -d '[:space:]')
 
     if [[ -n "${summary}" ]]; then
       if [[ "${NG_LANG}" == "en" ]]; then
@@ -697,7 +699,9 @@ ng_security_score() {
 
   if [[ -n "${auth_log}" ]]; then
     local failed_count
-    failed_count=$(grep -c "Failed password" "${auth_log}" 2>/dev/null || echo 0)
+    failed_count=$(grep -c "Failed password" "${auth_log}" 2>/dev/null || true)
+    failed_count="${failed_count:-0}"
+    failed_count=$(echo "${failed_count}" | tr -d '[:space:]')
     if [[ "${failed_count}" -gt 100 ]]; then
       score=$((score - 10))
       if [[ "${NG_LANG}" == "en" ]]; then
@@ -747,7 +751,9 @@ ng_security_score() {
     fi
     if [[ -n "${auth_log}" ]]; then
       local fc
-      fc=$(grep -c "Failed password" "${auth_log}" 2>/dev/null || echo 0)
+      fc=$(grep -c "Failed password" "${auth_log}" 2>/dev/null || true)
+      fc="${fc:-0}"
+      fc=$(echo "${fc}" | tr -d '[:space:]')
       if [[ "${fc}" -gt 50 ]]; then
         printf '%s   %s\n' "$(ng_color "${NG_C_PANEL}" "║")" "$( [[ "${NG_LANG}" == "en" ]] && echo "• Install fail2ban to block brute force" || echo "• 安装 fail2ban 防暴力破解" )"
       fi

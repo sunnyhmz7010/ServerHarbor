@@ -168,10 +168,9 @@ ng_bootstrap_menu() {
       ng_print_option "2" "🐳" "Install Docker" "Auto-detect region for mirror"
       ng_print_option "3" "🚀" "bbrv3-lite" "Lightweight BBR v3 / XanMod / TCP tuning script"
       ng_print_option "4" "⚙️" "vps-tcp-tune" "BBR3+FQ TCP tuning script for VPS optimization"
-      ng_print_option "5" "📊" "System status" "Check CPU, memory, disk and alerts"
-      ng_print_option "6" "📄" "Generate report" "Show system summary"
+      ng_print_option "5" "📄" "Generate report" "Show system summary"
       if [[ "${NG_RUNTIME_MODE}" == "installed" ]]; then
-        ng_print_option "7" "🔄" "Migrate data" "Migrate from online to installed version"
+        ng_print_option "6" "🔄" "Migrate data" "Migrate from online to installed version"
       fi
       ng_print_option "0" "↩" "Back"
     else
@@ -180,10 +179,9 @@ ng_bootstrap_menu() {
       ng_print_option "2" "🐳" "Docker 安装" "自动检测地区使用镜像"
       ng_print_option "3" "🚀" "bbrv3-lite" "轻量级 BBR v3 / XanMod / TCP 网络调优脚本"
       ng_print_option "4" "⚙️" "vps-tcp-tune" "BBR3+FQ TCP 网络调优脚本，一键优化 VPS 网络"
-      ng_print_option "5" "📊" "系统状态" "查看 CPU、内存、磁盘和告警"
-      ng_print_option "6" "📄" "生成报告" "输出系统摘要"
+      ng_print_option "5" "📄" "生成报告" "输出系统摘要"
       if [[ "${NG_RUNTIME_MODE}" == "installed" ]]; then
-        ng_print_option "7" "🔄" "数据迁移" "从在线版迁移到安装版"
+        ng_print_option "6" "🔄" "数据迁移" "从在线版迁移到安装版"
       fi
       ng_print_option "0" "↩" "返回"
     fi
@@ -219,9 +217,8 @@ ng_bootstrap_menu() {
           "https://github.com/Eric86777/vps-tcp-tune" \
           "https://raw.githubusercontent.com/Eric86777/vps-tcp-tune/refs/heads/main/net-tcp-tune.sh"
         ;;
-      5) ng_show_system_status ;;
-      6) ng_bootstrap_report ;;
-      7) ng_trigger_migration ;;
+      5) ng_bootstrap_report ;;
+      6) ng_trigger_migration ;;
       0) return 0 ;;
       *) ng_t invalid_option ;;
     esac
