@@ -461,74 +461,6 @@ ng_sync_to_all_nodes() {
   fi
 }
 
-ng_deploy_ssh_keys() {
-  if ! ng_ensure_jq; then
-    return 1
-  fi
-
-  local count
-  count=$(jq '.servers | length' "${NG_NODES_FILE}" 2>/dev/null || echo 0)
-
-  if [[ "${count}" -eq 0 ]]; then
-    if [[ "${NG_LANG}" == "en" ]]; then
-      printf 'No nodes configured.\n'
-    else
-      printf '未配置节点。\n'
-    fi
-    return 0
-  fi
-
-  if [[ ! -f ~/.ssh/id_ed25519 ]] && [[ ! -f ~/.ssh/id_rsa ]]; then
-    if [[ "${NG_LANG}" == "en" ]]; then
-      printf 'No SSH key found. Generating new key...\n'
-    else
-      printf '未找到 SSH 密钥，正在生成...\n'
-    fi
-    ssh-keygen -t ed25519 -f ~/.ssh/id_ed25519 -N "" -q 2>/dev/null || ssh-keygen -t rsa -f ~/.ssh/id_rsa -N "" -q 2>/dev/null
-  fi
-
-  if [[ "${NG_LANG}" == "en" ]]; then
-    printf 'Deploying SSH keys to all nodes...\n\n'
-  else
-    printf '正在部署 SSH 密钥到所有节点...\n\n'
-  fi
-
-  local success=0
-  local failed=0
-
-  while read -r node; do
-    local node_name node_host node_user node_port
-    node_name=$(echo "${node}" | jq -r '.name')
-    node_host=$(echo "${node}" | jq -r '.host')
-    node_user=$(echo "${node}" | jq -r '.ssh.user // "root"')
-    node_port=$(echo "${node}" | jq -r '.ssh.port // 22')
-
-    printf '  %-20s ' "${node_name}"
-
-    if ssh-copy-id -o ConnectTimeout=5 -o StrictHostKeyChecking=accept-new -p "${node_port}" "${node_user}@${node_host}" 2>/dev/null; then
-      if [[ "${NG_LANG}" == "en" ]]; then
-        printf '✓ Deployed\n'
-      else
-        printf '✓ 已部署\n'
-      fi
-      ((success++)) || true
-    else
-      if [[ "${NG_LANG}" == "en" ]]; then
-        printf '✗ Failed\n'
-      else
-        printf '✗ 失败\n'
-      fi
-      ((failed++)) || true
-    fi
-  done < <(jq -c '.servers[]' "${NG_NODES_FILE}" 2>/dev/null)
-
-  if [[ "${NG_LANG}" == "en" ]]; then
-    printf '\nDeployment completed: %d success, %d failed\n' "${success}" "${failed}"
-  else
-    printf '\n部署完成: %d 成功, %d 失败\n' "${success}" "${failed}"
-  fi
-}
-
 ng_collect_local_probe() {
   local state_file="${NG_STATE_DIR}/${NG_HOSTNAME}-local.state"
   local tmp_file="${state_file}.tmp"
@@ -897,29 +829,6 @@ ng_register_node() {
   fi
 }
 
-ng_generate_join_command() {
-  local join_script_path
-  if [[ -f "${PROJECT_ROOT}/join.sh" ]]; then
-    join_script_path="${PROJECT_ROOT}/join.sh"
-  else
-    join_script_path="join.sh"
-  fi
-
-  if [[ "${NG_LANG}" == "en" ]]; then
-    ng_print_header "Register via Script"
-    printf 'Run on this server (or copy join.sh to it):\n\n'
-    printf '%s\n' "$(ng_color "${NG_C_ACCENT}" "bash ${join_script_path}")"
-    printf '\n'
-    printf '%s\n' "$(ng_color "${NG_C_DIM}" "The script will prompt for IP, alias, port, and user.")"
-  else
-    ng_print_header "通过脚本注册"
-    printf '在本服务器上执行（或将 join.sh 复制到本机）：\n\n'
-    printf '%s\n' "$(ng_color "${NG_C_ACCENT}" "bash ${join_script_path}")"
-    printf '\n'
-    printf '%s\n' "$(ng_color "${NG_C_DIM}" "脚本会交互式询问 IP、别名、端口和用户。")"
-  fi
-}
-
 ng_node_menu() {
   local choice
 
@@ -934,9 +843,7 @@ ng_node_menu() {
       ng_print_option "5" "📡" "Probe nodes" "Check ICMP, SSH, latency and local health"
       ng_print_option "6" "⚡" "Batch execute" "Run command on selected nodes"
       ng_print_option "7" "📁" "Sync config" "Sync config file to selected nodes"
-      ng_print_option "8" "🔑" "Deploy SSH keys" "Deploy SSH keys to selected nodes"
-      ng_print_option "9" "🔗" "Register new node" "Register a new server via SSH from this server"
-      ng_print_option "10" "📜" "Register via script" "Show standalone join script command"
+      ng_print_option "8" "🔗" "Register new node" "Register a new server via SSH from this server"
       ng_print_option "0" "↩" "Back"
     else
       ng_print_title_box "🛰 节点管理" "基于 SSH 的多服务器管理"
@@ -947,9 +854,7 @@ ng_node_menu() {
       ng_print_option "5" "📡" "探测节点" "检查 ICMP、SSH、延迟和本机健康"
       ng_print_option "6" "⚡" "批量执行" "在选中节点上执行命令"
       ng_print_option "7" "📁" "配置同步" "将配置文件同步到选中节点"
-      ng_print_option "8" "🔑" "部署 SSH 密钥" "部署 SSH 密钥到选中节点"
-      ng_print_option "9" "🔗" "注册新节点" "从本服务器通过 SSH 注册新服务器"
-      ng_print_option "10" "📜" "脚本注册" "显示独立注册脚本命令"
+      ng_print_option "8" "🔗" "注册新节点" "从本服务器通过 SSH 注册新服务器"
       ng_print_option "0" "↩" "返回"
     fi
 
@@ -1127,9 +1032,7 @@ ng_node_menu() {
           fi
         fi
         ;;
-      8) ng_deploy_ssh_keys ;;
-      9) ng_register_node ;;
-      10) ng_generate_join_command ;;
+      8) ng_register_node ;;
       0) return 0 ;;
       *) ng_t invalid_option ;;
     esac
