@@ -654,13 +654,17 @@ ng_security_score() {
     ng_report_header "📊 Security Score"
     ng_report_meta "Generated At" "$(ng_timestamp)"
     ng_report_meta "Host" "${NG_HOSTNAME}"
-    ng_report_section_start "$( [[ "${NG_LANG}" == "en" ]] && echo "Checks" || echo "检查项" )"
+    ng_report_section_start "$( [[ "${NG_LANG}" == "en" ]] && echo "Checks Performed" || echo "执行检查" )"
   else
     ng_report_header "📊 安全评分"
     ng_report_meta "生成时间" "$(ng_timestamp)"
     ng_report_meta "主机" "${NG_HOSTNAME}"
-    ng_report_section_start "检查项"
+    ng_report_section_start "执行检查"
   fi
+
+  printf '%s   ✓ %s\n' "$(ng_color "${NG_C_PANEL}" "║")" "$( [[ "${NG_LANG}" == "en" ]] && echo "SSH configuration" || echo "SSH 配置" )"
+  printf '%s   ✓ %s\n' "$(ng_color "${NG_C_PANEL}" "║")" "$( [[ "${NG_LANG}" == "en" ]] && echo "Firewall status" || echo "防火墙状态" )"
+  printf '%s   ✓ %s\n' "$(ng_color "${NG_C_PANEL}" "║")" "$( [[ "${NG_LANG}" == "en" ]] && echo "Auth log analysis" || echo "认证日志分析" )"
 
   if [[ "${EUID}" -eq 0 ]]; then
     score=$((score - 10))
