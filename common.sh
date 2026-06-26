@@ -907,8 +907,10 @@ ng_get_cpu_usage() {
     fi
   else
     set +e
-    top -bn1 2>/dev/null | grep "Cpu(s)" | awk '{print $2}' | cut -d'%' -f1
+    local result
+    result=$(top -bn1 2>/dev/null | grep "Cpu(s)" | awk '{print $2}' | cut -d'%' -f1)
     set -e
+    printf '%s' "${result:-0.0}"
   fi
 }
 
@@ -924,9 +926,9 @@ ng_check_alerts() {
   local cpu_usage mem_usage disk_usage
   local alerts=()
 
-  cpu_usage=$(ng_get_cpu_usage | cut -d'.' -f1)
-  mem_usage=$(ng_get_memory_usage | cut -d'.' -f1)
-  disk_usage=$(ng_get_disk_usage)
+  cpu_usage=$(ng_get_cpu_usage | tr -d '\n' | cut -d'.' -f1)
+  mem_usage=$(ng_get_memory_usage | tr -d '\n' | cut -d'.' -f1)
+  disk_usage=$(ng_get_disk_usage | tr -d '\n')
   : "${cpu_usage:=0}"
   : "${mem_usage:=0}"
   : "${disk_usage:=0}"

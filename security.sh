@@ -415,6 +415,7 @@ ng_integrity_verify_single() {
   local changes=0
   local total=0
   local passed=0
+  local -a changed_files=()
 
   if [[ "${NG_LANG}" == "en" ]]; then
     ng_report_header "✅ Integrity Verification"
@@ -435,6 +436,9 @@ ng_integrity_verify_single() {
   while IFS= read -r line; do
     if [[ "${line}" == *"FAILED"* ]]; then
       printf '%s   %s %s\n' "$(ng_color "${NG_C_PANEL}" "║")" "$(ng_color "${NG_C_ERR}" "✗")" "${line}"
+      local failed_file
+      failed_file=$(echo "${line}" | awk -F: '{print $1}' | sed 's/^ *//')
+      changed_files+=("${failed_file}")
       ((changes++)) || true
       ((total++)) || true
     elif [[ "${line}" == *"OK"* ]]; then
@@ -451,8 +455,14 @@ ng_integrity_verify_single() {
   ng_report_summary_kv "$([[ "${NG_LANG}" == "en" ]] && echo "Checked files:" || echo "检查文件:")" "${total}"
   ng_report_summary_kv "$([[ "${NG_LANG}" == "en" ]] && echo "Passed:" || echo "通过:")" "${passed}"
   ng_report_summary_kv "$([[ "${NG_LANG}" == "en" ]] && echo "Changed:" || echo "变更:")" "${changes}"
+
   if [[ "${changes}" -gt 0 ]]; then
     ng_report_summary_kv "$([[ "${NG_LANG}" == "en" ]] && echo "Status:" || echo "状态:")" "$(ng_color "${NG_C_WARN}" "⚠️  $( [[ "${NG_LANG}" == "en" ]] && echo "Files have changed since baseline" || echo "有文件自基线以来发生了变化" )")"
+    ng_report_separator
+    printf '%s %s\n' "$(ng_color "${NG_C_PANEL}" "║")" "$(ng_color "${NG_C_ERR}" "  $( [[ "${NG_LANG}" == "en" ]] && echo "Changed files:" || echo "变更文件：" )")"
+    for cf in "${changed_files[@]}"; do
+      printf '%s   ✗ %s\n' "$(ng_color "${NG_C_PANEL}" "║")" "${cf}"
+    done
   else
     ng_report_summary_kv "$([[ "${NG_LANG}" == "en" ]] && echo "Status:" || echo "状态:")" "$(ng_color "${NG_C_OK}" "✅ $( [[ "${NG_LANG}" == "en" ]] && echo "All files match baseline" || echo "所有文件与基线一致" )")"
   fi
@@ -637,17 +647,13 @@ ng_security_score() {
     ng_report_header "📊 Security Score"
     ng_report_meta "Generated At" "$(ng_timestamp)"
     ng_report_meta "Host" "${NG_HOSTNAME}"
-    ng_report_section_start "Scanning"
+    ng_report_section_start "$( [[ "${NG_LANG}" == "en" ]] && echo "Checks" || echo "检查项" )"
   else
     ng_report_header "📊 安全评分"
     ng_report_meta "生成时间" "$(ng_timestamp)"
     ng_report_meta "主机" "${NG_HOSTNAME}"
-    ng_report_section_start "扫描中"
+    ng_report_section_start "检查项"
   fi
-
-  ng_report_line "  $( [[ "${NG_LANG}" == "en" ]] && echo "Checking SSH configuration..." || echo "检查 SSH 配置..." )"
-  ng_report_line "  $( [[ "${NG_LANG}" == "en" ]] && echo "Checking firewall..." || echo "检查防火墙..." )"
-  ng_report_line "  $( [[ "${NG_LANG}" == "en" ]] && echo "Checking auth logs..." || echo "检查认证日志..." )"
 
   if [[ "${EUID}" -eq 0 ]]; then
     score=$((score - 10))

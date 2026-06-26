@@ -55,7 +55,7 @@ ng_bootstrap_report() {
   cpu_model=$(awk -F': +' '/model name/ {print $2; exit}' /proc/cpuinfo 2>/dev/null || lscpu 2>/dev/null | awk -F': +' '/Model name:/ {print $2; exit}' || echo "unknown")
   cpu_cores=$(nproc 2>/dev/null || echo "?")
   cpu_freq=$(awk '/MHz/ {printf "%.1f GHz\n", $4/1000; exit}' /proc/cpuinfo 2>/dev/null || echo "unknown")
-  cpu_usage=$(ng_get_cpu_usage)
+  cpu_usage=$(ng_get_cpu_usage | tr -d '\n')
   load=$(ng_system_load)
   mem_info=$(free -m 2>/dev/null | awk 'NR==2{printf "%dM/%dM (%.1f%%)", $3, $2, $3*100/$2}' || echo "unknown")
   swap_info=$(free -m 2>/dev/null | awk 'NR==3{if($2==0){printf "0M/0M (0%%)"} else {printf "%dM/%dM (%d%%)", $3, $2, $3*100/$2}}' || echo "unknown")
