@@ -664,21 +664,15 @@ ng_remote_execute() {
     while true; do
       if [[ "${NG_LANG}" == "en" ]]; then
         printf '\nRemote execute on %s (%s):\n\n' "${node_name}" "${node_host}"
-        printf '  [1] Custom command\n'
-        printf '  [2] Install base packages (curl, wget, sudo, iptables)\n'
-        printf '  [3] Install Docker\n'
-        printf '  [4] bbrv3-lite network tuning\n'
-        printf '  [5] vps-tcp-tune network tuning\n'
-        printf '  [6] System status\n'
+        printf '  [1] Run ServerHarbor online (curl | bash)\n'
+        printf '  [2] Run ServerHarbor installed (shr)\n'
+        printf '  [3] Custom command\n'
         printf '  [0] Back to node selection\n'
       else
         printf '\n在 %s (%s) 上远程执行：\n\n' "${node_name}" "${node_host}"
-        printf '  [1] 自定义命令\n'
-        printf '  [2] 基础软件安装（curl、wget、sudo、iptables）\n'
-        printf '  [3] Docker 安装\n'
-        printf '  [4] bbrv3-lite 网络调优\n'
-        printf '  [5] vps-tcp-tune 网络调优\n'
-        printf '  [6] 系统状态查看\n'
+        printf '  [1] 运行在线版 ServerHarbor（curl | bash）\n'
+        printf '  [2] 运行安装版 ServerHarbor（shr）\n'
+        printf '  [3] 自定义命令\n'
         printf '  [0] 返回选择节点\n'
       fi
 
@@ -693,34 +687,14 @@ ng_remote_execute() {
 
       case "${op_choice}" in
         1)
-          if [[ "${NG_LANG}" == "en" ]]; then printf 'Enter command: '; else printf '输入命令：'; fi
-          ng_read_line cmd || return 130
+          cmd="bash <(curl -q -fsSL 'https://raw.githubusercontent.com/sunnyhmz7010/ServerHarbor/main/run.sh?$(date +%s)')"
           ;;
         2)
-          cmd="apt-get update -y && apt-get install -y curl wget sudo iptables || yum install -y curl wget sudo iptables"
+          cmd="shr"
           ;;
         3)
-          local country
-          if [[ "${use_sshpass}" -eq 1 ]]; then
-            country=$(sshpass -e ssh "${ssh_opts[@]}" "${node_user}@${node_host}" "curl -s --connect-timeout 5 ipinfo.io/country" 2>/dev/null || echo "unknown")
-          else
-            country=$(ssh "${ssh_opts[@]}" "${node_user}@${node_host}" "curl -s --connect-timeout 5 ipinfo.io/country" 2>/dev/null || echo "unknown")
-          fi
-          country=$(echo "${country}" | tr -d '\r\n')
-          if [[ "${country}" == "CN" ]]; then
-            cmd="curl -fsSL https://get.docker.com | bash -s docker --mirror Aliyun"
-          else
-            cmd="curl -fsSL https://get.docker.com | sh"
-          fi
-          ;;
-        4)
-          cmd="bash <(curl -fsSL https://raw.githubusercontent.com/ike-sh/bbrv3-lite/main/net-tcp-tune.sh)"
-          ;;
-        5)
-          cmd="bash <(curl -fsSL https://raw.githubusercontent.com/Eric86777/vps-tcp-tune/main/net-tcp-tune.sh)"
-          ;;
-        6)
-          cmd="echo '=== System Info ==='; hostname; uname -r; uptime; echo ''; echo '=== CPU ==='; nproc; grep 'model name' /proc/cpuinfo | head -1; echo ''; echo '=== Memory ==='; free -h; echo ''; echo '=== Disk ==='; df -h /; echo ''; echo '=== Network ==='; hostname -I; echo ''; echo '=== Docker ==='; docker --version 2>/dev/null || echo 'Not installed'"
+          if [[ "${NG_LANG}" == "en" ]]; then printf 'Enter command: '; else printf '输入命令：'; fi
+          ng_read_line cmd || return 130
           ;;
         *)
           ng_t invalid_option
