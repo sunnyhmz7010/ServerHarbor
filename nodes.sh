@@ -374,13 +374,13 @@ ng_node_manage() {
     if [[ "${NG_LANG}" == "en" ]]; then
       printf '  [a] Add node\n'
       if [[ "${idx}" -gt 1 ]]; then
-        printf '  [1-%d] Remove node by number\n' "$((idx-1))"
+        printf '  [1-%d] Edit or remove node by number\n' "$((idx-1))"
       fi
       printf '  [0] Back\n'
     else
       printf '  [a] 添加节点\n'
       if [[ "${idx}" -gt 1 ]]; then
-        printf '  [1-%d] 输入序号删除节点\n' "$((idx-1))"
+        printf '  [1-%d] 输入序号编辑或删除节点\n' "$((idx-1))"
       fi
       printf '  [0] 返回\n'
     fi
