@@ -257,7 +257,8 @@ ng_setup_mutual_nodes() {
 
   local -a run_ssh=()
   if [[ "${auth_method}" == "password" ]] && command -v sshpass >/dev/null 2>&1; then
-    run_ssh=(SSHPASS="${key}" sshpass -e ssh "${ssh_opts[@]}" "${ssh_user}@${remote_ip}")
+    export SSHPASS="${key}"
+    run_ssh=(sshpass -e ssh "${ssh_opts[@]}" "${ssh_user}@${remote_ip}")
   else
     ssh_opts+=(-i "${key}")
     run_ssh=(ssh "${ssh_opts[@]}" "${ssh_user}@${remote_ip}")
@@ -558,7 +559,7 @@ ng_node_manage() {
           local ssh_ok=0
 
           if [[ "${auth}" == "password" ]] && command -v sshpass >/dev/null 2>&1; then
-            if SSHPASS="${key}" sshpass -e ssh "${test_opts[@]}" "${user}@${host}" "echo OK" >/dev/null 2>&1; then
+            if export SSHPASS="${key}" && sshpass -e ssh "${test_opts[@]}" "${user}@${host}" "echo OK" >/dev/null 2>&1; then
               ssh_ok=1
             fi
           elif [[ "${auth}" == "key" ]]; then
@@ -684,13 +685,13 @@ ng_remote_execute() {
   ng_read_line op_choice || return 130
 
   local -a ssh_opts=(-o ConnectTimeout=10 -o StrictHostKeyChecking=accept-new -p "${node_port}")
-  local -a run_ssh=()
+  local use_sshpass=0
 
   if [[ "${node_auth}" == "password" ]] && command -v sshpass >/dev/null 2>&1; then
-    run_ssh=(SSHPASS="${node_key}" sshpass -e ssh -o ConnectTimeout=10 -o StrictHostKeyChecking=accept-new -p "${node_port}" "${node_user}@${node_host}")
+    use_sshpass=1
+    export SSHPASS="${node_key}"
   else
     ssh_opts+=(-i "${node_key}")
-    run_ssh=(ssh "${ssh_opts[@]}" "${node_user}@${node_host}")
   fi
 
   local cmd=""
@@ -739,7 +740,11 @@ ng_remote_execute() {
     printf '\n正在 %s 上执行 ...\n\n' "${node_name}"
   fi
 
-  "${run_ssh[@]}" "bash -c '${cmd}'"
+  if [[ "${use_sshpass}" -eq 1 ]]; then
+    sshpass -e ssh "${ssh_opts[@]}" "${node_user}@${node_host}" "bash -c '${cmd}'"
+  else
+    ssh "${ssh_opts[@]}" "${node_user}@${node_host}" "bash -c '${cmd}'"
+  fi
   local rc=$?
 
   printf '\n'
