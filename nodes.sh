@@ -166,41 +166,6 @@ ng_remove_node() {
   fi
 }
 
-ng_list_nodes() {
-  if ! command -v jq >/dev/null 2>&1; then
-    if [[ "${NG_LANG}" == "en" ]]; then
-      ng_log "ERROR" "jq is required for node management."
-    else
-      ng_log "ERROR" "节点管理需要 jq。"
-    fi
-    return 1
-  fi
-
-  local count
-  count=$(jq '.servers | length' "${NG_NODES_FILE}" 2>/dev/null || echo 0)
-
-  if [[ "${count}" -eq 0 ]]; then
-    if [[ "${NG_LANG}" == "en" ]]; then
-      printf 'No nodes configured.\n'
-    else
-      printf '未配置节点。\n'
-    fi
-    return 0
-  fi
-
-  if [[ "${NG_LANG}" == "en" ]]; then
-    printf '%-20s %-20s %-10s %-6s %-10s\n' "NAME" "HOST" "USER" "PORT" "AUTH"
-    printf '%s\n' '---------------------------------------------------------------------'
-  else
-    printf '%-20s %-20s %-10s %-6s %-10s\n' "名称" "主机" "用户" "端口" "认证"
-    printf '%s\n' '---------------------------------------------------------------------'
-  fi
-
-  jq -r '.servers[] | "\(.name)\t\(.host)\t\(.ssh.user // "root")\t\(.ssh.port // 22)\t\(.ssh.auth // "key")"' "${NG_NODES_FILE}" 2>/dev/null | while IFS=$'\t' read -r name host user port auth; do
-    printf '%-20s %-20s %-10s %-6s %-10s\n' "${name}" "${host}" "${user}" "${port}" "${auth}"
-  done
-}
-
 ng_test_node_ssh() {
   local name="$1"
   local host="$2"
@@ -638,28 +603,55 @@ ng_node_manage() {
     clear || true
     if [[ "${NG_LANG}" == "en" ]]; then
       ng_print_title_box "📋 Node List" "Manage node configurations"
-      ng_print_option "1" "📋" "List nodes" "Show all configured nodes"
-      ng_print_option "2" "➕" "Add node" "Add a new server node"
-      ng_print_option "3" "➖" "Remove node" "Remove a server node"
-      ng_print_option "0" "↩" "Back"
     else
       ng_print_title_box "📋 节点列表" "管理节点配置"
-      ng_print_option "1" "📋" "列出节点" "显示所有已配置的节点"
-      ng_print_option "2" "➕" "添加节点" "添加新的服务器节点"
-      ng_print_option "3" "➖" "删除节点" "删除服务器节点"
-      ng_print_option "0" "↩" "返回"
     fi
 
     printf '\n'
-    ng_print_menu_hint
+    local -a node_names=()
+    local -a node_hosts=()
+    local idx=1
+
+    if command -v jq >/dev/null 2>&1 && [[ -f "${NG_NODES_FILE}" ]]; then
+      while IFS=$'\t' read -r name host; do
+        printf '  [%d] %-20s %s\n' "${idx}" "${name}" "${host}"
+        node_names+=("${name}")
+        node_hosts+=("${host}")
+        ((idx++)) || true
+      done < <(jq -r '.servers[] | select(.enabled != false) | "\(.name)\t\(.host)"' "${NG_NODES_FILE}" 2>/dev/null)
+    fi
+
+    if [[ "${idx}" -eq 1 ]]; then
+      if [[ "${NG_LANG}" == "en" ]]; then
+        printf '  (No nodes configured)\n'
+      else
+        printf '  （未配置节点）\n'
+      fi
+    fi
+
+    printf '\n'
+    if [[ "${NG_LANG}" == "en" ]]; then
+      printf '  [a] Add node\n'
+      if [[ "${idx}" -gt 1 ]]; then
+        printf '  [1-%d] Remove node by number\n' "$((idx-1))"
+      fi
+      printf '  [0] Back\n'
+    else
+      printf '  [a] 添加节点\n'
+      if [[ "${idx}" -gt 1 ]]; then
+        printf '  [1-%d] 输入序号删除节点\n' "$((idx-1))"
+      fi
+      printf '  [0] 返回\n'
+    fi
+
     printf '\n'
     ng_t select
     ng_read_line choice || return 130
 
     case "${choice}" in
-      1) ng_list_nodes ;;
+      0) return 0 ;;
 
-      2)
+      a|A)
         local alias host user port auth key
         if [[ "${NG_LANG}" == "en" ]]; then
           printf 'Enter node alias (e.g., hk-01): '
@@ -815,26 +807,28 @@ ng_node_manage() {
             fi
           fi
         fi
+        ng_press_enter || return 130
         ;;
 
-      3)
-        if [[ "${NG_LANG}" == "en" ]]; then
-          printf 'Enter node alias to remove: '
+      *)
+        if [[ "${choice}" =~ ^[0-9]+$ ]] && [[ "${choice}" -ge 1 ]] && [[ "${choice}" -lt "${idx}" ]]; then
+          local remove_name="${node_names[$((choice-1))]}"
+          if [[ "${NG_LANG}" == "en" ]]; then
+            printf 'Remove node "%s"? [y/N]: ' "${remove_name}"
+          else
+            printf '删除节点 "%s"？[y/N]：' "${remove_name}"
+          fi
+          local confirm
+          ng_read_line confirm || return 130
+          if [[ "${confirm}" =~ ^[Yy] ]]; then
+            ng_remove_node "${remove_name}"
+          fi
         else
-          printf '输入要删除的节点别名：'
+          ng_t invalid_option
         fi
-        local remove_alias
-        ng_read_line remove_alias || return 130
-        if [[ -n "${remove_alias}" ]]; then
-          ng_remove_node "${remove_alias}"
-        fi
+        ng_press_enter || return 130
         ;;
-
-      0) return 0 ;;
-      *) ng_t invalid_option ;;
     esac
-
-    ng_press_enter || return 130
   done
 }
 
