@@ -683,22 +683,25 @@ ng_select_nodes() {
 ng_generate_join_command() {
   local main_host
   main_host=$(hostname -I 2>/dev/null | awk '{print $1}' || hostname)
-  local join_url="https://raw.githubusercontent.com/sunnyhmz7010/ServerHarbor/main/join.sh"
 
   if [[ "${NG_LANG}" == "en" ]]; then
-    ng_print_header "Generate Join Command"
-    printf 'Run this on a new server to register it:\n\n'
-    printf '%s\n' "$(ng_color "${NG_C_ACCENT}" "curl -fsSL ${join_url} | bash -s -- ${main_host} ALIAS en")"
+    ng_print_header "Register New Node"
+    printf 'On this server, run:\n\n'
+    printf '%s\n' "$(ng_color "${NG_C_ACCENT}" "bash join.sh")"
     printf '\n'
-    printf '%s\n' "$(ng_color "${NG_C_DIM}" "Replace ALIAS with the node name (e.g. hk-01).")"
-    printf '%s\n' "$(ng_color "${NG_C_DIM}" "The new server needs SSH access to ${main_host}.")"
+    printf '%s\n' "$(ng_color "${NG_C_DIM}" "Or if installed:")"
+    printf '%s\n' "$(ng_color "${NG_C_ACCENT}" "shr → [3] Node Management → [9] Register new node")"
+    printf '\n'
+    printf '%s\n' "$(ng_color "${NG_C_DIM}" "Requires SSH access from this server to the new server.")"
   else
-    ng_print_header "生成加入命令"
-    printf '在新服务器上执行此命令进行注册：\n\n'
-    printf '%s\n' "$(ng_color "${NG_C_ACCENT}" "curl -fsSL ${join_url} | bash -s -- ${main_host} ALIAS zh")"
+    ng_print_header "注册新节点"
+    printf '在本服务器上执行：\n\n'
+    printf '%s\n' "$(ng_color "${NG_C_ACCENT}" "bash join.sh")"
     printf '\n'
-    printf '%s\n' "$(ng_color "${NG_C_DIM}" "将 ALIAS 替换为节点名称（如 hk-01）。")"
-    printf '%s\n' "$(ng_color "${NG_C_DIM}" "新服务器需要能通过 SSH 连接到 ${main_host}。")"
+    printf '%s\n' "$(ng_color "${NG_C_DIM}" "或安装版：")"
+    printf '%s\n' "$(ng_color "${NG_C_ACCENT}" "shr → [3] 节点管理 → [9] 注册新节点")"
+    printf '\n'
+    printf '%s\n' "$(ng_color "${NG_C_DIM}" "需要从本服务器 SSH 到新服务器。")"
   fi
 }
 
@@ -717,7 +720,7 @@ ng_node_menu() {
       ng_print_option "6" "⚡" "Batch execute" "Run command on selected nodes"
       ng_print_option "7" "📁" "Sync config" "Sync config file to selected nodes"
       ng_print_option "8" "🔑" "Deploy SSH keys" "Deploy SSH keys to selected nodes"
-      ng_print_option "9" "🔗" "Generate join command" "Generate command for new servers to join"
+      ng_print_option "9" "🔗" "Register new node" "Register a new server via SSH from this server"
       ng_print_option "0" "↩" "Back"
     else
       ng_print_title_box "🛰 节点管理" "基于 SSH 的多服务器管理"
@@ -729,7 +732,7 @@ ng_node_menu() {
       ng_print_option "6" "⚡" "批量执行" "在选中节点上执行命令"
       ng_print_option "7" "📁" "配置同步" "将配置文件同步到选中节点"
       ng_print_option "8" "🔑" "部署 SSH 密钥" "部署 SSH 密钥到选中节点"
-      ng_print_option "9" "🔗" "生成加入命令" "生成新服务器加入的命令"
+      ng_print_option "9" "🔗" "注册新节点" "从本服务器通过 SSH 注册新服务器"
       ng_print_option "0" "↩" "返回"
     fi
 

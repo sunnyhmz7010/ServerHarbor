@@ -2,142 +2,113 @@
 
 set -euo pipefail
 
-MAIN_SERVER="${1:-}"
-ALIAS="${2:-$(hostname)}"
-LANG_CHOICE="${3:-zh}"
+# ServerHarbor Join Command Generator
+# Runs on the MAIN server to generate a registration command for a new node.
+# Usage: bash join.sh [lang]
 
-if [[ -z "${MAIN_SERVER}" ]]; then
+LANG_CHOICE="${1:-zh}"
+
+if [[ "${LANG_CHOICE}" == "en" ]]; then
+  printf '=== ServerHarbor Node Registration ===\n\n'
+  printf 'This script registers a new node from the main server.\n'
+  printf 'You need SSH access FROM this server TO the new server.\n\n'
+  printf 'Enter new server IP: '
+else
+  printf '=== ServerHarbor 节点注册 ===\n\n'
+  printf '此脚本在主服务器上运行，注册新节点。\n'
+  printf '需要从本服务器 SSH 到新服务器。\n\n'
+  printf '输入新服务器 IP：'
+fi
+
+read -r NEW_IP < /dev/tty
+if [[ -z "${NEW_IP}" ]]; then
   if [[ "${LANG_CHOICE}" == "en" ]]; then
-    printf 'ERROR: Main server IP is required.\n'
-    printf 'Usage: curl -fsSL <url> | bash -s -- <main-server-ip> [alias] [en]\n'
+    printf 'ERROR: IP is required.\n'
   else
-    printf 'ERROR: 需要主服务器 IP。\n'
-    printf '用法: curl -fsSL <url> | bash -s -- <主服务器IP> [别名] [zh]\n'
+    printf 'ERROR: IP 不能为空。\n'
   fi
   exit 1
 fi
 
 if [[ "${LANG_CHOICE}" == "en" ]]; then
-  printf '=== ServerHarbor Node Join ===\n'
-  printf 'Main server: %s\n' "${MAIN_SERVER}"
-  printf 'Alias:       %s\n\n' "${ALIAS}"
+  printf 'Enter node alias (e.g. hk-01): '
 else
-  printf '=== ServerHarbor 节点加入 ===\n'
-  printf '主服务器: %s\n' "${MAIN_SERVER}"
-  printf '别名:     %s\n\n' "${ALIAS}"
+  printf '输入节点别名（如 hk-01）：'
 fi
 
-if [[ "${EUID}" -ne 0 ]]; then
-  if [[ "${LANG_CHOICE}" == "en" ]]; then
-    printf 'WARNING: Not running as root. jq auto-install may fail.\n\n'
-  else
-    printf 'WARNING: 未以 root 身份运行，jq 自动安装可能失败。\n\n'
-  fi
-fi
-
-if ! command -v jq >/dev/null 2>&1; then
-  if [[ "${EUID}" -ne 0 ]]; then
-    if [[ "${LANG_CHOICE}" == "en" ]]; then
-      printf 'ERROR: jq is required. Please install it first: apt install jq\n'
-    else
-      printf 'ERROR: 需要 jq，请先安装: apt install jq\n'
-    fi
-    exit 1
-  fi
-  if [[ "${LANG_CHOICE}" == "en" ]]; then
-    printf 'Installing jq...\n'
-  else
-    printf '正在安装 jq...\n'
-  fi
-  if command -v apt-get >/dev/null 2>&1; then
-    apt-get update -qq && apt-get install -y -qq jq
-  elif command -v yum >/dev/null 2>&1; then
-    yum install -y jq
-  elif command -v dnf >/dev/null 2>&1; then
-    dnf install -y jq
-  else
-    if [[ "${LANG_CHOICE}" == "en" ]]; then
-      printf 'ERROR: Cannot install jq. Please install it manually.\n'
-    else
-      printf 'ERROR: 无法自动安装 jq，请手动安装。\n'
-    fi
-    exit 1
-  fi
-fi
-
-MY_IP=$(hostname -I 2>/dev/null | awk '{print $1}' || echo "unknown")
+read -r ALIAS < /dev/tty
+ALIAS="${ALIAS:-$(ssh -o ConnectTimeout=5 -o StrictHostKeyChecking=accept-new root@"${NEW_IP}" hostname 2>/dev/null || echo "node-${NEW_IP##*.}")}"
 
 if [[ "${LANG_CHOICE}" == "en" ]]; then
-  printf 'Local IP:    %s\n' "${MY_IP}"
-  printf 'Registering with main server...\n\n'
+  printf 'Enter SSH port (default 22): '
 else
-  printf '本地 IP:     %s\n' "${MY_IP}"
-  printf '正在注册到主服务器...\n\n'
+  printf '输入 SSH 端口（默认 22）：'
 fi
 
-ALIAS_B64=$(printf '%s' "${ALIAS}" | base64 2>/dev/null || printf '%s' "${ALIAS}" | base64encode 2>/dev/null || printf '%s' "${ALIAS}")
+read -r SSH_PORT < /dev/tty
+SSH_PORT="${SSH_PORT:-22}"
 
-REMOTE_SCRIPT=$(cat <<'REMOTE_EOF'
-#!/bin/bash
-NODES="$1"
-IP="$2"
-ALIAS=$(echo "$3" | base64 -d 2>/dev/null || echo "$3")
+if [[ "${LANG_CHOICE}" == "en" ]]; then
+  printf 'Enter SSH user (default root): '
+else
+  printf '输入 SSH 用户（默认 root）：'
+fi
 
-if [[ ! -f "${NODES}" ]]; then
-  mkdir -p "$(dirname "${NODES}")"
-  cat > "${NODES}" <<'EOF'
+read -r SSH_USER < /dev/tty
+SSH_USER="${SSH_USER:-root}"
+
+if [[ "${LANG_CHOICE}" == "en" ]]; then
+  printf '\nTesting SSH connection to %s@%s:%s ...\n' "${SSH_USER}" "${NEW_IP}" "${SSH_PORT}"
+else
+  printf '\n正在测试 SSH 连接 %s@%s:%s ...\n' "${SSH_USER}" "${NEW_IP}" "${SSH_PORT}"
+fi
+
+if ssh -o ConnectTimeout=5 -o StrictHostKeyChecking=accept-new -p "${SSH_PORT}" "${SSH_USER}@${NEW_IP}" "echo OK" >/dev/null 2>&1; then
+  if [[ "${LANG_CHOICE}" == "en" ]]; then
+    printf '✓ SSH connection successful.\n\n'
+  else
+    printf '✓ SSH 连接成功。\n\n'
+  fi
+else
+  if [[ "${LANG_CHOICE}" == "en" ]]; then
+    printf '✗ SSH connection failed. Please check credentials and try again.\n'
+  else
+    printf '✗ SSH 连接失败，请检查凭据后重试。\n'
+  fi
+  exit 1
+fi
+
+NODES_FILE="${HOME}/.config/serverharbor/servers.json"
+if [[ -f "/opt/serverharbor/.serverharbor-install" ]]; then
+  NODES_FILE="/opt/serverharbor/data/servers.json"
+fi
+
+mkdir -p "$(dirname "${NODES_FILE}")"
+if [[ ! -f "${NODES_FILE}" ]]; then
+  cat > "${NODES_FILE}" <<'EOF'
 {"defaults":{"ssh":{"user":"root","port":22,"key":"~/.ssh/id_ed25519"}},"servers":[]}
 EOF
 fi
 
-if jq -e --arg n "${ALIAS}" '.servers[] | select(.name == $n)' "${NODES}" >/dev/null 2>&1; then
-  echo "EXISTS:${ALIAS}"
+if jq -e --arg n "${ALIAS}" '.servers[] | select(.name == $n)' "${NODES_FILE}" >/dev/null 2>&1; then
+  if [[ "${LANG_CHOICE}" == "en" ]]; then
+    printf 'Node "%s" already exists.\n' "${ALIAS}"
+  else
+    printf '节点 "%s" 已存在。\n' "${ALIAS}"
+  fi
   exit 0
 fi
 
-TMP="${NODES}.tmp"
-jq --arg n "${ALIAS}" --arg h "${IP}" \
-  '.servers += [{name:$n,host:$h,ssh:{user:"root",port:22,auth:"key",key:"~/.ssh/id_ed25519"},tags:[],enabled:true}]' \
-  "${NODES}" > "${TMP}" && mv -f "${TMP}" "${NODES}"
+TMP="${NODES_FILE}.tmp"
+jq --arg name "${ALIAS}" \
+   --arg host "${NEW_IP}" \
+   --arg user "${SSH_USER}" \
+   --arg port "${SSH_PORT}" \
+   '.servers += [{name:$name,host:$host,ssh:{user:$user,port:($port|number),auth:"key",key:"~/.ssh/id_ed25519"},tags:[],enabled:true}]' \
+   "${NODES_FILE}" > "${TMP}" && mv -f "${TMP}" "${NODES_FILE}"
 
-echo "OK:${ALIAS}:${IP}"
-REMOTE_EOF
-)
-
-DETECTED_NODES_FILE="/opt/serverharbor/data/servers.json"
-if [[ ! -d "/opt/serverharbor" ]]; then
-  DETECTED_NODES_FILE="${HOME}/.config/serverharbor/servers.json"
-fi
-
-OUTPUT=$(ssh -o ConnectTimeout=10 -o StrictHostKeyChecking=accept-new root@"${MAIN_SERVER}" \
-  "bash -s -- '${DETECTED_NODES_FILE}' '${MY_IP}' '${ALIAS_B64}'" <<< "${REMOTE_SCRIPT}" 2>&1) || true
-
-if echo "${OUTPUT}" | grep -q "^OK:"; then
-  if [[ "${LANG_CHOICE}" == "en" ]]; then
-    printf '✓ Successfully registered!\n'
-    printf '  Node "%s" (%s) is now part of the node group.\n' "${ALIAS}" "${MY_IP}"
-  else
-    printf '✓ 注册成功！\n'
-    printf '  节点 "%s" (%s) 已加入节点组。\n' "${ALIAS}" "${MY_IP}"
-  fi
-elif echo "${OUTPUT}" | grep -q "^EXISTS:"; then
-  if [[ "${LANG_CHOICE}" == "en" ]]; then
-    printf 'Node "%s" already exists on the main server.\n' "${ALIAS}"
-  else
-    printf '节点 "%s" 已存在于主服务器上。\n' "${ALIAS}"
-  fi
+if [[ "${LANG_CHOICE}" == "en" ]]; then
+  printf '✓ Node "%s" (%s@%s:%s) registered successfully!\n' "${ALIAS}" "${SSH_USER}" "${NEW_IP}" "${SSH_PORT}"
 else
-  if [[ "${LANG_CHOICE}" == "en" ]]; then
-    printf '✗ Registration failed.\n\n'
-    printf 'Manual registration:\n'
-    printf '  1. SSH to the main server: ssh root@%s\n' "${MAIN_SERVER}"
-    printf '  2. Add via menu: [3] Node Management → [2] Add node\n'
-    printf '     Name: %s  Host: %s\n' "${ALIAS}" "${MY_IP}"
-  else
-    printf '✗ 注册失败。\n\n'
-    printf '手动注册：\n'
-    printf '  1. SSH 到主服务器：ssh root@%s\n' "${MAIN_SERVER}"
-    printf '  2. 通过菜单添加：[3] 节点管理 → [2] 添加节点\n'
-    printf '     名称: %s  主机: %s\n' "${ALIAS}" "${MY_IP}"
-  fi
+  printf '✓ 节点 "%s" (%s@%s:%s) 注册成功！\n' "${ALIAS}" "${SSH_USER}" "${NEW_IP}" "${SSH_PORT}"
 fi
