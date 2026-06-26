@@ -683,21 +683,40 @@ ng_select_nodes() {
 ng_generate_join_command() {
   local main_host
   main_host=$(hostname -I 2>/dev/null | awk '{print $1}' || hostname)
+  local nodes_file="${NG_NODES_FILE}"
 
   if [[ "${NG_LANG}" == "en" ]]; then
     ng_print_header "Generate Join Command"
-    printf 'Run this command on a new server to register it:\n\n'
-    printf '%s\n' "$(ng_color "${NG_C_ACCENT}" "ssh root@${main_host} \"jq --arg n ALIAS --arg h \$(hostname -I | awk '{print \\\$1}') '.servers += [{\\\"name\\\": \\\$n, \\\"host\\\": \\\$h, \\\"ssh\\\": {\\\"user\\\": \\\"root\\\", \\\"port\\\": 22, \\\"auth\\\": \\\"key\\\", \\\"key\\\": \\\"~/.ssh/id_ed25519\\\"}, \\\"tags\\\": [], \\\"enabled\\\": true}]' /opt/serverharbor/data/servers.json > /tmp/sh.json && mv /tmp/sh.json /opt/serverharbor/data/servers.json\"")"
+    printf 'On the new server, run this script to register:\n\n'
+    printf '%s\n' "$(ng_color "${NG_C_BOLD}" 'Replace MY_SERVER_NAME with your alias, then copy and run:')"
     printf '\n'
-    printf 'Replace ALIAS with a name for the new node (e.g. hk-01).\n'
-    printf 'The new server needs SSH access to this server.\n'
+    printf '%s\n' "$(ng_color "${NG_C_ACCENT}" "#!/bin/bash")"
+    printf '%s\n' "$(ng_color "${NG_C_ACCENT}" "ALIAS=\"MY_SERVER_NAME\"")"
+    printf '%s\n' "$(ng_color "${NG_C_ACCENT}" "REMOTE=\"${main_host}\"")"
+    printf '%s\n' "$(ng_color "${NG_C_ACCENT}" "NODES=\"${nodes_file}\"")"
+    printf '%s\n' "$(ng_color "${NG_C_ACCENT}" "MY_IP=\$(hostname -I | awk '{print \$1}')")"
+    printf '%s\n' "$(ng_color "${NG_C_ACCENT}" "ssh -o StrictHostKeyChecking=accept-new root@\${REMOTE} \\")"
+    printf '%s\n' "$(ng_color "${NG_C_ACCENT}" "  jq --arg n \"\${ALIAS}\" --arg h \"\${MY_IP}\" \\")"
+    printf '%s\n' "$(ng_color "${NG_C_ACCENT}" "  '.servers += [{name:\$n,host:\$h,ssh:{user:\"root\",port:22,auth:\"key\",key:\"~/.ssh/id_ed25519\"},tags:[],enabled:true}]' \\")"
+    printf '%s\n' "$(ng_color "${NG_C_ACCENT}" "  \${NODES} > /tmp/sh.json && mv /tmp/sh.json \${NODES}")"
+    printf '\n'
+    printf '%s\n' "$(ng_color "${NG_C_DIM}" "The new server needs SSH access to ${main_host}.")"
   else
     ng_print_header "生成加入命令"
-    printf '在新服务器上执行此命令注册到本服务器：\n\n'
-    printf '%s\n' "$(ng_color "${NG_C_ACCENT}" "ssh root@${main_host} \"jq --arg n ALIAS --arg h \$(hostname -I | awk '{print \\\$1}') '.servers += [{\\\"name\\\": \\\$n, \\\"host\\\": \\\$h, \\\"ssh\\\": {\\\"user\\\": \\\"root\\\", \\\"port\\\": 22, \\\"auth\\\": \\\"key\\\", \\\"key\\\": \\\"~/.ssh/id_ed25519\\\"}, \\\"tags\\\": [], \\\"enabled\\\": true}]' /opt/serverharbor/data/servers.json > /tmp/sh.json && mv /tmp/sh.json /opt/serverharbor/data/servers.json\"")"
+    printf '在新服务器上运行以下脚本进行注册：\n\n'
+    printf '%s\n' "$(ng_color "${NG_C_BOLD}" '将 MY_SERVER_NAME 替换为你的别名，然后复制运行：')"
     printf '\n'
-    printf '将 ALIAS 替换为新节点的名称（如 hk-01）。\n'
-    printf '新服务器需要能通过 SSH 连接到本服务器。\n'
+    printf '%s\n' "$(ng_color "${NG_C_ACCENT}" "#!/bin/bash")"
+    printf '%s\n' "$(ng_color "${NG_C_ACCENT}" "ALIAS=\"MY_SERVER_NAME\"")"
+    printf '%s\n' "$(ng_color "${NG_C_ACCENT}" "REMOTE=\"${main_host}\"")"
+    printf '%s\n' "$(ng_color "${NG_C_ACCENT}" "NODES=\"${nodes_file}\"")"
+    printf '%s\n' "$(ng_color "${NG_C_ACCENT}" "MY_IP=\$(hostname -I | awk '{print \$1}')")"
+    printf '%s\n' "$(ng_color "${NG_C_ACCENT}" "ssh -o StrictHostKeyChecking=accept-new root@\${REMOTE} \\")"
+    printf '%s\n' "$(ng_color "${NG_C_ACCENT}" "  jq --arg n \"\${ALIAS}\" --arg h \"\${MY_IP}\" \\")"
+    printf '%s\n' "$(ng_color "${NG_C_ACCENT}" "  '.servers += [{name:\$n,host:\$h,ssh:{user:\"root\",port:22,auth:\"key\",key:\"~/.ssh/id_ed25519\"},tags:[],enabled:true}]' \\")"
+    printf '%s\n' "$(ng_color "${NG_C_ACCENT}" "  \${NODES} > /tmp/sh.json && mv /tmp/sh.json \${NODES}")"
+    printf '\n'
+    printf '%s\n' "$(ng_color "${NG_C_DIM}" "新服务器需要能通过 SSH 连接到 ${main_host}。")"
   fi
 }
 
