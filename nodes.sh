@@ -819,7 +819,7 @@ ng_register_node() {
      --arg port "${ssh_port}" \
      --arg auth "${ssh_auth}" \
      --arg key "${ssh_key}" \
-     '.servers += [{name:$name,host:$host,ssh:{user:$user,port:($port|number),auth:$auth,key:$key},tags:[],enabled:true}]' \
+     '.servers += [{name:$name,host:$host,ssh:{user:$user,port:($port|tonumber),auth:$auth,key:$key},tags:[],enabled:true}]' \
      "${NG_NODES_FILE}" > "${tmp_file}" && mv -f "${tmp_file}" "${NG_NODES_FILE}"
 
   if [[ "${NG_LANG}" == "en" ]]; then
