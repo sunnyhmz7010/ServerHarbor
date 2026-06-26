@@ -274,7 +274,7 @@ ng_setup_mutual_nodes() {
   if ! jq -e --arg n "${remote_alias}" '.servers[] | select(.name == $n)' "${NG_NODES_FILE}" >/dev/null 2>&1; then
     local tmp="${NG_NODES_FILE}.tmp"
     jq --arg name "${remote_alias}" --arg host "${remote_ip}" --arg user "${ssh_user}" --arg port "${ssh_port}" --arg auth "${auth_method}" --arg key "${key}" \
-      '.servers += [{name:$name,host:$host,ssh:{user:$user,port:($port|number),auth:$auth,key:$key},tags:[],enabled:true}]' \
+      '.servers += [{name:$name,host:$host,ssh:{user:$user,port:($port|tonumber),auth:$auth,key:$key},tags:[],enabled:true}]' \
       "${NG_NODES_FILE}" > "${tmp}" && mv -f "${tmp}" "${NG_NODES_FILE}"
     if [[ "${NG_LANG}" == "en" ]]; then printf '  ✓ Node "%s" added\n' "${remote_alias}"; else printf '  ✓ 节点 "%s" 已添加\n' "${remote_alias}"; fi
   else
@@ -300,7 +300,7 @@ ng_setup_mutual_nodes() {
   local register_cmd="mkdir -p \$(dirname ${remote_nodes_file}) && [[ -f ${remote_nodes_file} ]] || cat > ${remote_nodes_file} <<'EOFCFG'
 {\"defaults\":{\"ssh\":{\"user\":\"root\",\"port\":22,\"key\":\"~/.ssh/id_ed25519\"}},\"servers\":[]}
 EOFCFG
-jq --arg name '${my_alias}' --arg host '${my_ip}' --arg user 'root' --arg port '22' --arg auth 'key' --arg key '~/.ssh/id_ed25519' '.servers += [{name:\$name,host:\$host,ssh:{user:\$user,port:(\$port|number),auth:\$auth,key:\$key},tags:[],enabled:true}]' ${remote_nodes_file} > ${remote_nodes_file}.tmp && mv -f ${remote_nodes_file}.tmp ${remote_nodes_file}"
+jq --arg name '${my_alias}' --arg host '${my_ip}' --arg user 'root' --arg port '22' --arg auth 'key' --arg key '~/.ssh/id_ed25519' '.servers += [{name:\$name,host:\$host,ssh:{user:\$user,port:(\$port|tonumber),auth:\$auth,key:\$key},tags:[],enabled:true}]' ${remote_nodes_file} > ${remote_nodes_file}.tmp && mv -f ${remote_nodes_file}.tmp ${remote_nodes_file}"
 
   if "${run_ssh[@]}" "bash -c '${register_cmd}'" >/dev/null 2>&1; then
     if [[ "${NG_LANG}" == "en" ]]; then printf '  ✓ Self registered on remote\n'; else printf '  ✓ 本机已注册到对方服务器\n'; fi
