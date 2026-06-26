@@ -334,9 +334,13 @@ migrate_online_data() {
 
   local has_data=0
   [[ -f "${online_dir}/config/servers.json" ]] && has_data=1
+  [[ -f "${online_dir}/config/app.conf" ]] && has_data=1
+  [[ -f "${online_dir}/config/peers.conf" ]] && has_data=1
+  [[ -f "${online_dir}/config/watch.conf" ]] && has_data=1
   [[ -d "${online_dir}/state" ]] && [[ -n "$(ls -A "${online_dir}/state" 2>/dev/null)" ]] && has_data=1
   [[ -d "${online_dir}/reports" ]] && [[ -n "$(ls -A "${online_dir}/reports" 2>/dev/null)" ]] && has_data=1
   [[ -d "${online_dir}/backups" ]] && [[ -n "$(ls -A "${online_dir}/backups" 2>/dev/null)" ]] && has_data=1
+  [[ -d "${online_dir}/logs" ]] && [[ -n "$(ls -A "${online_dir}/logs" 2>/dev/null)" ]] && has_data=1
 
   if [[ "${has_data}" -eq 0 ]]; then
     return 0
@@ -377,32 +381,21 @@ migrate_online_data() {
     printf '\n正在迁移数据...\n'
   fi
 
-  mkdir -p "${DATA_ROOT}/config" "${DATA_ROOT}/state" "${DATA_ROOT}/reports" "${DATA_ROOT}/backups"
+  mkdir -p "${DATA_ROOT}/config" "${DATA_ROOT}/state" "${DATA_ROOT}/reports" "${DATA_ROOT}/backups" "${DATA_ROOT}/logs"
 
-  if [[ -f "${online_dir}/config/servers.json" ]]; then
-    cp -f "${online_dir}/config/servers.json" "${DATA_ROOT}/config/servers.json" 2>/dev/null || true
-    printf '  ✓ servers.json\n'
-  fi
-  if [[ -f "${online_dir}/config/peers.conf" ]]; then
-    cp -f "${online_dir}/config/peers.conf" "${DATA_ROOT}/config/peers.conf" 2>/dev/null || true
-    printf '  ✓ peers.conf\n'
-  fi
-  if [[ -f "${online_dir}/config/watch.conf" ]]; then
-    cp -f "${online_dir}/config/watch.conf" "${DATA_ROOT}/config/watch.conf" 2>/dev/null || true
-    printf '  ✓ watch.conf\n'
-  fi
-  if [[ -d "${online_dir}/state" ]] && [[ -n "$(ls -A "${online_dir}/state" 2>/dev/null)" ]]; then
-    cp -rf "${online_dir}/state/"* "${DATA_ROOT}/state/" 2>/dev/null || true
-    printf '  ✓ %d state files\n' "$(ls -1 "${online_dir}/state" 2>/dev/null | wc -l)"
-  fi
-  if [[ -d "${online_dir}/reports" ]] && [[ -n "$(ls -A "${online_dir}/reports" 2>/dev/null)" ]]; then
-    cp -rf "${online_dir}/reports/"* "${DATA_ROOT}/reports/" 2>/dev/null || true
-    printf '  ✓ %d reports\n' "$(ls -1 "${online_dir}/reports" 2>/dev/null | wc -l)"
-  fi
-  if [[ -d "${online_dir}/backups" ]] && [[ -n "$(ls -A "${online_dir}/backups" 2>/dev/null)" ]]; then
-    cp -rf "${online_dir}/backups/"* "${DATA_ROOT}/backups/" 2>/dev/null || true
-    printf '  ✓ %d backups\n' "$(ls -1 "${online_dir}/backups" 2>/dev/null | wc -l)"
-  fi
+  for conf_name in servers.json app.conf peers.conf watch.conf; do
+    if [[ -f "${online_dir}/config/${conf_name}" ]]; then
+      cp -f "${online_dir}/config/${conf_name}" "${DATA_ROOT}/config/${conf_name}" 2>/dev/null || true
+      printf '  ✓ %s\n' "${conf_name}"
+    fi
+  done
+
+  for sub_dir in state reports backups logs; do
+    if [[ -d "${online_dir}/${sub_dir}" ]] && [[ -n "$(ls -A "${online_dir}/${sub_dir}" 2>/dev/null)" ]]; then
+      cp -rf "${online_dir}/${sub_dir}/"* "${DATA_ROOT}/${sub_dir}/" 2>/dev/null || true
+      printf '  ✓ %s (%d files)\n' "${sub_dir}" "$(ls -1 "${online_dir}/${sub_dir}" 2>/dev/null | wc -l)"
+    fi
+  done
 
   if [[ "${LANGUAGE}" == "en" ]]; then
     printf '\n✓ Migration completed!\n'

@@ -96,7 +96,9 @@ ng_bootstrap_menu() {
       ng_print_option "4" "⚙️" "vps-tcp-tune" "BBR3+FQ TCP tuning script for VPS optimization"
       ng_print_option "5" "📊" "System status" "Check CPU, memory, disk and alerts"
       ng_print_option "6" "📄" "Generate report" "Show system summary"
-      ng_print_option "7" "🔄" "Migrate data" "Migrate from online to installed version"
+      if [[ "${NG_RUNTIME_MODE}" == "installed" ]]; then
+        ng_print_option "7" "🔄" "Migrate data" "Migrate from online to installed version"
+      fi
       ng_print_option "0" "↩" "Back"
     else
       ng_print_title_box "🚀 系统开荒" "服务器初始化与优化"
@@ -106,7 +108,9 @@ ng_bootstrap_menu() {
       ng_print_option "4" "⚙️" "vps-tcp-tune" "BBR3+FQ TCP 网络调优脚本，一键优化 VPS 网络"
       ng_print_option "5" "📊" "系统状态" "查看 CPU、内存、磁盘和告警"
       ng_print_option "6" "📄" "生成报告" "输出系统摘要"
-      ng_print_option "7" "🔄" "数据迁移" "从在线版迁移到安装版"
+      if [[ "${NG_RUNTIME_MODE}" == "installed" ]]; then
+        ng_print_option "7" "🔄" "数据迁移" "从在线版迁移到安装版"
+      fi
       ng_print_option "0" "↩" "返回"
     fi
 

@@ -175,6 +175,16 @@ print_run_plan() {
   else
     t plan_dep_status "${dep_note}"
   fi
+
+  if [[ -f "/opt/serverharbor/.serverharbor-install" ]]; then
+    if [[ "${LANGUAGE}" == "en" ]]; then
+      printf '\n  ⚠ ServerHarbor is installed. Installed data: /opt/serverharbor/data\n'
+      printf '    Online data and installed data are separate. Changes here won'\''t affect installed version.\n'
+    else
+      printf '\n  ⚠ ServerHarbor 已安装。安装版数据: /opt/serverharbor/data\n'
+      printf '    在线版数据与安装版数据独立，在线版的修改不会影响安装版。\n'
+    fi
+  fi
 }
 
 ensure_fetch_tools_installed() {

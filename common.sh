@@ -9,7 +9,10 @@ NG_INSTALL_ROOT="/opt/serverharbor"
 NG_INSTALL_DATA="${NG_INSTALL_ROOT}/data"
 NG_ONLINE_DATA="${SERVERHARBOR_HOME:-${XDG_CONFIG_HOME:-${HOME}/.config}/serverharbor}"
 
-if [[ -f "${NG_INSTALL_ROOT}/.serverharbor-install" ]]; then
+if [[ "${SERVERHARBOR_RUNTIME:-}" == "online" ]]; then
+  NG_RUNTIME_MODE="online"
+  NG_DATA_ROOT="${NG_ONLINE_DATA}"
+elif [[ -f "${NG_INSTALL_ROOT}/.serverharbor-install" ]]; then
   NG_RUNTIME_MODE="installed"
   NG_DATA_ROOT="${NG_INSTALL_DATA}"
 else
@@ -41,33 +44,50 @@ NG_C_PANEL=""
 NG_C_PANEL_2=""
 
 ng_trigger_migration() {
-  local source_dir=""
-  local target_dir="/opt/serverharbor/data"
+  if [[ "${NG_RUNTIME_MODE}" != "installed" ]]; then
+    if [[ "${NG_LANG}" == "en" ]]; then
+      ng_log "WARN" "Data migration is only available in installed mode."
+      printf '  Run the installed version (shr) to use this feature.\n'
+    else
+      ng_log "WARN" "数据迁移仅在安装模式下可用。"
+      printf '  请运行安装版（shr）使用此功能。\n'
+    fi
+    return 1
+  fi
 
-  if [[ "${NG_RUNTIME_MODE}" == "installed" ]]; then
-    source_dir="${NG_ONLINE_DATA}"
-    target_dir="${NG_DATA_ROOT}"
-  else
-    source_dir="${NG_DATA_ROOT}"
+  local source_dir="${NG_ONLINE_DATA}"
+  local target_dir="${NG_DATA_ROOT}"
+  local migrated_dir="${NG_ONLINE_DATA}.migrated"
+
+  if [[ -d "${migrated_dir}" ]]; then
+    if [[ "${NG_LANG}" == "en" ]]; then
+      printf '%s\n' "$(ng_color "${NG_C_OK}" "✓ Data was already migrated to ${migrated_dir}")"
+      printf '  If you need to re-migrate, remove or rename that directory first.\n'
+    else
+      printf '%s\n' "$(ng_color "${NG_C_OK}" "✓ 数据已迁移至 ${migrated_dir}")"
+      printf '  如需重新迁移，请先删除或重命名该目录。\n'
+    fi
+    return 0
   fi
 
   if [[ ! -d "${source_dir}" ]]; then
     if [[ "${NG_LANG}" == "en" ]]; then
-      ng_log "WARN" "No source data found at ${source_dir}"
+      ng_log "WARN" "No online data found at ${source_dir}"
     else
-      ng_log "WARN" "未找到源数据目录 ${source_dir}"
+      ng_log "WARN" "未找到在线版数据 ${source_dir}"
     fi
     return 1
   fi
 
   local has_data=0
   [[ -f "${source_dir}/config/servers.json" ]] && has_data=1
-  [[ -f "${source_dir}/config/peers.conf" ]] && has_data=1
   [[ -f "${source_dir}/config/app.conf" ]] && has_data=1
+  [[ -f "${source_dir}/config/peers.conf" ]] && has_data=1
   [[ -f "${source_dir}/config/watch.conf" ]] && has_data=1
   [[ -d "${source_dir}/state" ]] && [[ -n "$(ls -A "${source_dir}/state" 2>/dev/null)" ]] && has_data=1
   [[ -d "${source_dir}/reports" ]] && [[ -n "$(ls -A "${source_dir}/reports" 2>/dev/null)" ]] && has_data=1
   [[ -d "${source_dir}/backups" ]] && [[ -n "$(ls -A "${source_dir}/backups" 2>/dev/null)" ]] && has_data=1
+  [[ -d "${source_dir}/logs" ]] && [[ -n "$(ls -A "${source_dir}/logs" 2>/dev/null)" ]] && has_data=1
 
   if [[ "${has_data}" -eq 0 ]]; then
     if [[ "${NG_LANG}" == "en" ]]; then
@@ -81,52 +101,67 @@ ng_trigger_migration() {
   if [[ "${NG_LANG}" == "en" ]]; then
     printf '\n  Source: %s\n' "${source_dir}"
     printf '  Target: %s\n\n' "${target_dir}"
-    ng_prompt_yes_no "Migrate data from source to target?" || return 0
+    printf '  After migration, source will be renamed to:\n'
+    printf '  %s\n\n' "${migrated_dir}"
+    ng_prompt_yes_no "Migrate data from online to installed?" || return 0
   else
     printf '\n  源目录: %s\n' "${source_dir}"
     printf '  目标目录: %s\n\n' "${target_dir}"
-    ng_prompt_yes_no "是否将数据从源目录迁移到目标目录？" || return 0
+    printf '  迁移完成后，源目录将重命名为：\n'
+    printf '  %s\n\n' "${migrated_dir}"
+    ng_prompt_yes_no "是否将在线版数据迁移到安装版？" || return 0
   fi
 
   mkdir -p "${target_dir}/config" "${target_dir}/state" "${target_dir}/logs" "${target_dir}/reports" "${target_dir}/backups"
 
-  if [[ -f "${source_dir}/config/servers.json" ]]; then
-    cp -f "${source_dir}/config/servers.json" "${target_dir}/config/servers.json" 2>/dev/null || true
-    printf '  %s servers.json\n' "$(ng_color "${NG_C_OK}" "✓")"
-  fi
-  if [[ -f "${source_dir}/config/app.conf" ]]; then
-    cp -f "${source_dir}/config/app.conf" "${target_dir}/config/app.conf" 2>/dev/null || true
-    printf '  %s app.conf\n' "$(ng_color "${NG_C_OK}" "✓")"
-  fi
-  if [[ -f "${source_dir}/config/peers.conf" ]]; then
-    cp -f "${source_dir}/config/peers.conf" "${target_dir}/config/peers.conf" 2>/dev/null || true
-    printf '  %s peers.conf\n' "$(ng_color "${NG_C_OK}" "✓")"
-  fi
-  if [[ -f "${source_dir}/config/watch.conf" ]]; then
-    cp -f "${source_dir}/config/watch.conf" "${target_dir}/config/watch.conf" 2>/dev/null || true
-    printf '  %s watch.conf\n' "$(ng_color "${NG_C_OK}" "✓")"
+  local copied=0
+
+  for conf_name in servers.json app.conf peers.conf watch.conf; do
+    if [[ -f "${source_dir}/config/${conf_name}" ]]; then
+      if [[ -f "${target_dir}/config/${conf_name}" ]]; then
+        if [[ "${NG_LANG}" == "en" ]]; then
+          printf '  %s already exists, skipping %s\n' "$(ng_color "${NG_C_WARN}" "⚠")" "${conf_name}"
+        else
+          printf '  %s 已存在，跳过 %s\n' "$(ng_color "${NG_C_WARN}" "⚠")" "${conf_name}"
+        fi
+      else
+        cp -f "${source_dir}/config/${conf_name}" "${target_dir}/config/${conf_name}" 2>/dev/null || true
+        printf '  %s %s\n' "$(ng_color "${NG_C_OK}" "✓")" "${conf_name}"
+        ((copied++)) || true
+      fi
+    fi
+  done
+
+  for sub_dir in state reports backups logs; do
+    if [[ -d "${source_dir}/${sub_dir}" ]] && [[ -n "$(ls -A "${source_dir}/${sub_dir}" 2>/dev/null)" ]]; then
+      local count
+      count=$(ls -1 "${source_dir}/${sub_dir}" 2>/dev/null | wc -l)
+      cp -rf "${source_dir}/${sub_dir}/"* "${target_dir}/${sub_dir}/" 2>/dev/null || true
+      printf '  %s %s (%d files)\n' "$(ng_color "${NG_C_OK}" "✓")" "${sub_dir}" "${count}"
+      ((copied++)) || true
+    fi
+  done
+
+  if [[ "${copied}" -eq 0 ]]; then
+    if [[ "${NG_LANG}" == "en" ]]; then
+      printf 'Nothing was copied.\n'
+    else
+      printf '没有复制任何内容。\n'
+    fi
+    return 0
   fi
 
-  if [[ -d "${source_dir}/state" ]] && [[ -n "$(ls -A "${source_dir}/state" 2>/dev/null)" ]]; then
-    cp -rf "${source_dir}/state/"* "${target_dir}/state/" 2>/dev/null || true
-    printf '  %s %d state files\n' "$(ng_color "${NG_C_OK}" "✓")" "$(ls -1 "${source_dir}/state" 2>/dev/null | wc -l)"
-  fi
-  if [[ -d "${source_dir}/reports" ]] && [[ -n "$(ls -A "${source_dir}/reports" 2>/dev/null)" ]]; then
-    cp -rf "${source_dir}/reports/"* "${target_dir}/reports/" 2>/dev/null || true
-    printf '  %s %d reports\n' "$(ng_color "${NG_C_OK}" "✓")" "$(ls -1 "${source_dir}/reports" 2>/dev/null | wc -l)"
-  fi
-  if [[ -d "${source_dir}/backups" ]] && [[ -n "$(ls -A "${source_dir}/backups" 2>/dev/null)" ]]; then
-    cp -rf "${source_dir}/backups/"* "${target_dir}/backups/" 2>/dev/null || true
-    printf '  %s %d backups\n' "$(ng_color "${NG_C_OK}" "✓")" "$(ls -1 "${source_dir}/backups" 2>/dev/null | wc -l)"
-  fi
+  mv "${source_dir}" "${migrated_dir}" 2>/dev/null || true
 
   if [[ "${NG_LANG}" == "en" ]]; then
     printf '\n%s\n' "$(ng_color "${NG_C_OK}" "✓ Migration completed!")"
+    printf '  Source renamed to: %s\n' "${migrated_dir}"
   else
     printf '\n%s\n' "$(ng_color "${NG_C_OK}" "✓ 数据迁移完成！")"
+    printf '  源目录已重命名为: %s\n' "${migrated_dir}"
   fi
 
-  ng_log "INFO" "Data migration completed from ${source_dir} to ${target_dir}"
+  ng_log "INFO" "Data migrated from ${source_dir} to ${target_dir}, source renamed to ${migrated_dir}"
 }
 
 ng_init_environment() {
@@ -134,6 +169,20 @@ ng_init_environment() {
 
   ng_init_theme
   ng_seed_default_configs
+
+  if [[ "${NG_RUNTIME_MODE}" == "online" ]] && [[ -f "${NG_INSTALL_ROOT}/.serverharbor-install" ]]; then
+    if [[ "${NG_LANG}" == "en" ]]; then
+      printf '\n%s\n' "$(ng_color "${NG_C_WARN}" "⚠ ServerHarbor is installed but running in online mode.")"
+      printf '  Installed data: %s\n' "${NG_INSTALL_DATA}"
+      printf '  Online data:    %s\n' "${NG_ONLINE_DATA}"
+      printf '  These are separate data stores. Use [1]→[7] in installed mode to merge.\n'
+    else
+      printf '\n%s\n' "$(ng_color "${NG_C_WARN}" "⚠ ServerHarbor 已安装，但当前运行在在线模式。")"
+      printf '  安装版数据: %s\n' "${NG_INSTALL_DATA}"
+      printf '  在线版数据: %s\n' "${NG_ONLINE_DATA}"
+      printf '  两处数据独立，互不影响。如需合并请使用安装版菜单 [1]→[7]。\n'
+    fi
+  fi
 
   if [[ -f "${NG_CONFIG_FILE}" ]]; then
     # Basic config file validation - only allow KEY=VALUE patterns

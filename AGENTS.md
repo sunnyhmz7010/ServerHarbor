@@ -127,8 +127,18 @@ CLI modes: `--cron-probe`, `--cron-security`, `--cron-alerts`
 - Managed code and mutable user data must stay decoupled. Installer updates may replace `/opt/serverharbor/app`, but must preserve user config and runtime data under `/opt/serverharbor/data`.
 - Before any installer package operation or filesystem write, the script must print the intended actions and require explicit user confirmation.
 - Generated reports and state files may be retained locally for inspection, but logs should stay ignored unless requested otherwise.
-- The bootstrap menu includes a data migration option (`[7]`) that copies data from the online runtime directory (`~/.config/serverharbor`) to the installed directory (`/opt/serverharbor/data`). This works in both online and installed modes.
-- The installer (`install.sh`) detects existing online data after a fresh install and offers to migrate it to the installed location.
+
+### Data Isolation Between Online and Installed Modes
+
+- Online mode (`curl | bash`) always uses `~/.config/serverharbor` as its data directory, even if ServerHarbor is installed. This is enforced by checking `SERVERHARBOR_RUNTIME=online` before checking the install manifest.
+- Installed mode (`shr`) always uses `/opt/serverharbor/data` as its data directory.
+- The two data directories are completely independent. Changes in one mode do not affect the other.
+- When running online mode and an install is detected, the user is warned that the data stores are separate.
+- The installer (`install.sh`) automatically detects and offers to migrate online data during fresh install.
+- The bootstrap menu `[7]` (data migration) is only visible in installed mode. It migrates data from the online directory to the installed directory.
+- After migration, the source directory is renamed to `~/.config/serverharbor.migrated` to prevent duplicate migration and signal that the data has been transferred.
+- If `.migrated` directory already exists, the migration function reports this and skips.
+- Both migration paths detect: `servers.json`, `app.conf`, `peers.conf`, `watch.conf`, `state/`, `reports/`, `backups/`, `logs/`.
 
 ## Development Commands
 
