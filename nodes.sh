@@ -642,8 +642,8 @@ ng_remote_execute() {
   ng_read_line sel || return 130
 
   if [[ -z "${sel}" ]] || ! [[ "${sel}" =~ ^[0-9]+$ ]] || [[ "${sel}" -lt 1 ]] || [[ "${sel}" -gt "${idx}" ]]; then
-    ng_t invalid_option
-    return 1
+    if [[ "${NG_LANG}" == "en" ]]; then printf 'Invalid selection.\n'; else printf '无效选择。\n'; fi
+    return 0
   fi
 
   local node_name="${node_names[$((sel-1))]}"
@@ -726,7 +726,7 @@ ng_remote_execute() {
     0) return 0 ;;
     *)
       ng_t invalid_option
-      return 1
+      return 0
       ;;
   esac
 
