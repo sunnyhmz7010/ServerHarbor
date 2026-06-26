@@ -204,17 +204,17 @@ ng_select_baseline() {
 
   if [[ "${baseline_count}" -eq 0 ]]; then
     if [[ "${NG_LANG}" == "en" ]]; then
-      printf 'No baselines found. Create one first.\n'
+      printf 'No baselines found. Create one first.\n' >&2
     else
-      printf '未找到基线，请先创建。\n'
+      printf '未找到基线，请先创建。\n' >&2
     fi
     return 1
   fi
 
   if [[ "${NG_LANG}" == "en" ]]; then
-    printf '\nExisting baselines:\n'
+    printf '\nExisting baselines:\n' >&2
   else
-    printf '\n已有基线：\n'
+    printf '\n已有基线：\n' >&2
   fi
 
   local idx=1
@@ -226,23 +226,23 @@ ng_select_baseline() {
     file_count=$(wc -l < "${f}" 2>/dev/null | tr -d ' ')
     local mtime
     mtime=$(date -r "${f}" '+%Y-%m-%d %H:%M' 2>/dev/null || stat -c '%y' "${f}" 2>/dev/null | cut -d. -f1 || echo "?")
-    printf '  [%d] %-20s %5s files   %s\n' "${idx}" "${bname}" "${file_count}" "${mtime}"
+    printf '  [%d] %-20s %5s files   %s\n' "${idx}" "${bname}" "${file_count}" "${mtime}" >&2
     ((idx++)) || true
   done
 
   if [[ "${mode}" == "all" ]]; then
-    printf '  [a] %s\n' "$( [[ "${NG_LANG}" == "en" ]] && echo "Verify all" || echo "全部校验" )"
+    printf '  [a] %s\n' "$( [[ "${NG_LANG}" == "en" ]] && echo "Verify all" || echo "全部校验" )" >&2
   fi
 
-  printf '\n'
+  printf '\n' >&2
   if [[ "${NG_LANG}" == "en" ]]; then
-    printf 'Select baseline (number): '
+    printf 'Select baseline (number): ' >&2
   else
-    printf '选择基线（输入编号）：'
+    printf '选择基线（输入编号）：' >&2
   fi
 
   local selection
-  ng_read_line selection || return 130
+  read -r selection < /dev/tty
 
   if [[ "${selection}" == "a" ]] && [[ "${mode}" == "all" ]]; then
     printf '%s\n' "all"
@@ -256,9 +256,9 @@ ng_select_baseline() {
   fi
 
   if [[ "${NG_LANG}" == "en" ]]; then
-    printf 'Invalid selection.\n'
+    printf 'Invalid selection.\n' >&2
   else
-    printf '无效选择。\n'
+    printf '无效选择。\n' >&2
   fi
   return 1
 }
