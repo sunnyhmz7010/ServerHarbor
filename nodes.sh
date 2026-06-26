@@ -271,14 +271,16 @@ ng_setup_mutual_nodes() {
   remote_alias=$(echo "${remote_alias}" | tr -d '\r\n')
   ng_init_nodes
 
-  if ! jq -e --arg n "${remote_alias}" '.servers[] | select(.name == $n)' "${NG_NODES_FILE}" >/dev/null 2>&1; then
+  if ! jq -e --arg h "${remote_ip}" '.servers[] | select(.host == $h)' "${NG_NODES_FILE}" >/dev/null 2>&1; then
     local tmp="${NG_NODES_FILE}.tmp"
     jq --arg name "${remote_alias}" --arg host "${remote_ip}" --arg user "${ssh_user}" --arg port "${ssh_port}" --arg auth "${auth_method}" --arg key "${key}" \
       '.servers += [{name:$name,host:$host,ssh:{user:$user,port:($port|tonumber),auth:$auth,key:$key},tags:[],enabled:true}]' \
       "${NG_NODES_FILE}" > "${tmp}" && mv -f "${tmp}" "${NG_NODES_FILE}"
     if [[ "${NG_LANG}" == "en" ]]; then printf '  ✓ Node "%s" added\n' "${remote_alias}"; else printf '  ✓ 节点 "%s" 已添加\n' "${remote_alias}"; fi
   else
-    if [[ "${NG_LANG}" == "en" ]]; then printf '  ⚠ Node "%s" already exists\n' "${remote_alias}"; else printf '  ⚠ 节点 "%s" 已存在\n' "${remote_alias}"; fi
+    local existing_name
+    existing_name=$(jq -r --arg h "${remote_ip}" '.servers[] | select(.host == $h) | .name' "${NG_NODES_FILE}" 2>/dev/null)
+    if [[ "${NG_LANG}" == "en" ]]; then printf '  ⚠ Node "%s" already exists for this IP\n' "${existing_name}"; else printf '  ⚠ 该 IP 已有节点 "%s"\n' "${existing_name}"; fi
   fi
 
   if [[ "${NG_LANG}" == "en" ]]; then
@@ -689,7 +691,7 @@ ng_remote_execute() {
 
       case "${op_choice}" in
         1)
-          cmd="bash <(curl -q -fsSL 'https://raw.githubusercontent.com/sunnyhmz7010/ServerHarbor/main/run.sh?$(date +%s)')"
+          cmd="echo 'y' | bash <(curl -q -fsSL 'https://raw.githubusercontent.com/sunnyhmz7010/ServerHarbor/main/run.sh?$(date +%s)')"
           ;;
         2)
           cmd="curl -q -fsSL 'https://raw.githubusercontent.com/sunnyhmz7010/ServerHarbor/main/install.sh?$(date +%s)' | sudo bash"
