@@ -637,8 +637,9 @@ ng_remote_execute() {
       continue
     fi
 
-    local -a ssh_opts=(-o ConnectTimeout=10 -o StrictHostKeyChecking=accept-new -p "${node_port}")
-    local use_sshpass=0
+  local -a ssh_opts=(-o ConnectTimeout=10 -o StrictHostKeyChecking=accept-new -p "${node_port}")
+  local -a ssh_opts_interactive=(-t -o ConnectTimeout=10 -o StrictHostKeyChecking=accept-new -p "${node_port}")
+  local use_sshpass=0
 
     if [[ "${node_auth}" == "password" ]] && command -v sshpass >/dev/null 2>&1; then
       use_sshpass=1
@@ -676,10 +677,10 @@ ng_remote_execute() {
 
       case "${op_choice}" in
         1)
-          cmd="echo 'y' | bash <(curl -q -fsSL 'https://raw.githubusercontent.com/sunnyhmz7010/ServerHarbor/main/run.sh?$(date +%s)')"
+          cmd="bash <(curl -q -fsSL 'https://raw.githubusercontent.com/sunnyhmz7010/ServerHarbor/main/run.sh?$(date +%s)')"
           ;;
         2)
-          cmd="echo 'y' | curl -q -fsSL 'https://raw.githubusercontent.com/sunnyhmz7010/ServerHarbor/main/install.sh?$(date +%s)' | sudo bash"
+          cmd="curl -q -fsSL 'https://raw.githubusercontent.com/sunnyhmz7010/ServerHarbor/main/install.sh?$(date +%s)' | sudo bash"
           ;;
         3)
           cmd="shr"
@@ -704,11 +705,24 @@ ng_remote_execute() {
         printf '\n正在 %s 上执行 ...\n\n' "${node_name}"
       fi
 
-      if [[ "${use_sshpass}" -eq 1 ]]; then
-        sshpass -e ssh "${ssh_opts[@]}" "${node_user}@${node_host}" "bash -c '${cmd}'"
+      local -a exec_ssh=()
+      if [[ "${op_choice}" =~ ^[1-3]$ ]]; then
+        # Interactive mode for ServerHarbor operations (allocates PTY)
+        if [[ "${use_sshpass}" -eq 1 ]]; then
+          exec_ssh=(sshpass -e ssh "${ssh_opts_interactive[@]}" "${node_user}@${node_host}")
+        else
+          exec_ssh=(ssh "${ssh_opts_interactive[@]}" "${node_user}@${node_host}")
+        fi
       else
-        ssh "${ssh_opts[@]}" "${node_user}@${node_host}" "bash -c '${cmd}'"
+        # Non-interactive mode for custom commands
+        if [[ "${use_sshpass}" -eq 1 ]]; then
+          exec_ssh=(sshpass -e ssh "${ssh_opts[@]}" "${node_user}@${node_host}")
+        else
+          exec_ssh=(ssh "${ssh_opts[@]}" "${node_user}@${node_host}")
+        fi
       fi
+
+      "${exec_ssh[@]}" "bash -c '${cmd}'"
       local rc=$?
 
       printf '\n'
