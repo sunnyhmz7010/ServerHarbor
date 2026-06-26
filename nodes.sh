@@ -794,12 +794,18 @@ ng_node_menu() {
           done <<< "${selection}"
 
           if [[ "${NG_LANG}" == "en" ]]; then
-            printf '%-20s %-20s %-15s %s\n' "NODE" "HOST" "STATUS" "DETAIL"
-            printf '%s\n' '----------------------------------------------------------------------'
+            ng_report_header "🔍 SSH Connectivity Test"
+            ng_report_meta "Generated At" "$(ng_timestamp)"
+            ng_report_meta "Host" "${NG_HOSTNAME}"
+            ng_report_section_start "Test Results"
           else
-            printf '%-20s %-20s %-15s %s\n' "节点" "主机" "状态" "详情"
-            printf '%s\n' '----------------------------------------------------------------------'
+            ng_report_header "🔍 SSH 连接测试"
+            ng_report_meta "生成时间" "$(ng_timestamp)"
+            ng_report_meta "主机" "${NG_HOSTNAME}"
+            ng_report_section_start "测试结果"
           fi
+
+          local total=0 passed=0 failed=0
 
           for node_idx in "${target_nodes[@]}"; do
             local node_name node_host node_user node_port node_auth node_key
@@ -815,17 +821,29 @@ ng_node_menu() {
             status=$(ng_test_node_ssh "${node_name}" "${node_host}" "${node_user}" "${node_port}" "${node_auth}" "${node_key}") || true
 
             case "${status}" in
-              OK) if [[ "${NG_LANG}" == "en" ]]; then detail="✓ Connected"; else detail="✓ 已连接"; fi; status="OK" ;;
-              CONN_REFUSED) if [[ "${NG_LANG}" == "en" ]]; then detail="SSH port closed"; else detail="SSH 端口关闭"; fi; status="FAIL" ;;
-              TIMEOUT) if [[ "${NG_LANG}" == "en" ]]; then detail="Connection timeout"; else detail="连接超时"; fi; status="FAIL" ;;
-              AUTH_FAILED) if [[ "${NG_LANG}" == "en" ]]; then detail="Authentication failed"; else detail="认证失败"; fi; status="FAIL" ;;
-              KEY_MISMATCH) if [[ "${NG_LANG}" == "en" ]]; then detail="Host key mismatch"; else detail="主机密钥不匹配"; fi; status="FAIL" ;;
-              KEY_NOT_FOUND) if [[ "${NG_LANG}" == "en" ]]; then detail="SSH key not found"; else detail="SSH 密钥未找到"; fi; status="FAIL" ;;
-              *) if [[ "${NG_LANG}" == "en" ]]; then detail="Unknown error"; else detail="未知错误"; fi; status="FAIL" ;;
+              OK) if [[ "${NG_LANG}" == "en" ]]; then detail="✓ Connected"; else detail="✓ 已连接"; fi; ((passed++)) || true ;;
+              CONN_REFUSED) if [[ "${NG_LANG}" == "en" ]]; then detail="SSH port closed"; else detail="SSH 端口关闭"; fi; ((failed++)) || true ;;
+              TIMEOUT) if [[ "${NG_LANG}" == "en" ]]; then detail="Connection timeout"; else detail="连接超时"; fi; ((failed++)) || true ;;
+              AUTH_FAILED) if [[ "${NG_LANG}" == "en" ]]; then detail="Authentication failed"; else detail="认证失败"; fi; ((failed++)) || true ;;
+              KEY_MISMATCH) if [[ "${NG_LANG}" == "en" ]]; then detail="Host key mismatch"; else detail="主机密钥不匹配"; fi; ((failed++)) || true ;;
+              KEY_NOT_FOUND) if [[ "${NG_LANG}" == "en" ]]; then detail="SSH key not found"; else detail "SSH 密钥未找到"; fi; ((failed++)) || true ;;
+              *) if [[ "${NG_LANG}" == "en" ]]; then detail="Unknown error"; else detail="未知错误"; fi; ((failed++)) || true ;;
             esac
+            ((total++)) || true
 
-            printf '%-20s %-20s %-15s %s\n' "${node_name}" "${node_host}" "${status}" "${detail}"
+            printf '%s   %-20s %-20s %-15s %s\n' "$(ng_color "${NG_C_PANEL}" "║")" "${node_name}" "${node_host}" "${status}" "${detail}"
           done
+
+          ng_report_summary_start "$( [[ "${NG_LANG}" == "en" ]] && echo "Summary" || echo "摘要" )"
+          ng_report_summary_kv "$([[ "${NG_LANG}" == "en" ]] && echo "Tested:" || echo "测试:")" "${total}"
+          ng_report_summary_kv "$([[ "${NG_LANG}" == "en" ]] && echo "Passed:" || echo "通过:")" "${passed}"
+          ng_report_summary_kv "$([[ "${NG_LANG}" == "en" ]] && echo "Failed:" || echo "失败:")" "${failed}"
+          if [[ "${failed}" -gt 0 ]]; then
+            ng_report_summary_kv "$([[ "${NG_LANG}" == "en" ]] && echo "Status:" || echo "状态:")" "$(ng_color "${NG_C_WARN}" "⚠️  $( [[ "${NG_LANG}" == "en" ]] && echo "Some connections failed" || echo "部分连接失败" )")"
+          else
+            ng_report_summary_kv "$([[ "${NG_LANG}" == "en" ]] && echo "Status:" || echo "状态:")" "$(ng_color "${NG_C_OK}" "✅ $( [[ "${NG_LANG}" == "en" ]] && echo "All passed" || echo "全部通过" )")"
+          fi
+          ng_report_footer
         fi
         ;;
       3)
