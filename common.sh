@@ -26,7 +26,6 @@ NG_REPORT_DIR="${NG_DATA_ROOT}/reports"
 NG_STATE_DIR="${NG_DATA_ROOT}/state"
 NG_CONFIG_FILE="${NG_DATA_ROOT}/serverharbor.conf"
 NG_NODES_FILE="${NG_DATA_ROOT}/servers.json"
-NG_INTEGRITY_DB="${NG_STATE_DIR}/integrity.sha256"
 NG_DEFAULT_CONFIG_DIR="${NG_PROJECT_ROOT}"
 NG_WATCH_PATHS="/etc /var/www /root"
 NG_COLOR_ENABLED=0
@@ -1025,5 +1024,26 @@ ng_report_advice_start() {
   local title="$1"
   printf '%s\n' "$(ng_color "${NG_C_PANEL}" "╠$(ng_repeat '─' 68)")"
   printf '%s %s\n' "$(ng_color "${NG_C_PANEL}" "║")" "$(ng_color "${NG_C_BOLD}${NG_C_ACCENT}" "💡 ${title}")"
+}
+
+ng_get_baseline_file() {
+  local name="${1:-default}"
+  printf '%s' "${NG_STATE_DIR}/integrity-${name}.sha256"
+}
+
+ng_list_baselines() {
+  local count=0
+  for f in "${NG_STATE_DIR}"/integrity-*.sha256; do
+    [[ -f "${f}" ]] || continue
+    local basename="${f##*/integrity-}"
+    basename="${basename%.sha256}"
+    local file_count
+    file_count=$(wc -l < "${f}" 2>/dev/null | tr -d ' ')
+    local mtime
+    mtime=$(date -r "${f}" '+%Y-%m-%d %H:%M' 2>/dev/null || stat -c '%y' "${f}" 2>/dev/null | cut -d. -f1 || echo "unknown")
+    printf '  %-20s %5s files   %s\n' "${basename}" "${file_count}" "${mtime}"
+    ((count++)) || true
+  done
+  return "${count}"
 }
 

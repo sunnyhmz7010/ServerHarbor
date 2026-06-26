@@ -187,9 +187,83 @@ ng_firewall_summary() {
   ng_report_footer
 }
 
-ng_integrity_create_baseline() {
-  local baseline_file="${NG_INTEGRITY_DB}"
+ng_select_baseline() {
+  local mode="${1:-single}"
+  local baseline_count=0
+  local -a baseline_names=()
+  local -a baseline_files=()
 
+  for f in "${NG_STATE_DIR}"/integrity-*.sha256; do
+    [[ -f "${f}" ]] || continue
+    local bname="${f##*/integrity-}"
+    bname="${bname%.sha256}"
+    baseline_names+=("${bname}")
+    baseline_files+=("${f}")
+    ((baseline_count++)) || true
+  done
+
+  if [[ "${baseline_count}" -eq 0 ]]; then
+    if [[ "${NG_LANG}" == "en" ]]; then
+      printf 'No baselines found. Create one first.\n'
+    else
+      printf '未找到基线，请先创建。\n'
+    fi
+    return 1
+  fi
+
+  if [[ "${NG_LANG}" == "en" ]]; then
+    printf '\nExisting baselines:\n'
+  else
+    printf '\n已有基线：\n'
+  fi
+
+  local idx=1
+  for f in "${NG_STATE_DIR}"/integrity-*.sha256; do
+    [[ -f "${f}" ]] || continue
+    local bname="${f##*/integrity-}"
+    bname="${bname%.sha256}"
+    local file_count
+    file_count=$(wc -l < "${f}" 2>/dev/null | tr -d ' ')
+    local mtime
+    mtime=$(date -r "${f}" '+%Y-%m-%d %H:%M' 2>/dev/null || stat -c '%y' "${f}" 2>/dev/null | cut -d. -f1 || echo "?")
+    printf '  [%d] %-20s %5s files   %s\n' "${idx}" "${bname}" "${file_count}" "${mtime}"
+    ((idx++)) || true
+  done
+
+  if [[ "${mode}" == "all" ]]; then
+    printf '  [a] %s\n' "$( [[ "${NG_LANG}" == "en" ]] && echo "Verify all" || echo "全部校验" )"
+  fi
+
+  printf '\n'
+  if [[ "${NG_LANG}" == "en" ]]; then
+    printf 'Select baseline (number): '
+  else
+    printf '选择基线（输入编号）：'
+  fi
+
+  local selection
+  ng_read_line selection || return 130
+
+  if [[ "${selection}" == "a" ]] && [[ "${mode}" == "all" ]]; then
+    printf '%s\n' "all"
+    return 0
+  fi
+
+  if [[ "${selection}" =~ ^[0-9]+$ ]] && [[ "${selection}" -ge 1 ]] && [[ "${selection}" -le "${baseline_count}" ]]; then
+    local sel_idx=$((selection - 1))
+    printf '%s\n' "${baseline_files[${sel_idx}]}"
+    return 0
+  fi
+
+  if [[ "${NG_LANG}" == "en" ]]; then
+    printf 'Invalid selection.\n'
+  else
+    printf '无效选择。\n'
+  fi
+  return 1
+}
+
+ng_integrity_create_baseline() {
   if [[ -z "${NG_WATCH_PATHS:-}" ]]; then
     if [[ "${NG_LANG}" == "en" ]]; then
       printf 'No watch paths configured. Set NG_WATCH_PATHS in serverharbor.conf.\n'
@@ -199,19 +273,69 @@ ng_integrity_create_baseline() {
     return 1
   fi
 
+  local baseline_name="default"
+
   if [[ "${NG_LANG}" == "en" ]]; then
     ng_report_header "🧬 Create Integrity Baseline"
     ng_report_meta "Generated At" "$(ng_timestamp)"
     ng_report_meta "Host" "${NG_HOSTNAME}"
-    ng_report_section_start "Scan Paths"
+    ng_report_section_start "Existing Baselines"
   else
     ng_report_header "🧬 创建完整性基线"
     ng_report_meta "生成时间" "$(ng_timestamp)"
     ng_report_meta "主机" "${NG_HOSTNAME}"
-    ng_report_section_start "扫描路径"
+    ng_report_section_start "已有基线"
   fi
 
+  local has_existing=0
+  for f in "${NG_STATE_DIR}"/integrity-*.sha256; do
+    [[ -f "${f}" ]] || continue
+    local bname="${f##*/integrity-}"
+    bname="${bname%.sha256}"
+    local file_count
+    file_count=$(wc -l < "${f}" 2>/dev/null | tr -d ' ')
+    local mtime
+    mtime=$(date -r "${f}" '+%Y-%m-%d %H:%M' 2>/dev/null || stat -c '%y' "${f}" 2>/dev/null | cut -d. -f1 || echo "?")
+    printf '%s   %-20s %5s files   %s\n' "$(ng_color "${NG_C_PANEL}" "║")" "${bname}" "${file_count}" "${mtime}"
+    has_existing=1
+  done
+
+  if [[ "${has_existing}" -eq 0 ]]; then
+    printf '%s   %s\n' "$(ng_color "${NG_C_PANEL}" "║")" "$( [[ "${NG_LANG}" == "en" ]] && echo "(None)" || echo "（无）" )"
+  fi
+
+  ng_report_separator
   ng_report_detail "$([[ "${NG_LANG}" == "en" ]] && echo "Watch paths" || echo "监控路径")" "${NG_WATCH_PATHS}"
+
+  if [[ "${NG_LANG}" == "en" ]]; then
+    printf '\n  Enter baseline name (Enter to overwrite "default"): '
+  else
+    printf '\n  输入基线名称（回车覆盖 "default"）：'
+  fi
+  ng_read_line baseline_name || return 130
+  baseline_name="${baseline_name:-default}"
+
+  local baseline_file
+  baseline_file="$(ng_get_baseline_file "${baseline_name}")"
+
+  if [[ -f "${baseline_file}" ]]; then
+    if [[ "${NG_LANG}" == "en" ]]; then
+      printf '  Baseline "%s" already exists. Overwrite? [y/N]: ' "${baseline_name}"
+    else
+      printf '  基线 "%s" 已存在，是否覆盖？[y/N]：' "${baseline_name}"
+    fi
+    local confirm
+    ng_read_line confirm || return 130
+    if [[ ! "${confirm}" =~ ^[Yy] ]]; then
+      if [[ "${NG_LANG}" == "en" ]]; then
+        printf 'Cancelled.\n'
+      else
+        printf '已取消。\n'
+      fi
+      return 0
+    fi
+  fi
+
   ng_report_separator
 
   : > "${baseline_file}"
@@ -252,24 +376,38 @@ ng_integrity_create_baseline() {
   done
 
   ng_report_summary_start "$( [[ "${NG_LANG}" == "en" ]] && echo "Summary" || echo "摘要" )"
+  ng_report_summary_kv "$([[ "${NG_LANG}" == "en" ]] && echo "Baseline name:" || echo "基线名称:")" "${baseline_name}"
   ng_report_summary_kv "$([[ "${NG_LANG}" == "en" ]] && echo "Indexed files:" || echo "索引文件:")" "${total_files}"
   ng_report_summary_kv "$([[ "${NG_LANG}" == "en" ]] && echo "Skipped paths:" || echo "跳过路径:")" "${skipped_paths}"
-  ng_report_summary_kv "$([[ "${NG_LANG}" == "en" ]] && echo "Baseline location:" || echo "基线位置:")" "${baseline_file}"
   ng_report_summary_kv "$([[ "${NG_LANG}" == "en" ]] && echo "Status:" || echo "状态:")" "$(ng_color "${NG_C_OK}" "✅ $( [[ "${NG_LANG}" == "en" ]] && echo "Baseline created" || echo "基线已建立" )")"
   ng_report_footer
 
-  ng_log "INFO" "Integrity baseline created: ${total_files} files indexed"
+  ng_log "INFO" "Integrity baseline '${baseline_name}' created: ${total_files} files indexed"
 }
 
 ng_integrity_verify() {
-  if [[ ! -f "${NG_INTEGRITY_DB}" ]]; then
-    if [[ "${NG_LANG}" == "en" ]]; then
-      printf 'No integrity baseline found. Create one first.\n'
-    else
-      printf '未找到完整性基线，请先生成。\n'
-    fi
-    return 1
+  local baseline_file
+  baseline_file="$(ng_select_baseline all)" || return 1
+
+  if [[ "${baseline_file}" == "all" ]]; then
+    for f in "${NG_STATE_DIR}"/integrity-*.sha256; do
+      [[ -f "${f}" ]] || continue
+      local bname="${f##*/integrity-}"
+      bname="${bname%.sha256}"
+      ng_integrity_verify_single "${f}" "${bname}"
+      printf '\n'
+    done
+    return 0
   fi
+
+  local bname="${baseline_file##*/integrity-}"
+  bname="${bname%.sha256}"
+  ng_integrity_verify_single "${baseline_file}" "${bname}"
+}
+
+ng_integrity_verify_single() {
+  local baseline_file="$1"
+  local baseline_name="$2"
 
   local changes=0
   local total=0
@@ -279,15 +417,16 @@ ng_integrity_verify() {
     ng_report_header "✅ Integrity Verification"
     ng_report_meta "Generated At" "$(ng_timestamp)"
     ng_report_meta "Host" "${NG_HOSTNAME}"
-    ng_report_section_start "Baseline File"
+    ng_report_section_start "Baseline"
   else
     ng_report_header "✅ 完整性校验"
     ng_report_meta "生成时间" "$(ng_timestamp)"
     ng_report_meta "主机" "${NG_HOSTNAME}"
-    ng_report_section_start "基线文件"
+    ng_report_section_start "基线"
   fi
 
-  ng_report_detail "$([[ "${NG_LANG}" == "en" ]] && echo "Baseline" || echo "基线文件")" "${NG_INTEGRITY_DB}"
+  ng_report_detail "$([[ "${NG_LANG}" == "en" ]] && echo "Name" || echo "名称")" "${baseline_name}"
+  ng_report_detail "$([[ "${NG_LANG}" == "en" ]] && echo "File" || echo "文件")" "${baseline_file}"
   ng_report_separator
 
   while IFS= read -r line; do
@@ -302,9 +441,10 @@ ng_integrity_verify() {
     else
       printf '%s   %s\n' "$(ng_color "${NG_C_PANEL}" "║")" "${line}"
     fi
-  done < <(cd / && sha256sum -c "${NG_INTEGRITY_DB}" 2>&1 || true)
+  done < <(cd / && sha256sum -c "${baseline_file}" 2>&1 || true)
 
   ng_report_summary_start "$( [[ "${NG_LANG}" == "en" ]] && echo "Summary" || echo "摘要" )"
+  ng_report_summary_kv "$([[ "${NG_LANG}" == "en" ]] && echo "Baseline:" || echo "基线:")" "${baseline_name}"
   ng_report_summary_kv "$([[ "${NG_LANG}" == "en" ]] && echo "Checked files:" || echo "检查文件:")" "${total}"
   ng_report_summary_kv "$([[ "${NG_LANG}" == "en" ]] && echo "Passed:" || echo "通过:")" "${passed}"
   ng_report_summary_kv "$([[ "${NG_LANG}" == "en" ]] && echo "Changed:" || echo "变更:")" "${changes}"
@@ -329,10 +469,12 @@ ng_manage_watch_paths() {
       printf '\n当前监控路径：\n'
     fi
 
+    local -a paths_array=()
     if [[ -n "${NG_WATCH_PATHS:-}" ]]; then
       local line_num=1
       for path in ${NG_WATCH_PATHS}; do
         printf '  [%d] %s\n' "${line_num}" "${path}"
+        paths_array+=("${path}")
         ((line_num++)) || true
       done
     else
@@ -345,8 +487,8 @@ ng_manage_watch_paths() {
 
     printf '\n'
     if [[ "${NG_LANG}" == "en" ]]; then
-      printf '  [1] Add path\n'
-      printf '  [2] Remove path\n'
+      printf '  [1] Add path(s)\n'
+      printf '  [2] Remove path(s)\n'
       printf '  [3] Reset to defaults\n'
       printf '  [0] Back\n'
     else
@@ -362,60 +504,103 @@ ng_manage_watch_paths() {
 
     case "${choice}" in
       1)
-        local new_path
         if [[ "${NG_LANG}" == "en" ]]; then
-          printf 'Enter path to monitor (file or directory): '
+          printf 'Enter path(s) to monitor (space-separated, e.g. /etc /opt /var/www): '
         else
-          printf '输入要监控的路径（文件或目录）：'
+          printf '输入要监控的路径（空格分隔，如 /etc /opt /var/www）：'
         fi
-        ng_read_line new_path || return 130
+        local new_paths
+        ng_read_line new_paths || return 130
 
-        if [[ -n "${new_path}" ]]; then
-          if [[ -e "${new_path}" ]]; then
-            NG_WATCH_PATHS="${NG_WATCH_PATHS} ${new_path}"
-            if grep -q '^NG_WATCH_PATHS=' "${NG_CONFIG_FILE}" 2>/dev/null; then
-              sed -i "s#^NG_WATCH_PATHS=.*#NG_WATCH_PATHS=\"${NG_WATCH_PATHS}\"#" "${NG_CONFIG_FILE}"
+        if [[ -n "${new_paths}" ]]; then
+          local added=0
+          local skipped=0
+          for np in ${new_paths}; do
+            if [[ -e "${np}" ]]; then
+              if [[ " ${NG_WATCH_PATHS} " != *" ${np} "* ]]; then
+                NG_WATCH_PATHS="${NG_WATCH_PATHS} ${np}"
+                ((added++)) || true
+                printf '  ✓ %s\n' "${np}"
+              else
+                if [[ "${NG_LANG}" == "en" ]]; then
+                  printf '  ⚠ %s (already exists)\n' "${np}"
+                else
+                  printf '  ⚠ %s（已存在）\n' "${np}"
+                fi
+                ((skipped++)) || true
+              fi
             else
-              echo "NG_WATCH_PATHS=\"${NG_WATCH_PATHS}\"" >> "${NG_CONFIG_FILE}"
+              if [[ "${NG_LANG}" == "en" ]]; then
+                printf '  ✗ %s (not found)\n' "${np}"
+              else
+                printf '  ✗ %s（不存在）\n' "${np}"
+              fi
+              ((skipped++)) || true
             fi
-            if [[ "${NG_LANG}" == "en" ]]; then
-              printf 'Path added: %s\n' "${new_path}"
-            else
-              printf '路径已添加：%s\n' "${new_path}"
-            fi
+          done
+
+          NG_WATCH_PATHS=$(echo "${NG_WATCH_PATHS}" | sed 's/^ *//')
+          if grep -q '^NG_WATCH_PATHS=' "${NG_CONFIG_FILE}" 2>/dev/null; then
+            sed -i "s#^NG_WATCH_PATHS=.*#NG_WATCH_PATHS=\"${NG_WATCH_PATHS}\"#" "${NG_CONFIG_FILE}"
           else
-            if [[ "${NG_LANG}" == "en" ]]; then
-              printf 'Path does not exist: %s\n' "${new_path}"
-            else
-              printf '路径不存在：%s\n' "${new_path}"
-            fi
+            echo "NG_WATCH_PATHS=\"${NG_WATCH_PATHS}\"" >> "${NG_CONFIG_FILE}"
+          fi
+
+          if [[ "${NG_LANG}" == "en" ]]; then
+            printf '\nAdded: %d, Skipped: %d\n' "${added}" "${skipped}"
+          else
+            printf '\n添加: %d, 跳过: %d\n' "${added}" "${skipped}"
           fi
         fi
         ;;
       2)
-        if [[ -z "${NG_WATCH_PATHS:-}" ]]; then
+        if [[ "${#paths_array[@]}" -eq 0 ]]; then
           if [[ "${NG_LANG}" == "en" ]]; then
             printf 'No paths to remove.\n'
           else
             printf '没有可删除的路径。\n'
           fi
         else
-          local -a paths_array=(${NG_WATCH_PATHS})
           if [[ "${NG_LANG}" == "en" ]]; then
-            printf 'Enter path number to remove (1-%d): ' "${#paths_array[@]}"
+            printf 'Enter path numbers to remove (comma-separated, e.g. 1,3 or a for all): '
           else
-            printf '输入要删除的路径编号（1-%d）：' "${#paths_array[@]}"
+            printf '输入要删除的编号（逗号分隔，如 1,3 或 a 全部删除）：'
           fi
-          local remove_num
-          ng_read_line remove_num || return 130
-          if [[ "${remove_num}" =~ ^[0-9]+$ ]] && [[ "${remove_num}" -ge 1 ]] && [[ "${remove_num}" -le "${#paths_array[@]}" ]]; then
-            unset 'paths_array[remove_num-1]'
-            NG_WATCH_PATHS="${paths_array[*]}"
-            sed -i "s#^NG_WATCH_PATHS=.*#NG_WATCH_PATHS=\"${NG_WATCH_PATHS}\"#" "${NG_CONFIG_FILE}" 2>/dev/null || true
-            if [[ "${NG_LANG}" == "en" ]]; then
-              printf 'Path removed.\n'
+          local remove_input
+          ng_read_line remove_input || return 130
+
+          if [[ -n "${remove_input}" ]]; then
+            local -a to_remove=()
+
+            if [[ "${remove_input}" == "a" ]] || [[ "${remove_input}" == "A" ]]; then
+              for ((i=0; i<${#paths_array[@]}; i++)); do
+                to_remove+=("${paths_array[$i]}")
+              done
             else
-              printf '路径已删除。\n'
+              IFS=',' read -ra remove_nums <<< "${remove_input}"
+              for num in "${remove_nums[@]}"; do
+                num=$(echo "${num}" | tr -d ' ')
+                if [[ "${num}" =~ ^[0-9]+$ ]] && [[ "${num}" -ge 1 ]] && [[ "${num}" -le "${#paths_array[@]}" ]]; then
+                  to_remove+=("${paths_array[$((num-1))]}")
+                fi
+              done
+            fi
+
+            if [[ "${#to_remove[@]}" -gt 0 ]]; then
+              for rp in "${to_remove[@]}"; do
+                NG_WATCH_PATHS=$(echo " ${NG_WATCH_PATHS} " | sed "s| ${rp} | |g" | sed 's/^ *//;s/ *$//')
+                printf '  ✓ %s\n' "${rp}"
+              done
+
+              if grep -q '^NG_WATCH_PATHS=' "${NG_CONFIG_FILE}" 2>/dev/null; then
+                sed -i "s#^NG_WATCH_PATHS=.*#NG_WATCH_PATHS=\"${NG_WATCH_PATHS}\"#" "${NG_CONFIG_FILE}"
+              fi
+
+              if [[ "${NG_LANG}" == "en" ]]; then
+                printf '\nRemoved %d path(s).\n' "${#to_remove[@]}"
+              else
+                printf '\n已删除 %d 个路径。\n' "${#to_remove[@]}"
+              fi
             fi
           fi
         fi
