@@ -612,223 +612,6 @@ ng_select_nodes() {
   printf '%s\n' "${selection}"
 }
 
-ng_register_node() {
-  local new_ip new_alias ssh_port ssh_user ssh_auth ssh_key
-
-  if [[ "${NG_LANG}" == "en" ]]; then
-    printf 'Enter new server IP: '
-  else
-    printf '输入新服务器 IP：'
-  fi
-  ng_read_line new_ip || return 130
-  if [[ -z "${new_ip}" ]]; then
-    if [[ "${NG_LANG}" == "en" ]]; then
-      ng_log "ERROR" "IP is required."
-    else
-      ng_log "ERROR" "IP 不能为空。"
-    fi
-    return 1
-  fi
-
-  if [[ "${NG_LANG}" == "en" ]]; then
-    printf 'Enter node alias (e.g. hk-01): '
-  else
-    printf '输入节点别名（如 hk-01）：'
-  fi
-  ng_read_line new_alias || return 130
-  new_alias="${new_alias:-node-${new_ip##*.}}"
-
-  if [[ "${NG_LANG}" == "en" ]]; then
-    printf 'Enter SSH port (default 22): '
-  else
-    printf '输入 SSH 端口（默认 22）：'
-  fi
-  ng_read_line ssh_port || return 130
-  ssh_port="${ssh_port:-22}"
-
-  if [[ "${NG_LANG}" == "en" ]]; then
-    printf 'Enter SSH user (default root): '
-  else
-    printf '输入 SSH 用户（默认 root）：'
-  fi
-  ng_read_line ssh_user || return 130
-  ssh_user="${ssh_user:-root}"
-
-  if [[ "${NG_LANG}" == "en" ]]; then
-    printf 'Authentication method:\n'
-    printf '  [1] SSH key (default)\n'
-    printf '  [2] Password\n'
-  else
-    printf '认证方式：\n'
-    printf '  [1] SSH 密钥（默认）\n'
-    printf '  [2] 密码\n'
-  fi
-  local auth_choice
-  ng_read_line auth_choice || return 130
-
-  local -a ssh_opts=(-o ConnectTimeout=5 -o StrictHostKeyChecking=accept-new -p "${ssh_port}")
-
-  case "${auth_choice}" in
-    2)
-      ssh_auth="password"
-      if [[ "${NG_LANG}" == "en" ]]; then
-        printf 'Enter SSH password: '
-      else
-        printf '输入 SSH 密码：'
-      fi
-      IFS= read -rs ssh_key < /dev/tty
-      printf '\n'
-
-      if ! command -v sshpass >/dev/null 2>&1; then
-        if [[ "${NG_LANG}" == "en" ]]; then
-          printf 'Installing sshpass...\n'
-        else
-          printf '正在安装 sshpass...\n'
-        fi
-        if command -v apt-get >/dev/null 2>&1; then
-          apt-get install -y -qq sshpass 2>/dev/null || true
-        elif command -v yum >/dev/null 2>&1; then
-          yum install -y sshpass 2>/dev/null || true
-        elif command -v dnf >/dev/null 2>&1; then
-          dnf install -y sshpass 2>/dev/null || true
-        fi
-      fi
-
-      if command -v sshpass >/dev/null 2>&1; then
-        ssh_opts=(-o ConnectTimeout=5 -o StrictHostKeyChecking=accept-new -p "${ssh_port}")
-        if [[ "${NG_LANG}" == "en" ]]; then
-          printf '\nTesting SSH to %s@%s:%s ...\n' "${ssh_user}" "${new_ip}" "${ssh_port}"
-        else
-          printf '\n正在测试 SSH 连接 %s@%s:%s ...\n' "${ssh_user}" "${new_ip}" "${ssh_port}"
-        fi
-        if sshpass -p "${ssh_key}" ssh "${ssh_opts[@]}" "${ssh_user}@${new_ip}" "echo OK" >/dev/null 2>&1; then
-          if [[ "${NG_LANG}" == "en" ]]; then
-            printf '✓ SSH connected.\n'
-          else
-            printf '✓ SSH 连接成功。\n'
-          fi
-        else
-          if [[ "${NG_LANG}" == "en" ]]; then
-            ng_log "ERROR" "SSH connection failed. Check password and try again."
-          else
-            ng_log "ERROR" "SSH 连接失败，请检查密码后重试。"
-          fi
-          return 1
-        fi
-      else
-        if [[ "${NG_LANG}" == "en" ]]; then
-          ng_log "ERROR" "sshpass not available. Install it or use key auth."
-        else
-          ng_log "ERROR" "sshpass 不可用，请安装或使用密钥认证。"
-        fi
-        return 1
-      fi
-      ;;
-    *)
-      ssh_auth="key"
-      local -a available_keys=()
-      for kf in ~/.ssh/id_ed25519 ~/.ssh/id_rsa ~/.ssh/id_ecdsa ~/.ssh/id_dsa; do
-        [[ -f "${kf}" ]] && available_keys+=("${kf}")
-      done
-
-      if [[ "${#available_keys[@]}" -eq 0 ]]; then
-        if [[ "${NG_LANG}" == "en" ]]; then
-          printf 'No SSH keys found in ~/.ssh/. Generate one first (ssh-keygen).\n'
-        else
-          printf '~/.ssh/ 中未找到密钥，请先生成（ssh-keygen）。\n'
-        fi
-        return 1
-      fi
-
-      if [[ "${#available_keys[@]}" -eq 1 ]]; then
-        ssh_key="${available_keys[0]}"
-        if [[ "${NG_LANG}" == "en" ]]; then
-          printf 'Using SSH key: %s\n' "${ssh_key}"
-        else
-          printf '使用 SSH 密钥：%s\n' "${ssh_key}"
-        fi
-      else
-        if [[ "${NG_LANG}" == "en" ]]; then
-          printf 'Available SSH keys:\n'
-        else
-          printf '可用 SSH 密钥：\n'
-        fi
-        local ki=1
-        for kf in "${available_keys[@]}"; do
-          printf '  [%d] %s\n' "${ki}" "${kf}"
-          ((ki++)) || true
-        done
-        if [[ "${NG_LANG}" == "en" ]]; then
-          printf 'Select key (default 1): '
-        else
-          printf '选择密钥（默认 1）：'
-        fi
-        local key_choice
-        ng_read_line key_choice || return 130
-        key_choice="${key_choice:-1}"
-        if [[ "${key_choice}" =~ ^[0-9]+$ ]] && [[ "${key_choice}" -ge 1 ]] && [[ "${key_choice}" -le "${#available_keys[@]}" ]]; then
-          ssh_key="${available_keys[$((key_choice-1))]}"
-        else
-          ssh_key="${available_keys[0]}"
-        fi
-      fi
-
-      if [[ "${NG_LANG}" == "en" ]]; then
-        printf '\nTesting SSH to %s@%s:%s (key: %s) ...\n' "${ssh_user}" "${new_ip}" "${ssh_port}" "${ssh_key}"
-      else
-        printf '\n正在测试 SSH 连接 %s@%s:%s（密钥: %s）...\n' "${ssh_user}" "${new_ip}" "${ssh_port}" "${ssh_key}"
-      fi
-
-      ssh_opts+=(-i "${ssh_key}")
-      if ssh "${ssh_opts[@]}" "${ssh_user}@${new_ip}" "echo OK" >/dev/null 2>&1; then
-        if [[ "${NG_LANG}" == "en" ]]; then
-          printf '✓ SSH connected.\n'
-        else
-          printf '✓ SSH 连接成功。\n'
-        fi
-      else
-        if [[ "${NG_LANG}" == "en" ]]; then
-          ng_log "ERROR" "SSH connection failed. Check key or try password."
-        else
-          ng_log "ERROR" "SSH 连接失败，请检查密钥或尝试密码认证。"
-        fi
-        return 1
-      fi
-      ;;
-  esac
-
-  ng_init_nodes
-
-  if ! ng_ensure_jq; then
-    return 1
-  fi
-
-  if jq -e --arg n "${new_alias}" '.servers[] | select(.name == $n)' "${NG_NODES_FILE}" >/dev/null 2>&1; then
-    if [[ "${NG_LANG}" == "en" ]]; then
-      ng_log "WARN" "Node '${new_alias}' already exists."
-    else
-      ng_log "WARN" "节点 '${new_alias}' 已存在。"
-    fi
-    return 1
-  fi
-
-  local tmp_file="${NG_NODES_FILE}.tmp"
-  jq --arg name "${new_alias}" \
-     --arg host "${new_ip}" \
-     --arg user "${ssh_user}" \
-     --arg port "${ssh_port}" \
-     --arg auth "${ssh_auth}" \
-     --arg key "${ssh_key}" \
-     '.servers += [{name:$name,host:$host,ssh:{user:$user,port:($port|tonumber),auth:$auth,key:$key},tags:[],enabled:true}]' \
-     "${NG_NODES_FILE}" > "${tmp_file}" && mv -f "${tmp_file}" "${NG_NODES_FILE}"
-
-  if [[ "${NG_LANG}" == "en" ]]; then
-    printf '✓ Node "%s" (%s@%s:%s) registered!\n' "${new_alias}" "${ssh_user}" "${new_ip}" "${ssh_port}"
-  else
-    printf '✓ 节点 "%s" (%s@%s:%s) 注册成功！\n' "${new_alias}" "${ssh_user}" "${new_ip}" "${ssh_port}"
-  fi
-}
-
 ng_node_menu() {
   local choice
 
@@ -843,7 +626,6 @@ ng_node_menu() {
       ng_print_option "5" "📡" "Probe nodes" "Check ICMP, SSH, latency and local health"
       ng_print_option "6" "⚡" "Batch execute" "Run command on selected nodes"
       ng_print_option "7" "📁" "Sync config" "Sync config file to selected nodes"
-      ng_print_option "8" "🔗" "Register new node" "Register a new server via SSH from this server"
       ng_print_option "0" "↩" "Back"
     else
       ng_print_title_box "🛰 节点管理" "基于 SSH 的多服务器管理"
@@ -854,7 +636,6 @@ ng_node_menu() {
       ng_print_option "5" "📡" "探测节点" "检查 ICMP、SSH、延迟和本机健康"
       ng_print_option "6" "⚡" "批量执行" "在选中节点上执行命令"
       ng_print_option "7" "📁" "配置同步" "将配置文件同步到选中节点"
-      ng_print_option "8" "🔗" "注册新节点" "从本服务器通过 SSH 注册新服务器"
       ng_print_option "0" "↩" "返回"
     fi
 
@@ -920,21 +701,107 @@ ng_node_menu() {
             fi
             IFS= read -rs key < /dev/tty
             printf '\n'
+
+            if ! command -v sshpass >/dev/null 2>&1; then
+              if [[ "${EUID}" -eq 0 ]]; then
+                if [[ "${NG_LANG}" == "en" ]]; then
+                  printf 'Installing sshpass...\n'
+                else
+                  printf '正在安装 sshpass...\n'
+                fi
+                if command -v apt-get >/dev/null 2>&1; then apt-get install -y -qq sshpass 2>/dev/null || true
+                elif command -v yum >/dev/null 2>&1; then yum install -y sshpass 2>/dev/null || true
+                elif command -v dnf >/dev/null 2>&1; then dnf install -y sshpass 2>/dev/null || true
+                fi
+              fi
+            fi
             ;;
           *)
             auth="key"
-            if [[ "${NG_LANG}" == "en" ]]; then
-              printf 'Enter SSH key path (default: ~/.ssh/id_ed25519): '
-            else
-              printf '输入 SSH 密钥路径（默认: ~/.ssh/id_ed25519）：'
+            local -a available_keys=()
+            for kf in ~/.ssh/id_ed25519 ~/.ssh/id_rsa ~/.ssh/id_ecdsa ~/.ssh/id_dsa; do
+              [[ -f "${kf}" ]] && available_keys+=("${kf}")
+            done
+
+            if [[ "${#available_keys[@]}" -eq 0 ]]; then
+              if [[ "${NG_LANG}" == "en" ]]; then
+                printf 'No SSH keys found. Generate one first (ssh-keygen).\n'
+              else
+                printf '~/.ssh/ 中未找到密钥，请先生成（ssh-keygen）。\n'
+              fi
+              continue
             fi
-            ng_read_line key || return 130
-            key="${key:-~/.ssh/id_ed25519}"
+
+            if [[ "${#available_keys[@]}" -eq 1 ]]; then
+              key="${available_keys[0]}"
+              if [[ "${NG_LANG}" == "en" ]]; then
+                printf 'Using SSH key: %s\n' "${key}"
+              else
+                printf '使用 SSH 密钥：%s\n' "${key}"
+              fi
+            else
+              if [[ "${NG_LANG}" == "en" ]]; then
+                printf 'Available SSH keys:\n'
+              else
+                printf '可用 SSH 密钥：\n'
+              fi
+              local ki=1
+              for kf in "${available_keys[@]}"; do
+                printf '  [%d] %s\n' "${ki}" "${kf}"
+                ((ki++)) || true
+              done
+              if [[ "${NG_LANG}" == "en" ]]; then
+                printf 'Select key (default 1): '
+              else
+                printf '选择密钥（默认 1）：'
+              fi
+              local key_choice
+              ng_read_line key_choice || return 130
+              key_choice="${key_choice:-1}"
+              if [[ "${key_choice}" =~ ^[0-9]+$ ]] && [[ "${key_choice}" -ge 1 ]] && [[ "${key_choice}" -le "${#available_keys[@]}" ]]; then
+                key="${available_keys[$((key_choice-1))]}"
+              else
+                key="${available_keys[0]}"
+              fi
+            fi
             ;;
         esac
 
         if [[ -n "${alias}" && -n "${host}" ]]; then
-          ng_add_node "${alias}" "${host}" "${user}" "${port}" "${auth}" "${key}"
+          if [[ "${NG_LANG}" == "en" ]]; then
+            printf '\nTesting SSH %s@%s:%s ...\n' "${user}" "${host}" "${port}"
+          else
+            printf '\n正在测试 SSH 连接 %s@%s:%s ...\n' "${user}" "${host}" "${port}"
+          fi
+
+          local -a test_opts=(-o ConnectTimeout=5 -o StrictHostKeyChecking=accept-new -p "${port}")
+          local ssh_ok=0
+
+          if [[ "${auth}" == "password" ]] && command -v sshpass >/dev/null 2>&1; then
+            if sshpass -p "${key}" ssh "${test_opts[@]}" "${user}@${host}" "echo OK" >/dev/null 2>&1; then
+              ssh_ok=1
+            fi
+          elif [[ "${auth}" == "key" ]]; then
+            test_opts+=(-i "${key}")
+            if ssh "${test_opts[@]}" "${user}@${host}" "echo OK" >/dev/null 2>&1; then
+              ssh_ok=1
+            fi
+          fi
+
+          if [[ "${ssh_ok}" -eq 1 ]]; then
+            if [[ "${NG_LANG}" == "en" ]]; then
+              printf '✓ SSH connected.\n'
+            else
+              printf '✓ SSH 连接成功。\n'
+            fi
+            ng_add_node "${alias}" "${host}" "${user}" "${port}" "${auth}" "${key}"
+          else
+            if [[ "${NG_LANG}" == "en" ]]; then
+              printf '✗ SSH failed. Node not added.\n'
+            else
+              printf '✗ SSH 连接失败，节点未添加。\n'
+            fi
+          fi
         fi
         ;;
       3)
@@ -1032,7 +899,6 @@ ng_node_menu() {
           fi
         fi
         ;;
-      8) ng_register_node ;;
       0) return 0 ;;
       *) ng_t invalid_option ;;
     esac
