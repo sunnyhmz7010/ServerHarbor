@@ -665,14 +665,16 @@ ng_remote_execute() {
       if [[ "${NG_LANG}" == "en" ]]; then
         printf '\nRemote execute on %s (%s):\n\n' "${node_name}" "${node_host}"
         printf '  [1] Run ServerHarbor online (curl | bash)\n'
-        printf '  [2] Run ServerHarbor installed (shr)\n'
-        printf '  [3] Custom command\n'
+        printf '  [2] Install ServerHarbor (install.sh)\n'
+        printf '  [3] Run installed ServerHarbor (shr)\n'
+        printf '  [4] Custom command\n'
         printf '  [0] Back to node selection\n'
       else
         printf '\n在 %s (%s) 上远程执行：\n\n' "${node_name}" "${node_host}"
         printf '  [1] 运行在线版 ServerHarbor（curl | bash）\n'
-        printf '  [2] 运行安装版 ServerHarbor（shr）\n'
-        printf '  [3] 自定义命令\n'
+        printf '  [2] 安装 ServerHarbor（install.sh）\n'
+        printf '  [3] 运行安装版 ServerHarbor（shr）\n'
+        printf '  [4] 自定义命令\n'
         printf '  [0] 返回选择节点\n'
       fi
 
@@ -690,9 +692,12 @@ ng_remote_execute() {
           cmd="bash <(curl -q -fsSL 'https://raw.githubusercontent.com/sunnyhmz7010/ServerHarbor/main/run.sh?$(date +%s)')"
           ;;
         2)
-          cmd="shr"
+          cmd="curl -q -fsSL 'https://raw.githubusercontent.com/sunnyhmz7010/ServerHarbor/main/install.sh?$(date +%s)' | sudo bash"
           ;;
         3)
+          cmd="shr"
+          ;;
+        4)
           if [[ "${NG_LANG}" == "en" ]]; then printf 'Enter command: '; else printf '输入命令：'; fi
           ng_read_line cmd || return 130
           ;;
