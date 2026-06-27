@@ -25,6 +25,7 @@ ng_setup_mutual_nodes() {
 
   local -a node_lines=()
   while IFS= read -r line; do
+    line=$(printf '%s' "${line}" | tr -d '\r')
     [[ -n "${line}" ]] && node_lines+=("${line}")
   done < <(ng_get_nodes)
 
@@ -209,6 +210,7 @@ ng_node_manage() {
 
     local -a node_lines=()
     while IFS= read -r line; do
+      line=$(printf '%s' "${line}" | tr -d '\r')
       [[ -n "${line}" ]] && node_lines+=("${line}")
     done < <(ng_get_nodes)
 
@@ -498,6 +500,7 @@ ng_node_manage() {
 ng_remote_execute() {
   local -a node_lines=()
   while IFS= read -r line; do
+    line=$(printf '%s' "${line}" | tr -d '\r')
     [[ -n "${line}" ]] && node_lines+=("${line}")
   done < <(ng_get_nodes)
 
