@@ -628,7 +628,7 @@ ng_manage_watch_paths() {
       3)
         NG_WATCH_PATHS="/etc /var/www /root"
         if grep -q '^NG_WATCH_PATHS=' "${NG_CONFIG_FILE}" 2>/dev/null; then
-          sed -i "s#^NG_WATCH_PATHS=.*#NG_WATCH_PATHS=\"${NG_WATCH_PATHS}\"#" "${NG_CONFIG_FILE}"
+          awk -v val="NG_WATCH_PATHS=\"${NG_WATCH_PATHS}\"" '/^NG_WATCH_PATHS=/{print val;next}{print}' "${NG_CONFIG_FILE}" > "${NG_CONFIG_FILE}.tmp" && mv -f "${NG_CONFIG_FILE}.tmp" "${NG_CONFIG_FILE}"
         else
           echo "NG_WATCH_PATHS=\"${NG_WATCH_PATHS}\"" >> "${NG_CONFIG_FILE}"
         fi
@@ -835,4 +835,11 @@ ng_security_menu() {
 
     ng_press_enter || return 130
   done
+}
+
+ng_security_report() {
+  ng_scan_auth_failures
+  ng_scan_web_attacks
+  ng_firewall_summary
+  ng_security_score
 }

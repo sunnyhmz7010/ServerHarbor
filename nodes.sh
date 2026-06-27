@@ -44,14 +44,16 @@ ng_setup_mutual_nodes() {
   local -a existing_keys=()
 
   for line in "${node_lines[@]}"; do
-    local n h p au a k
+    local n h p au a k e
     n=$(printf '%s' "${line}" | cut -f1)
     h=$(printf '%s' "${line}" | cut -f2)
     p=$(printf '%s' "${line}" | cut -f3)
     au=$(printf '%s' "${line}" | cut -f4)
     a=$(printf '%s' "${line}" | cut -f5)
     k=$(printf '%s' "${line}" | cut -f6)
+    e=$(printf '%s' "${line}" | cut -f7)
     [[ -z "${n}" || "${n}" == "#"* ]] && continue
+    [[ "${e}" == "true" ]] || continue
     local node_status
     node_status=$(ng_check_node_status "${h}" "${p}")
     printf '  [%d] %-20s %-20s %s\n' "${ni}" "${n}" "${h}" "${node_status}"
@@ -122,7 +124,13 @@ ng_setup_mutual_nodes() {
   local my_alias="${NG_HOSTNAME}"
 
   local remote_conf
-  remote_conf=$("${run_ssh[@]}" "bash -c 'if [ -f /opt/serverharbor/.serverharbor-install ]; then echo /opt/serverharbor/data/serverharbor.conf; else echo \${XDG_CONFIG_HOME:-\$HOME/.config}/serverharbor/serverharbor.conf; fi'" 2>/dev/null || echo "")
+  remote_conf=$("${run_ssh[@]}" 'bash -c '\''
+    if [ -f /opt/serverharbor/.serverharbor-install ]; then
+      echo /opt/serverharbor/data/serverharbor.conf
+    else
+      echo "${XDG_CONFIG_HOME:-$HOME/.config}/serverharbor/serverharbor.conf"
+    fi
+  '\'' 2>/dev/null || echo "")
   remote_conf=$(echo "${remote_conf}" | tr -d '\r\n')
   if [[ -z "${remote_conf}" ]]; then
     remote_conf="~/.config/serverharbor/serverharbor.conf"
@@ -130,20 +138,37 @@ ng_setup_mutual_nodes() {
 
   local remote_line="${my_alias}	${my_ip}	${ssh_port}	${ssh_user}	${auth_method}	${key}	true"
 
-  local register_cmd="mkdir -p \$(dirname ${remote_conf}) && [[ -f ${remote_conf} ]] || printf '# ServerHarbor Configuration\n\n__NODES__\n__NODES__\n' > ${remote_conf}"
-  register_cmd="${register_cmd} && if grep -q '^${my_alias}	' ${remote_conf} 2>/dev/null; then echo EXISTS; else"
-  register_cmd="${register_cmd} tmp=\${remote_conf}.tmp"
-  register_cmd="${register_cmd} && sed '/^__NODES__$/,\$d' ${remote_conf} > \${tmp}"
-  register_cmd="${register_cmd} && existing=\$(sed -n '/^__NODES__$/,/^__NODES__\$/{ /^__NODES__\$/d; p; }' ${remote_conf} 2>/dev/null)"
-  register_cmd="${register_cmd} && { cat \${tmp}; printf '%s\n' '__NODES__';"
-  register_cmd="${register_cmd} if [ -n \"\${existing}\" ]; then printf '%s\n' \"\${existing}\"; fi;"
-  register_cmd="${register_cmd} printf '%s\n' '${my_alias}	${my_ip}	${ssh_port}	${ssh_user}	${auth_method}	${key}	true';"
-  register_cmd="${register_cmd} printf '%s\n' '__NODES__'; } > ${remote_conf}"
-  register_cmd="${register_cmd} && rm -f \${tmp}"
-  register_cmd="${register_cmd} && echo OK; fi"
+  local remote_script
+  remote_script=$(cat <<'REMOTE_EOF'
+read -r remote_conf
+read -r my_alias
+read -r my_ip
+read -r ssh_port
+read -r ssh_user
+read -r auth_method
+read -r ssh_key
+mkdir -p "$(dirname "${remote_conf}")"
+[[ -f "${remote_conf}" ]] || printf '# ServerHarbor Configuration\n\n__NODES__\n__NODES__\n' > "${remote_conf}"
+if grep -qF "${my_alias}	" "${remote_conf}" 2>/dev/null; then echo EXISTS; else
+  tmp="${remote_conf}.tmp"
+  sed '/^__NODES__$/,$d' "${remote_conf}" > "${tmp}"
+  existing=$(sed -n '/^__NODES__$/,/^__NODES__$/{ /^__NODES__$/d; p; }' "${remote_conf}" 2>/dev/null)
+  { cat "${tmp}"; printf '%s\n' '__NODES__'
+    if [ -n "${existing}" ]; then printf '%s\n' "${existing}"; fi
+    printf '%s\t%s\t%s\t%s\t%s\t%s\ttrue\n' "${my_alias}" "${my_ip}" "${ssh_port}" "${ssh_user}" "${auth_method}" "${ssh_key}"
+    printf '%s\n' '__NODES__'
+  } > "${remote_conf}"
+  rm -f "${tmp}"
+  echo OK
+fi
+REMOTE_EOF
+)
 
   local remote_output
-  remote_output=$("${run_ssh[@]}" "bash -c '${register_cmd}'" 2>&1) || true
+  remote_output=$(printf '%s\n%s\n%s\n%s\n%s\n%s\n%s\n' \
+    "${remote_conf}" "${my_alias}" "${my_ip}" "${ssh_port}" \
+    "${ssh_user}" "${auth_method}" "${key}" \
+    | "${run_ssh[@]}" "bash -c '$(printf '%s' "${remote_script}")'" 2>&1) || true
 
   if echo "${remote_output}" | grep -q "^OK"; then
     if [[ "${NG_LANG}" == "en" ]]; then printf '  ✓ Self registered on remote\n'; else printf '  ✓ 本机已注册到对方服务器\n'; fi
@@ -524,14 +549,16 @@ ng_remote_execute() {
     local -a node_keys=()
 
     for line in "${node_lines[@]}"; do
-      local n h p au a k
+      local n h p au a k e
       n=$(printf '%s' "${line}" | cut -f1)
       h=$(printf '%s' "${line}" | cut -f2)
       p=$(printf '%s' "${line}" | cut -f3)
       au=$(printf '%s' "${line}" | cut -f4)
       a=$(printf '%s' "${line}" | cut -f5)
       k=$(printf '%s' "${line}" | cut -f6)
+      e=$(printf '%s' "${line}" | cut -f7)
       [[ -z "${n}" || "${n}" == "#"* ]] && continue
+      [[ "${e}" == "true" ]] || continue
       local node_status
       node_status=$(ng_check_node_status "${h}" "${p}")
       printf '  [%d] %-20s %-20s %s\n' "${idx}" "${n}" "${h}" "${node_status}"
@@ -645,7 +672,11 @@ ng_remote_execute() {
         fi
       fi
 
-      "${exec_ssh[@]}" "bash -c '${cmd}'"
+      if [[ "${op_choice}" =~ ^[1-3]$ ]]; then
+        "${exec_ssh[@]}" "bash -c '${cmd}'"
+      else
+        printf '%s\n' "${cmd}" | "${exec_ssh[@]}" bash
+      fi
       local rc=$?
 
       printf '\n'
@@ -701,4 +732,59 @@ ng_node_menu() {
       *) ng_t invalid_option ;;
     esac
   done
+}
+
+ng_probe_all_peers() {
+  local -a node_lines=()
+  while IFS= read -r line; do
+    line=$(printf '%s' "${line}" | tr -d '\r')
+    [[ -n "${line}" ]] && node_lines+=("${line}")
+  done < <(ng_get_nodes)
+
+  if [[ "${#node_lines[@]}" -eq 0 ]]; then
+    ng_t no_nodes
+    return 0
+  fi
+
+  if [[ "${NG_LANG}" == "en" ]]; then
+    ng_report_header "🛰 Node Probe Report"
+    ng_report_meta "Generated At" "$(ng_timestamp)"
+    ng_report_meta "Host" "${NG_HOSTNAME}"
+    ng_report_section_start "Nodes"
+  else
+    ng_report_header "🛰 节点探测报告"
+    ng_report_meta "生成时间" "$(ng_timestamp)"
+    ng_report_meta "主机" "${NG_HOSTNAME}"
+    ng_report_section_start "节点"
+  fi
+
+  local total=0
+  local reachable=0
+  local unreachable=0
+
+  for line in "${node_lines[@]}"; do
+    local n h p e
+    n=$(printf '%s' "${line}" | cut -f1)
+    h=$(printf '%s' "${line}" | cut -f2)
+    p=$(printf '%s' "${line}" | cut -f3)
+    e=$(printf '%s' "${line}" | cut -f7)
+    [[ -z "${n}" || "${n}" == "#"* ]] && continue
+    [[ "${e}" == "true" ]] || continue
+
+    local status
+    status=$(ng_check_node_status "${h}" "${p}")
+    ng_report_detail "${n}" "${status} (${h}:${p})"
+    ((total++)) || true
+    if [[ "${status}" == "Connected" || "${status}" == "连通" ]]; then
+      ((reachable++)) || true
+    else
+      ((unreachable++)) || true
+    fi
+  done
+
+  ng_report_summary_start "$( [[ "${NG_LANG}" == "en" ]] && echo "Summary" || echo "摘要" )"
+  ng_report_summary_kv "$([[ "${NG_LANG}" == "en" ]] && echo "Total:" || echo "总计:")" "${total}"
+  ng_report_summary_kv "$([[ "${NG_LANG}" == "en" ]] && echo "Reachable:" || echo "可达:")" "${reachable}"
+  ng_report_summary_kv "$([[ "${NG_LANG}" == "en" ]] && echo "Unreachable:" || echo "不可达:")" "${unreachable}"
+  ng_report_footer
 }

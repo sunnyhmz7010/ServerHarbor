@@ -264,12 +264,12 @@ ng_init_environment() {
       printf '\n%s\n' "$(ng_color "${NG_C_WARN}" "⚠ ServerHarbor is installed but running in online mode.")"
       printf '  Installed data: %s\n' "${NG_INSTALL_DATA}"
       printf '  Online data:    %s\n' "${NG_ONLINE_DATA}"
-      printf '  These are separate data stores. Use [1]→[7] in installed mode to merge.\n'
+      printf '  These are separate data stores. Use [1]→[6] in installed mode to merge.\n'
     else
       printf '\n%s\n' "$(ng_color "${NG_C_WARN}" "⚠ ServerHarbor 已安装，但当前运行在在线模式。")"
       printf '  安装版数据: %s\n' "${NG_INSTALL_DATA}"
       printf '  在线版数据: %s\n' "${NG_ONLINE_DATA}"
-      printf '  两处数据独立，互不影响。如需合并请使用安装版菜单 [1]→[7]。\n'
+      printf '  两处数据独立，互不影响。如需合并请使用安装版菜单 [1]→[6]。\n'
     fi
   fi
 
@@ -378,10 +378,6 @@ ng_print_stat() {
     "$(ng_color "${NG_C_ACCENT_2}" "${icon}")" \
     "$(ng_color "${NG_C_DIM}" "${label}")" \
     "${value}"
-}
-
-ng_print_menu_hint() {
-  printf '%s\n' "$(ng_color "${NG_C_DIM}" "$(ng_t menu_hint)")"
 }
 
 ng_report_footer() {
@@ -553,7 +549,7 @@ ng_remove_node_from_file() {
   local existing
   existing=$(ng_get_nodes)
   local filtered
-  filtered=$(printf '%s\n' "${existing}" | grep -v "^${name}	" || true)
+  filtered=$(printf '%s\n' "${existing}" | awk -F'\t' -v name="${name}" '$1 != name' || true)
   sed '/^__NODES__$/,$d' "${NG_CONFIG_FILE}" > "${tmp}"
   {
     cat "${tmp}"
@@ -589,13 +585,6 @@ ng_rename_node_in_file() {
   rm -f "${tmp}"
 }
 
-ng_read_peers() {
-  ng_get_nodes | while IFS=$'\t' read -r name host _rest; do
-    [[ -n "${name}" && "${name}" != "#"* ]] || continue
-    printf '%s,%s\n' "${name}" "${host}"
-  done
-}
-
 ng_peer_count() {
   local count=0
   local nodes_output
@@ -603,7 +592,7 @@ ng_peer_count() {
   if [[ -n "${nodes_output}" ]]; then
     count=$(printf '%s\n' "${nodes_output}" | grep -c "	" 2>/dev/null || echo 0)
   fi
-  count=$(echo "${count}" | tr -d '[:space:]')
+  count=$(printf '%d' "${count}" 2>/dev/null || echo 0)
   : "${count:=0}"
   printf '%s' "${count}"
 }

@@ -4,6 +4,7 @@
 </div>
 
 <p align="center">
+  <a href="https://github.com/sunnyhmz7010/ServerHarbor/releases"><img src="https://img.shields.io/github/v/tag/sunnyhmz7010/ServerHarbor?label=Release&color=3b82f6" alt="Release" /></a>
   <a href="https://github.com/sunnyhmz7010/ServerHarbor/blob/main/LICENSE"><img src="https://img.shields.io/github/license/sunnyhmz7010/ServerHarbor?color=10b981" alt="License" /></a>
 </p>
 
@@ -44,7 +45,7 @@ ServerHarbor 的目标，就是用一个可以直接在 Linux 上运行的 Shell
 
 ### 🛰 节点管理
 
-- 通过 JSON 配置文件管理节点
+- 通过配置文件管理节点（KEY=VALUE + TSV 节点块）
 - 建立互信节点（双向注册）
 - 远程执行命令或预设操作（基础软件、Docker、网络调优等）
 
@@ -96,7 +97,8 @@ chmod +x menu.sh
 
 3. 首次使用前，建议先检查配置
 
-- `/opt/serverharbor/data/serverharbor.conf`
+- 安装版：`/opt/serverharbor/data/serverharbor.conf`
+- 在线版：`~/.config/serverharbor/serverharbor.conf`
 
 ### 💻 一条命令直接运行
 
@@ -214,7 +216,7 @@ shr
 ## 🧱 技术栈
 
 - Shell：Bash
-- 系统工具：`curl`、`tar`、`ssh`、`sha256sum`、`jq`
+- 系统工具：`curl`、`tar`、`ssh`、`sha256sum`、`grep`、`awk`、`sed`
 - 目标平台：Linux
 
 ## 🗂️ 项目结构
@@ -242,8 +244,7 @@ ServerHarbor/
 ### 🧰 环境
 
 - Bash
-- Linux 常见系统工具链
-- jq（节点管理功能需要，首次使用时自动安装）
+- Linux 常见系统工具链（grep、awk、sed、ssh、curl）
 
 ### ✅ 语法检查
 
