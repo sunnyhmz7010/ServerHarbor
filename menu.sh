@@ -4,6 +4,7 @@ set -euo pipefail
 
 PROJECT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
+# 加载各功能模块
 # shellcheck source=common.sh
 source "${PROJECT_ROOT}/common.sh"
 # shellcheck source=bootstrap.sh
@@ -13,24 +14,27 @@ source "${PROJECT_ROOT}/security.sh"
 # shellcheck source=nodes.sh
 source "${PROJECT_ROOT}/nodes.sh"
 
+# 初始化运行环境（创建目录、加载配置、初始化主题）
 ng_init_environment
 
+# 中断信号处理
 handle_menu_interrupt() {
   exit 130
 }
 
 trap handle_menu_interrupt INT
 
+# 判断当前是否为在线运行模式
 ng_is_online_runtime() {
   [[ "${SERVERHARBOR_RUNTIME:-}" == "online" ]]
 }
 
-
-
+# 自更新：在线模式下退出并触发刷新，安装模式下调用 install.sh --update
 ng_self_update() {
   local installer="${PROJECT_ROOT}/install.sh"
 
   if ng_is_online_runtime; then
+    # 在线模式通过退出码触发 run.sh 重新下载最新源码
     exit "${SERVERHARBOR_REFRESH_EXIT_CODE:-42}"
   fi
 
@@ -47,17 +51,21 @@ ng_self_update() {
   bash "${installer}" --update
 }
 
+# CLI 命令行模式：支持定时任务参数直接执行功能
 run_cli_mode() {
   case "${1:-}" in
     --cron-probe)
+      # 定时探测所有节点状态
       ng_probe_all_peers
       exit 0
       ;;
     --cron-security)
+      # 定时生成安全报告
       ng_security_report
       exit 0
       ;;
     --cron-alerts)
+      # 定时检查系统资源告警
       set +e
       ng_check_alerts
       exit $?
@@ -76,6 +84,7 @@ run_cli_mode() {
   esac
 }
 
+# 显示程序横幅信息（标题、主机名、数据目录、节点数）
 show_banner() {
   clear || true
 
@@ -94,10 +103,12 @@ show_banner() {
   printf '\n'
 }
 
+# 检测是否为安装版（存在安装清单文件）
 ng_is_installed() {
   [[ -f "/opt/serverharbor/.serverharbor-install" ]]
 }
 
+# 卸载入口：调用 uninstall.sh 执行卸载
 ng_uninstall() {
   local uninstaller="${PROJECT_ROOT}/uninstall.sh"
 
@@ -115,6 +126,7 @@ ng_uninstall() {
   exit 0
 }
 
+# 显示主菜单选项
 show_menu() {
   if [[ "${NG_LANG}" == "en" ]]; then
     ng_print_option "1" "🚀" "System bootstrap" "Base packages / Docker / network tuning scripts"
@@ -140,6 +152,7 @@ show_menu() {
   ng_print_menu_hint
 }
 
+# 主循环：显示横幅和菜单，读取用户输入并分发到各功能模块
 main() {
   local choice
 
@@ -151,13 +164,13 @@ main() {
     ng_read_line choice || exit 130
 
     case "${choice}" in
-      1) ng_bootstrap_menu ;;
-      2) ng_security_menu ;;
-      3) ng_node_menu ;;
-      4) ng_self_update ;;
+      1) ng_bootstrap_menu ;;    # 系统开荒
+      2) ng_security_menu ;;     # 安全卫士
+      3) ng_node_menu ;;         # 节点管理
+      4) ng_self_update ;;       # 自更新
       5)
         if ng_is_installed; then
-          ng_uninstall
+          ng_uninstall           # 卸载
         else
           ng_t invalid_option
         fi
@@ -168,5 +181,6 @@ main() {
   done
 }
 
+# 先处理 CLI 命令行模式，再进入交互式菜单
 run_cli_mode "${1:-}"
 main
