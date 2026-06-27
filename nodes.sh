@@ -127,7 +127,7 @@ ng_setup_mutual_nodes() {
     remote_conf="~/.config/serverharbor/serverharbor.conf"
   fi
 
-  local remote_line="${my_alias}	${my_ip}	${ssh_port}	${ssh_user}	${auth_method}	${key}"
+  local remote_line="${my_alias}	${my_ip}	${ssh_port}	${ssh_user}	${auth_method}	${key}	true"
 
   local register_cmd="mkdir -p \$(dirname ${remote_conf}) && [[ -f ${remote_conf} ]] || printf '# ServerHarbor Configuration\n\n__NODES__\n__NODES__\n' > ${remote_conf}"
   register_cmd="${register_cmd} && if grep -q '^${my_alias}	' ${remote_conf} 2>/dev/null; then echo EXISTS; else"
@@ -136,7 +136,7 @@ ng_setup_mutual_nodes() {
   register_cmd="${register_cmd} && existing=\$(sed -n '/^__NODES__$/,/^__NODES__\$/{ /^__NODES__\$/d; p; }' ${remote_conf} 2>/dev/null)"
   register_cmd="${register_cmd} && { cat \${tmp}; printf '%s\n' '__NODES__';"
   register_cmd="${register_cmd} if [ -n \"\${existing}\" ]; then printf '%s\n' \"\${existing}\"; fi;"
-  register_cmd="${register_cmd} printf '%s\n' '${my_alias}	${my_ip}	${ssh_port}	${ssh_user}	${auth_method}	${key}';"
+  register_cmd="${register_cmd} printf '%s\n' '${my_alias}	${my_ip}	${ssh_port}	${ssh_user}	${auth_method}	${key}	true';"
   register_cmd="${register_cmd} printf '%s\n' '__NODES__'; } > ${remote_conf}"
   register_cmd="${register_cmd} && rm -f \${tmp}"
   register_cmd="${register_cmd} && echo OK; fi"
@@ -407,7 +407,7 @@ ng_node_manage() {
               else
                 printf '✓ SSH 连接成功。\n'
               fi
-              ng_add_node_to_file "${alias}	${host}	${port}	${user}	${auth}	${key}"
+              ng_add_node_to_file "${alias}	${host}	${port}	${user}	${auth}	${key}	true"
               if [[ "${NG_LANG}" == "en" ]]; then
                 printf '✓ Node "%s" added.\n' "${alias}"
               else
