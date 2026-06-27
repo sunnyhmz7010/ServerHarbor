@@ -7,11 +7,12 @@ APP_ROOT="${INSTALL_ROOT}/app"
 DATA_ROOT="${INSTALL_ROOT}/data"
 BIN_PATH="/usr/local/bin/shr"
 MANIFEST_PATH="${INSTALL_ROOT}/.serverharbor-install"
-INTERRUPT_REQUESTED=0
-CRITICAL_SECTION=0
-KEEP_DATA=0
+INTERRUPT_REQUESTED=0   # 中断请求标志
+CRITICAL_SECTION=0      # 是否处于关键区段中
+KEEP_DATA=0             # 是否保留数据目录
 SH_LANG="${SERVERHARBOR_LANG:-${NG_LANG:-zh}}"
 
+# 中断信号处理：关键区段中延迟退出，否则立即取消
 handle_interrupt() {
   if [[ "${CRITICAL_SECTION}" -eq 1 ]]; then
     INTERRUPT_REQUESTED=1
@@ -30,10 +31,12 @@ handle_interrupt() {
   exit 130
 }
 
+# 进入关键区段（禁止中断立即退出）
 enter_critical_section() {
   CRITICAL_SECTION=1
 }
 
+# 离开关键区段（检查是否有待处理的中断请求）
 leave_critical_section() {
   CRITICAL_SECTION=0
   if [[ "${INTERRUPT_REQUESTED}" -eq 1 ]]; then
@@ -46,6 +49,7 @@ leave_critical_section() {
   fi
 }
 
+# 卸载确认提示：支持完全删除、保留数据、取消三种选项
 confirm() {
   local answer
 
@@ -91,6 +95,7 @@ confirm() {
   esac
 }
 
+# --- 文件锁机制 ---
 LOCK_FILE="/var/lock/serverharbor.lock"
 
 acquire_lock() {
@@ -106,6 +111,7 @@ acquire_lock() {
   fi
 }
 
+# 检查 root 权限
 if [[ "${EUID}" -ne 0 ]]; then
   if [[ "${SH_LANG}" == "en" ]]; then
     printf 'Please run uninstall.sh as root.\n' >&2
@@ -115,6 +121,7 @@ if [[ "${EUID}" -ne 0 ]]; then
   exit 1
 fi
 
+# 退出时清理锁文件
 cleanup() {
   rm -f "${LOCK_FILE}"
 }
@@ -123,6 +130,7 @@ trap handle_interrupt INT
 trap cleanup EXIT
 acquire_lock
 
+# 检查安装清单是否存在（防止误删非 ServerHarbor 管理的文件）
 if [[ ! -f "${MANIFEST_PATH}" ]]; then
   if [[ "${SH_LANG}" == "en" ]]; then
     printf 'ServerHarbor manifest not found at %s\n' "${MANIFEST_PATH}" >&2
@@ -134,6 +142,7 @@ if [[ ! -f "${MANIFEST_PATH}" ]]; then
   exit 1
 fi
 
+# 确认卸载
 if ! confirm; then
   if [[ "${SH_LANG}" == "en" ]]; then
     printf 'Uninstall cancelled.\n'
@@ -143,6 +152,7 @@ if ! confirm; then
   exit 0
 fi
 
+# 步骤 1：删除启动器命令（验证归属后才删除）
 if [[ -e "${BIN_PATH}" ]]; then
   enter_critical_section
   if grep -q "${APP_ROOT}/menu.sh" "${BIN_PATH}" 2>/dev/null; then
@@ -158,8 +168,10 @@ if [[ -e "${BIN_PATH}" ]]; then
   leave_critical_section
 fi
 
+# 步骤 2：删除程序目录（可选保留数据）
 enter_critical_section
 if [[ "${KEEP_DATA}" -eq 1 ]]; then
+  # 仅删除程序，保留数据目录
   if [[ -n "${APP_ROOT}" && -d "${APP_ROOT}" ]]; then
     rm -rf "${APP_ROOT}"
   fi
@@ -170,6 +182,7 @@ if [[ "${KEEP_DATA}" -eq 1 ]]; then
     printf 'ServerHarbor 程序已删除，数据保留在 %s\n' "${DATA_ROOT}"
   fi
 else
+  # 完全删除（包括数据）
   if [[ -n "${INSTALL_ROOT}" && -d "${INSTALL_ROOT}" ]]; then
     rm -rf "${INSTALL_ROOT}"
   fi
