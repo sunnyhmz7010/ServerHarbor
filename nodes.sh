@@ -2,171 +2,6 @@
 
 set -euo pipefail
 
-ng_init_nodes() {
-  if [[ ! -f "${NG_NODES_FILE}" ]]; then
-    mkdir -p "$(dirname "${NG_NODES_FILE}")"
-    cat > "${NG_NODES_FILE}" <<'EOF'
-{
-  "defaults": {
-    "ssh": {
-      "user": "root",
-      "port": 22,
-      "key": "~/.ssh/id_ed25519"
-    }
-  },
-  "servers": []
-}
-EOF
-  fi
-}
-
-ng_ensure_jq() {
-  if command -v jq >/dev/null 2>&1; then
-    return 0
-  fi
-
-  if [[ "${NG_LANG}" == "en" ]]; then
-    printf 'jq not found. Installing...\n'
-  else
-    printf '未找到 jq，正在安装...\n'
-  fi
-
-  if command -v apt-get >/dev/null 2>&1; then
-    apt-get update -qq && apt-get install -y -qq jq
-  elif command -v yum >/dev/null 2>&1; then
-    yum install -y jq
-  elif command -v dnf >/dev/null 2>&1; then
-    dnf install -y jq
-  else
-    if [[ "${NG_LANG}" == "en" ]]; then
-      ng_log "ERROR" "Cannot install jq automatically. Please install it manually."
-    else
-      ng_log "ERROR" "无法自动安装 jq，请手动安装。"
-    fi
-    return 1
-  fi
-}
-
-ng_add_node() {
-  local name="$1"
-  local host="$2"
-  local user="${3:-root}"
-  local port="${4:-22}"
-  local auth="${5:-key}"
-  local key="${6:-~/.ssh/id_ed25519}"
-  local tags="${7:-}"
-
-  if [[ -z "${name}" ]]; then
-    if [[ "${NG_LANG}" == "en" ]]; then
-      ng_log "ERROR" "Node name is required."
-    else
-      ng_log "ERROR" "节点名称不能为空。"
-    fi
-    return 1
-  fi
-
-  if [[ -z "${host}" ]]; then
-    if [[ "${NG_LANG}" == "en" ]]; then
-      ng_log "ERROR" "Host is required."
-    else
-      ng_log "ERROR" "主机地址不能为空。"
-    fi
-    return 1
-  fi
-
-  if ! [[ "${port}" =~ ^[0-9]+$ ]] || [[ "${port}" -lt 1 ]] || [[ "${port}" -gt 65535 ]]; then
-    if [[ "${NG_LANG}" == "en" ]]; then
-      ng_log "ERROR" "Invalid port number: ${port} (must be 1-65535)"
-    else
-      ng_log "ERROR" "无效端口号: ${port}（必须为 1-65535）"
-    fi
-    return 1
-  fi
-
-  if [[ "${auth}" != "key" && "${auth}" != "password" ]]; then
-    if [[ "${NG_LANG}" == "en" ]]; then
-      ng_log "ERROR" "Invalid auth method: ${auth} (must be 'key' or 'password')"
-    else
-      ng_log "ERROR" "无效认证方式: ${auth}（必须为 'key' 或 'password'）"
-    fi
-    return 1
-  fi
-
-  ng_init_nodes
-
-  if ! ng_ensure_jq; then
-    return 1
-  fi
-
-  if jq -e --arg n "${name}" '.servers[] | select(.name == $n)' "${NG_NODES_FILE}" >/dev/null 2>&1; then
-    if [[ "${NG_LANG}" == "en" ]]; then
-      ng_log "WARN" "Node '${name}' already exists. Use edit to modify."
-    else
-      ng_log "WARN" "节点 '${name}' 已存在，请使用编辑功能修改。"
-    fi
-    return 1
-  fi
-
-  local tmp_file="${NG_NODES_FILE}.tmp"
-  jq --arg name "${name}" \
-     --arg host "${host}" \
-     --arg user "${user}" \
-     --arg port "${port}" \
-     --arg auth "${auth}" \
-     --arg key "${key}" \
-     --arg tags "${tags}" \
-     '.servers += [{
-       "name": $name,
-       "host": $host,
-       "ssh": {
-         "user": $user,
-         "port": ($port | tonumber),
-         "auth": $auth,
-         "key": $key
-       },
-       "tags": (if $tags != "" then ($tags | split(",") | map(gsub("^\\s+|\\s+$"; ""))) else [] end),
-       "enabled": true
-     }]' "${NG_NODES_FILE}" > "${tmp_file}" && mv -f "${tmp_file}" "${NG_NODES_FILE}"
-
-  if [[ "${NG_LANG}" == "en" ]]; then
-    ng_log "INFO" "Node added: ${name} (${host})"
-  else
-    ng_log "INFO" "节点已添加: ${name} (${host})"
-  fi
-}
-
-ng_remove_node() {
-  local name="$1"
-
-  if ! command -v jq >/dev/null 2>&1; then
-    if [[ "${NG_LANG}" == "en" ]]; then
-      ng_log "ERROR" "jq is required for node management."
-    else
-      ng_log "ERROR" "节点管理需要 jq。"
-    fi
-    return 1
-  fi
-
-  if ! jq -e --arg n "${name}" '.servers[] | select(.name == $n)' "${NG_NODES_FILE}" >/dev/null 2>&1; then
-    if [[ "${NG_LANG}" == "en" ]]; then
-      ng_log "WARN" "Node '${name}' not found."
-    else
-      ng_log "WARN" "节点 '${name}' 不存在。"
-    fi
-    return 1
-  fi
-
-  local tmp_file="${NG_NODES_FILE}.tmp"
-  jq --arg name "${name}" '.servers |= map(select(.name != $name))' "${NG_NODES_FILE}" > "${tmp_file}" && mv -f "${tmp_file}" "${NG_NODES_FILE}"
-
-  if [[ "${NG_LANG}" == "en" ]]; then
-    ng_log "INFO" "Node removed: ${name}"
-  else
-    ng_log "INFO" "节点已删除: ${name}"
-  fi
-}
-
-
 ng_check_node_status() {
   local host="$1"
   local port="${2:-22}"
@@ -183,17 +18,17 @@ ng_check_node_status() {
 }
 
 ng_setup_mutual_nodes() {
-  local remote_ip ssh_port ssh_user auth_method key
-
-  if ! ng_ensure_jq; then return 1; fi
-  if [[ ! -f "${NG_NODES_FILE}" ]]; then
-    if [[ "${NG_LANG}" == "en" ]]; then printf 'No nodes configured. Add a node first.\n'; else printf '未配置节点，请先添加节点。\n'; fi
+  if ! [[ -f "${NG_CONFIG_FILE}" ]]; then
+    if [[ "${NG_LANG}" == "en" ]]; then printf 'No config found. Add a node first.\n'; else printf '未找到配置，请先添加节点。\n'; fi
     return 0
   fi
 
-  local node_count
-  node_count=$(jq '.servers | length' "${NG_NODES_FILE}" 2>/dev/null || echo "0")
-  if [[ "${node_count}" -eq 0 ]]; then
+  local -a node_lines=()
+  while IFS= read -r line; do
+    [[ -n "${line}" ]] && node_lines+=("${line}")
+  done < <(ng_get_nodes)
+
+  if [[ "${#node_lines[@]}" -eq 0 ]]; then
     if [[ "${NG_LANG}" == "en" ]]; then printf 'No nodes configured. Add a node first.\n'; else printf '未配置节点，请先添加节点。\n'; fi
     return 0
   fi
@@ -202,14 +37,31 @@ ng_setup_mutual_nodes() {
   local ni=1
   local -a existing_names=()
   local -a existing_hosts=()
-  while IFS=$'\t' read -r n h; do
+  local -a existing_ports=()
+  local -a existing_users=()
+  local -a existing_auths=()
+  local -a existing_keys=()
+
+  for line in "${node_lines[@]}"; do
+    local n h p au a k
+    n=$(printf '%s' "${line}" | cut -f1)
+    h=$(printf '%s' "${line}" | cut -f2)
+    p=$(printf '%s' "${line}" | cut -f3)
+    au=$(printf '%s' "${line}" | cut -f4)
+    a=$(printf '%s' "${line}" | cut -f5)
+    k=$(printf '%s' "${line}" | cut -f6)
+    [[ -z "${n}" || "${n}" == "#"* ]] && continue
     local node_status
-    node_status=$(ng_check_node_status "${h}")
+    node_status=$(ng_check_node_status "${h}" "${p}")
     printf '  [%d] %-20s %-20s %s\n' "${ni}" "${n}" "${h}" "${node_status}"
     existing_names+=("${n}")
     existing_hosts+=("${h}")
+    existing_ports+=("${p}")
+    existing_users+=("${au}")
+    existing_auths+=("${a}")
+    existing_keys+=("${k}")
     ((ni++)) || true
-  done < <(jq -r '.servers[] | select(.enabled != false) | "\(.name)\t\(.host)"' "${NG_NODES_FILE}" 2>/dev/null)
+  done
   printf '  [0] %s\n' "$( [[ "${NG_LANG}" == "en" ]] && echo "Back" || echo "返回" )"
 
   printf '\n'
@@ -225,35 +77,33 @@ ng_setup_mutual_nodes() {
   fi
 
   local sel_name="${existing_names[$((node_sel-1))]}"
-  remote_ip="${existing_hosts[$((node_sel-1))]}"
-  ssh_port=$(jq -r --arg n "${sel_name}" '.servers[] | select(.name == $n) | .ssh.port // 22' "${NG_NODES_FILE}" 2>/dev/null)
-  ssh_user=$(jq -r --arg n "${sel_name}" '.servers[] | select(.name == $n) | .ssh.user // "root"' "${NG_NODES_FILE}" 2>/dev/null)
-  auth_method=$(jq -r --arg n "${sel_name}" '.servers[] | select(.name == $n) | .ssh.auth // "key"' "${NG_NODES_FILE}" 2>/dev/null)
-  key=$(jq -r --arg n "${sel_name}" '.servers[] | select(.name == $n) | .ssh.key // "~/.ssh/id_ed25519"' "${NG_NODES_FILE}" 2>/dev/null)
-
-  if [[ "${auth_method}" == "password" ]] && ! command -v sshpass >/dev/null 2>&1; then
-    if [[ "${EUID}" -eq 0 ]]; then
-      if command -v apt-get >/dev/null 2>&1; then apt-get install -y -qq sshpass 2>/dev/null || true
-      elif command -v yum >/dev/null 2>&1; then yum install -y sshpass 2>/dev/null || true
-      elif command -v dnf >/dev/null 2>&1; then dnf install -y sshpass 2>/dev/null || true
-      fi
-    fi
-  fi
+  local remote_ip="${existing_hosts[$((node_sel-1))]}"
+  local ssh_port="${existing_ports[$((node_sel-1))]}"
+  local ssh_user="${existing_users[$((node_sel-1))]}"
+  local auth_method="${existing_auths[$((node_sel-1))]}"
+  local key="${existing_keys[$((node_sel-1))]}"
 
   local -a ssh_opts=(-o ConnectTimeout=5 -o StrictHostKeyChecking=accept-new -p "${ssh_port}")
-  local -a run_ssh=()
+  local use_sshpass=0
+
   if [[ "${auth_method}" == "password" ]] && command -v sshpass >/dev/null 2>&1; then
+    use_sshpass=1
     export SSHPASS="${key}"
-    run_ssh=(sshpass -e ssh "${ssh_opts[@]}" "${ssh_user}@${remote_ip}")
   else
     ssh_opts+=(-i "${key}")
+  fi
+
+  local -a run_ssh=()
+  if [[ "${use_sshpass}" -eq 1 ]]; then
+    run_ssh=(sshpass -e ssh "${ssh_opts[@]}" "${ssh_user}@${remote_ip}")
+  else
     run_ssh=(ssh "${ssh_opts[@]}" "${ssh_user}@${remote_ip}")
   fi
 
   if [[ "${NG_LANG}" == "en" ]]; then
-    printf '[1/3] Testing SSH to %s ...\n' "${remote_ip}"
+    printf '\n[1/3] Testing SSH to %s ...\n' "${remote_ip}"
   else
-    printf '[1/3] 测试 SSH 连接 %s ...\n' "${remote_ip}"
+    printf '\n[1/3] 测试 SSH 连接 %s ...\n' "${remote_ip}"
   fi
   if ! "${run_ssh[@]}" "echo OK" >/dev/null 2>&1; then
     if [[ "${NG_LANG}" == "en" ]]; then ng_log "ERROR" "SSH connection failed."; else ng_log "ERROR" "SSH 连接失败。"; fi
@@ -270,27 +120,34 @@ ng_setup_mutual_nodes() {
   my_ip=$(hostname -I 2>/dev/null | awk '{print $1}' || hostname)
   local my_alias="${NG_HOSTNAME}"
 
-  # Read local SSH info from the selected node entry (the connection we're using)
-  local local_ssh_user local_ssh_port local_ssh_auth local_ssh_key
-  local_ssh_user=$(jq -r --arg n "${sel_name}" '.servers[] | select(.name == $n) | .ssh.user // "root"' "${NG_NODES_FILE}" 2>/dev/null)
-  local_ssh_port=$(jq -r --arg n "${sel_name}" '.servers[] | select(.name == $n) | .ssh.port // 22' "${NG_NODES_FILE}" 2>/dev/null)
-  local_ssh_auth=$(jq -r --arg n "${sel_name}" '.servers[] | select(.name == $n) | .ssh.auth // "key"' "${NG_NODES_FILE}" 2>/dev/null)
-  local_ssh_key=$(jq -r --arg n "${sel_name}" '.servers[] | select(.name == $n) | .ssh.key // "~/.ssh/id_ed25519"' "${NG_NODES_FILE}" 2>/dev/null)
-
-  local remote_nodes_file
-  remote_nodes_file=$("${run_ssh[@]}" "bash -c 'echo \${SERVERHARBOR_HOME:-\${XDG_CONFIG_HOME:-\$HOME/.config}/serverharbor}/servers.json'" 2>/dev/null || echo "")
-  remote_nodes_file=$(echo "${remote_nodes_file}" | tr -d '\r\n')
-  if [[ -z "${remote_nodes_file}" ]]; then
-    remote_nodes_file="~/.config/serverharbor/servers.json"
+  local remote_conf
+  remote_conf=$("${run_ssh[@]}" "bash -c 'if [ -f /opt/serverharbor/.serverharbor-install ]; then echo /opt/serverharbor/data/serverharbor.conf; else echo \${XDG_CONFIG_HOME:-\$HOME/.config}/serverharbor/serverharbor.conf; fi'" 2>/dev/null || echo "")
+  remote_conf=$(echo "${remote_conf}" | tr -d '\r\n')
+  if [[ -z "${remote_conf}" ]]; then
+    remote_conf="~/.config/serverharbor/serverharbor.conf"
   fi
 
-  local register_cmd="mkdir -p \$(dirname ${remote_nodes_file}) && [[ -f ${remote_nodes_file} ]] || cat > ${remote_nodes_file} <<'EOFCFG'
-{\"defaults\":{\"ssh\":{\"user\":\"root\",\"port\":22,\"key\":\"~/.ssh/id_ed25519\"}},\"servers\":[]}
-EOFCFG
-jq --arg name '${my_alias}' --arg host '${my_ip}' --arg user '${local_ssh_user}' --arg port '${local_ssh_port}' --arg auth '${local_ssh_auth}' --arg key '${local_ssh_key}' '.servers += [{name:\$name,host:\$host,ssh:{user:\$user,port:(\$port|tonumber),auth:\$auth,key:\$key},tags:[],enabled:true}]' ${remote_nodes_file} > ${remote_nodes_file}.tmp && mv -f ${remote_nodes_file}.tmp ${remote_nodes_file}"
+  local remote_line="${my_alias}	${my_ip}	${ssh_port}	${ssh_user}	${auth_method}	${key}"
 
-  if "${run_ssh[@]}" "bash -c '${register_cmd}'" >/dev/null 2>&1; then
+  local register_cmd="mkdir -p \$(dirname ${remote_conf}) && [[ -f ${remote_conf} ]] || printf '# ServerHarbor Configuration\n\n__NODES__\n__NODES__\n' > ${remote_conf}"
+  register_cmd="${register_cmd} && if grep -q '^${my_alias}	' ${remote_conf} 2>/dev/null; then echo EXISTS; else"
+  register_cmd="${register_cmd} tmp=\${remote_conf}.tmp"
+  register_cmd="${register_cmd} && sed '/^__NODES__$/,\$d' ${remote_conf} > \${tmp}"
+  register_cmd="${register_cmd} && existing=\$(sed -n '/^__NODES__$/,/^__NODES__\$/{ /^__NODES__\$/d; p; }' ${remote_conf} 2>/dev/null)"
+  register_cmd="${register_cmd} && { cat \${tmp}; printf '%s\n' '__NODES__';"
+  register_cmd="${register_cmd} if [ -n \"\${existing}\" ]; then printf '%s\n' \"\${existing}\"; fi;"
+  register_cmd="${register_cmd} printf '%s\n' '${my_alias}	${my_ip}	${ssh_port}	${ssh_user}	${auth_method}	${key}';"
+  register_cmd="${register_cmd} printf '%s\n' '__NODES__'; } > ${remote_conf}"
+  register_cmd="${register_cmd} && rm -f \${tmp}"
+  register_cmd="${register_cmd} && echo OK; fi"
+
+  local remote_output
+  remote_output=$("${run_ssh[@]}" "bash -c '${register_cmd}'" 2>&1) || true
+
+  if echo "${remote_output}" | grep -q "^OK"; then
     if [[ "${NG_LANG}" == "en" ]]; then printf '  ✓ Self registered on remote\n'; else printf '  ✓ 本机已注册到对方服务器\n'; fi
+  elif echo "${remote_output}" | grep -q "^EXISTS"; then
+    if [[ "${NG_LANG}" == "en" ]]; then printf '  ⚠ Already registered on remote\n'; else printf '  ⚠ 已在对方服务器注册过\n'; fi
   else
     if [[ "${NG_LANG}" == "en" ]]; then printf '  ✗ Failed to register on remote\n'; else printf '  ✗ 在对方服务器注册失败\n'; fi
   fi
@@ -350,17 +207,27 @@ ng_node_manage() {
     local -a node_ports=()
     local idx=1
 
-    if command -v jq >/dev/null 2>&1 && [[ -f "${NG_NODES_FILE}" ]]; then
-      while IFS=$'\t' read -r name host port; do
-        local node_status
-        node_status=$(ng_check_node_status "${host}" "${port}")
-        printf '  [%d] %-20s %-20s %s\n' "${idx}" "${name}" "${host}" "${node_status}"
-        node_names+=("${name}")
-        node_hosts+=("${host}")
-        node_ports+=("${port}")
-        ((idx++)) || true
-      done < <(jq -r '.servers[] | select(.enabled != false) | "\(.name)\t\(.host)\t\(.ssh.port // 22)"' "${NG_NODES_FILE}" 2>/dev/null)
-    fi
+    local -a node_lines=()
+    while IFS= read -r line; do
+      [[ -n "${line}" ]] && node_lines+=("${line}")
+    done < <(ng_get_nodes)
+
+    for line in "${node_lines[@]}"; do
+      local n h p e
+      n=$(printf '%s' "${line}" | cut -f1)
+      h=$(printf '%s' "${line}" | cut -f2)
+      p=$(printf '%s' "${line}" | cut -f3)
+      e=$(printf '%s' "${line}" | cut -f6)
+      [[ -z "${n}" || "${n}" == "#"* ]] && continue
+      [[ "${e}" == "true" ]] || continue
+      local node_status
+      node_status=$(ng_check_node_status "${h}" "${p}")
+      printf '  [%d] %-20s %-20s %s\n' "${idx}" "${n}" "${h}" "${node_status}"
+      node_names+=("${n}")
+      node_hosts+=("${h}")
+      node_ports+=("${p}")
+      ((idx++)) || true
+    done
 
     if [[ "${idx}" -eq 1 ]]; then
       if [[ "${NG_LANG}" == "en" ]]; then
@@ -454,20 +321,6 @@ ng_node_manage() {
             fi
             IFS= read -rs key < /dev/tty
             printf '\n'
-
-            if ! command -v sshpass >/dev/null 2>&1; then
-              if [[ "${EUID}" -eq 0 ]]; then
-                if [[ "${NG_LANG}" == "en" ]]; then
-                  printf 'Installing sshpass...\n'
-                else
-                  printf '正在安装 sshpass...\n'
-                fi
-                if command -v apt-get >/dev/null 2>&1; then apt-get install -y -qq sshpass 2>/dev/null || true
-                elif command -v yum >/dev/null 2>&1; then yum install -y sshpass 2>/dev/null || true
-                elif command -v dnf >/dev/null 2>&1; then dnf install -y sshpass 2>/dev/null || true
-                fi
-              fi
-            fi
             ;;
           *)
             auth="key"
@@ -521,38 +374,51 @@ ng_node_manage() {
         esac
 
         if [[ -n "${alias}" && -n "${host}" ]]; then
-          if [[ "${NG_LANG}" == "en" ]]; then
-            printf '\nTesting SSH %s@%s:%s ...\n' "${user}" "${host}" "${port}"
-          else
-            printf '\n正在测试 SSH 连接 %s@%s:%s ...\n' "${user}" "${host}" "${port}"
-          fi
-
-          local -a test_opts=(-o ConnectTimeout=5 -o StrictHostKeyChecking=accept-new -p "${port}")
-          local ssh_ok=0
-
-          if [[ "${auth}" == "password" ]] && command -v sshpass >/dev/null 2>&1; then
-            if export SSHPASS="${key}" && sshpass -e ssh "${test_opts[@]}" "${user}@${host}" "echo OK" >/dev/null 2>&1; then
-              ssh_ok=1
-            fi
-          elif [[ "${auth}" == "key" ]]; then
-            test_opts+=(-i "${key}")
-            if ssh "${test_opts[@]}" "${user}@${host}" "echo OK" >/dev/null 2>&1; then
-              ssh_ok=1
-            fi
-          fi
-
-          if [[ "${ssh_ok}" -eq 1 ]]; then
+          local existing
+          existing=$(ng_get_nodes | grep "^${alias}	" || true)
+          if [[ -n "${existing}" ]]; then
             if [[ "${NG_LANG}" == "en" ]]; then
-              printf '✓ SSH connected.\n'
+              printf 'Node "%s" already exists.\n' "${alias}"
             else
-              printf '✓ SSH 连接成功。\n'
+              printf '节点 "%s" 已存在。\n' "${alias}"
             fi
-            ng_add_node "${alias}" "${host}" "${user}" "${port}" "${auth}" "${key}"
           else
             if [[ "${NG_LANG}" == "en" ]]; then
-              printf '✗ SSH failed. Node not added.\n'
+              printf '\nTesting SSH %s@%s:%s ...\n' "${user}" "${host}" "${port}"
             else
-              printf '✗ SSH 连接失败，节点未添加。\n'
+              printf '\n正在测试 SSH 连接 %s@%s:%s ...\n' "${user}" "${host}" "${port}"
+            fi
+
+            local -a test_opts=(-o ConnectTimeout=5 -o StrictHostKeyChecking=accept-new -p "${port}")
+            local ssh_ok=0
+
+            if [[ "${auth}" == "password" ]]; then
+              if command -v sshpass >/dev/null 2>&1; then
+                SSHPASS="${key}" sshpass -e ssh "${test_opts[@]}" "${user}@${host}" "echo OK" >/dev/null 2>&1 && ssh_ok=1
+              fi
+            else
+              test_opts+=(-i "${key}")
+              ssh "${test_opts[@]}" "${user}@${host}" "echo OK" >/dev/null 2>&1 && ssh_ok=1
+            fi
+
+            if [[ "${ssh_ok}" -eq 1 ]]; then
+              if [[ "${NG_LANG}" == "en" ]]; then
+                printf '✓ SSH connected.\n'
+              else
+                printf '✓ SSH 连接成功。\n'
+              fi
+              ng_add_node_to_file "${alias}	${host}	${port}	${user}	${auth}	${key}"
+              if [[ "${NG_LANG}" == "en" ]]; then
+                printf '✓ Node "%s" added.\n' "${alias}"
+              else
+                printf '✓ 节点 "%s" 已添加。\n' "${alias}"
+              fi
+            else
+              if [[ "${NG_LANG}" == "en" ]]; then
+                printf '✗ SSH failed. Node not added.\n'
+              else
+                printf '✗ SSH 连接失败，节点未添加。\n'
+              fi
             fi
           fi
         fi
@@ -569,12 +435,14 @@ ng_node_manage() {
             printf '  [e] Edit name\n'
             printf '  [d] Delete\n'
             printf '  [0] Cancel\n'
+            printf 'Note: To change IP, port, user, or auth, delete and re-add.\n'
             printf 'Choose: '
           else
             printf '\n节点: %s (%s)\n' "${target_name}" "${target_host}"
             printf '  [e] 修改名称\n'
             printf '  [d] 删除\n'
             printf '  [0] 取消\n'
+            printf '提示：如需修改 IP、端口、用户或认证方式，请删除节点后重新添加。\n'
             printf '选择：'
           fi
           local action
@@ -584,19 +452,13 @@ ng_node_manage() {
             e|E)
               if [[ "${NG_LANG}" == "en" ]]; then
                 printf 'New name (current: %s): ' "${target_name}"
-                printf '\nNote: To change IP, port, user, or auth method, delete and re-add the node.\n'
               else
                 printf '新名称（当前: %s）：' "${target_name}"
-                printf '\n提示：如需修改 IP、端口、用户或认证方式，请删除节点后重新添加。\n'
               fi
               local new_name
               ng_read_line new_name || return 130
               if [[ -n "${new_name}" && "${new_name}" != "${target_name}" ]]; then
-                if ! ng_ensure_jq; then continue; fi
-                local tmp="${NG_NODES_FILE}.tmp"
-                jq --arg old "${target_name}" --arg new "${new_name}" \
-                  '.servers |= map(if .name == $old then .name = $new else . end)' \
-                  "${NG_NODES_FILE}" > "${tmp}" && mv -f "${tmp}" "${NG_NODES_FILE}"
+                ng_rename_node_in_file "${target_name}" "${new_name}"
                 if [[ "${NG_LANG}" == "en" ]]; then
                   printf '✓ Renamed "%s" → "%s"\n' "${target_name}" "${new_name}"
                 else
@@ -613,13 +475,16 @@ ng_node_manage() {
               local confirm
               ng_read_line confirm || return 130
               if [[ "${confirm}" =~ ^[Yy] ]]; then
-                ng_remove_node "${target_name}"
+                ng_remove_node_from_file "${target_name}"
+                if [[ "${NG_LANG}" == "en" ]]; then
+                  printf '✓ Node "%s" removed.\n' "${target_name}"
+                else
+                  printf '✓ 节点 "%s" 已删除。\n' "${target_name}"
+                fi
               fi
               ;;
             0|"") ;;
-            *)
-              ng_t invalid_option
-              ;;
+            *) ng_t invalid_option ;;
           esac
         else
           ng_t invalid_option
@@ -631,17 +496,12 @@ ng_node_manage() {
 }
 
 ng_remote_execute() {
-  if ! ng_ensure_jq; then return 1; fi
-  if [[ ! -f "${NG_NODES_FILE}" ]]; then
-    if [[ "${NG_LANG}" == "en" ]]; then printf 'No nodes configured.\n'; else printf '未配置节点。\n'; fi
-    return 1
-  fi
+  local -a node_lines=()
+  while IFS= read -r line; do
+    [[ -n "${line}" ]] && node_lines+=("${line}")
+  done < <(ng_get_nodes)
 
-  local count
-  count=$(jq '.servers | length' "${NG_NODES_FILE}" 2>/dev/null || echo "0")
-  count=$(echo "${count}" | tr -d '[:space:]')
-  : "${count:=0}"
-  if [[ "${count}" -eq 0 ]]; then
+  if [[ "${#node_lines[@]}" -eq 0 ]]; then
     if [[ "${NG_LANG}" == "en" ]]; then printf 'No nodes configured.\n'; else printf '未配置节点。\n'; fi
     return 1
   fi
@@ -652,13 +512,32 @@ ng_remote_execute() {
     if [[ "${NG_LANG}" == "en" ]]; then printf '\nSelect target node:\n'; else printf '\n选择目标节点：\n'; fi
     local idx=1
     local -a node_names=()
-    while IFS=$'\t' read -r name host; do
+    local -a node_hosts=()
+    local -a node_ports=()
+    local -a node_users=()
+    local -a node_auths=()
+    local -a node_keys=()
+
+    for line in "${node_lines[@]}"; do
+      local n h p au a k
+      n=$(printf '%s' "${line}" | cut -f1)
+      h=$(printf '%s' "${line}" | cut -f2)
+      p=$(printf '%s' "${line}" | cut -f3)
+      au=$(printf '%s' "${line}" | cut -f4)
+      a=$(printf '%s' "${line}" | cut -f5)
+      k=$(printf '%s' "${line}" | cut -f6)
+      [[ -z "${n}" || "${n}" == "#"* ]] && continue
       local node_status
-      node_status=$(ng_check_node_status "${host}")
-      printf '  [%d] %-20s %-20s %s\n' "${idx}" "${name}" "${host}" "${node_status}"
-      node_names+=("${name}")
+      node_status=$(ng_check_node_status "${h}" "${p}")
+      printf '  [%d] %-20s %-20s %s\n' "${idx}" "${n}" "${h}" "${node_status}"
+      node_names+=("${n}")
+      node_hosts+=("${h}")
+      node_ports+=("${p}")
+      node_users+=("${au}")
+      node_auths+=("${a}")
+      node_keys+=("${k}")
       ((idx++)) || true
-    done < <(jq -r '.servers[] | select(.enabled != false) | "\(.name)\t\(.host)"' "${NG_NODES_FILE}" 2>/dev/null)
+    done
     printf '  [0] %s\n' "$( [[ "${NG_LANG}" == "en" ]] && echo "Back" || echo "返回" )"
 
     printf '\n'
@@ -674,30 +553,24 @@ ng_remote_execute() {
     fi
 
     local node_name="${node_names[$((sel-1))]}"
-    local node_host node_user node_port node_auth node_key
-    node_host=$(jq -r --arg n "${node_name}" '.servers[] | select(.name == $n) | .host' "${NG_NODES_FILE}" 2>/dev/null)
-    node_user=$(jq -r --arg n "${node_name}" '.servers[] | select(.name == $n) | .ssh.user // "root"' "${NG_NODES_FILE}" 2>/dev/null)
-    node_port=$(jq -r --arg n "${node_name}" '.servers[] | select(.name == $n) | .ssh.port // 22' "${NG_NODES_FILE}" 2>/dev/null)
-    node_auth=$(jq -r --arg n "${node_name}" '.servers[] | select(.name == $n) | .ssh.auth // "key"' "${NG_NODES_FILE}" 2>/dev/null)
-    node_key=$(jq -r --arg n "${node_name}" '.servers[] | select(.name == $n) | .ssh.key // "~/.ssh/id_ed25519"' "${NG_NODES_FILE}" 2>/dev/null)
+    local node_host="${node_hosts[$((sel-1))]}"
+    local node_port="${node_ports[$((sel-1))]}"
+    local node_user="${node_users[$((sel-1))]}"
+    local node_auth="${node_auths[$((sel-1))]}"
+    local node_key="${node_keys[$((sel-1))]}"
 
-    if [[ -z "${node_host}" || "${node_host}" == "null" ]]; then
-      if [[ "${NG_LANG}" == "en" ]]; then ng_log "ERROR" "Node not found."; else ng_log "ERROR" "节点不存在。"; fi
-      continue
-    fi
-
-  local -a ssh_opts=(-o ConnectTimeout=10 -o StrictHostKeyChecking=accept-new -p "${node_port}")
-  local -a ssh_opts_interactive=(-t -o ConnectTimeout=10 -o StrictHostKeyChecking=accept-new -p "${node_port}")
-  local use_sshpass=0
+    local -a ssh_opts=(-o ConnectTimeout=10 -o StrictHostKeyChecking=accept-new -p "${node_port}")
+    local -a ssh_opts_interactive=(-t -o ConnectTimeout=10 -o StrictHostKeyChecking=accept-new -p "${node_port}")
+    local use_sshpass=0
 
     if [[ "${node_auth}" == "password" ]] && command -v sshpass >/dev/null 2>&1; then
       use_sshpass=1
       export SSHPASS="${node_key}"
     else
       ssh_opts+=(-i "${node_key}")
+      ssh_opts_interactive+=(-i "${node_key}")
     fi
 
-    # Inner loop: operation selection
     while true; do
       if [[ "${NG_LANG}" == "en" ]]; then
         printf '\nRemote execute on %s (%s):\n\n' "${node_name}" "${node_host}"
@@ -744,9 +617,7 @@ ng_remote_execute() {
           ;;
       esac
 
-      if [[ -z "${cmd}" ]]; then
-        continue
-      fi
+      [[ -z "${cmd}" ]] && continue
 
       if [[ "${NG_LANG}" == "en" ]]; then
         printf '\nExecuting on %s ...\n\n' "${node_name}"
@@ -756,14 +627,12 @@ ng_remote_execute() {
 
       local -a exec_ssh=()
       if [[ "${op_choice}" =~ ^[1-3]$ ]]; then
-        # Interactive mode for ServerHarbor operations (allocates PTY)
         if [[ "${use_sshpass}" -eq 1 ]]; then
           exec_ssh=(sshpass -e ssh "${ssh_opts_interactive[@]}" "${node_user}@${node_host}")
         else
           exec_ssh=(ssh "${ssh_opts_interactive[@]}" "${node_user}@${node_host}")
         fi
       else
-        # Non-interactive mode for custom commands
         if [[ "${use_sshpass}" -eq 1 ]]; then
           exec_ssh=(sshpass -e ssh "${ssh_opts[@]}" "${node_user}@${node_host}")
         else

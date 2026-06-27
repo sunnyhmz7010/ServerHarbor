@@ -330,7 +330,6 @@ migrate_online_data() {
   fi
 
   local has_data=0
-  [[ -f "${online_dir}/servers.json" ]] && has_data=1
   [[ -f "${online_dir}/serverharbor.conf" ]] && has_data=1
   [[ -d "${online_dir}/state" ]] && [[ -n "$(ls -A "${online_dir}/state" 2>/dev/null)" ]] && has_data=1
   [[ -d "${online_dir}/reports" ]] && [[ -n "$(ls -A "${online_dir}/reports" 2>/dev/null)" ]] && has_data=1
@@ -377,7 +376,7 @@ migrate_online_data() {
 
   mkdir -p "${DATA_ROOT}/state" "${DATA_ROOT}/reports" "${DATA_ROOT}/logs"
 
-  for conf_name in servers.json serverharbor.conf; do
+  for conf_name in serverharbor.conf; do
     if [[ -f "${online_dir}/${conf_name}" ]]; then
       cp -f "${online_dir}/${conf_name}" "${DATA_ROOT}/${conf_name}" 2>/dev/null || true
       printf '  ✓ %s\n' "${conf_name}"

@@ -16,9 +16,6 @@ state/*.state
 state/*.sha256
 state/*.bak
 
-# Runtime language config
-lang.conf
-
 # OS files
 .DS_Store
 Thumbs.db

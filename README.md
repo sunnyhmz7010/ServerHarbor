@@ -224,9 +224,9 @@ ServerHarbor/
 ├─ menu.sh                      # 交互式菜单入口与 CLI 模式
 ├─ common.sh                    # 共享变量、日志、配置加载、通用函数
 ├─ bootstrap.sh                 # 系统开荒（基础软件、Docker、网络调优）
-├─ nodes.sh                     # 节点管理（JSON 配置、SSH、探测、批量操作）
+├─ nodes.sh                     # 节点管理（配置、SSH、探测、批量操作）
 ├─ security.sh                  # 安全巡检（登录、Web 攻击、防火墙、完整性）
-├─ serverharbor.conf            # 默认配置文件
+├─ serverharbor.conf            # 配置文件（全局设置 + 节点数据）
 ├─ install.sh                   # 安装脚本
 ├─ run.sh                       # 在线运行脚本
 ├─ uninstall.sh                 # 卸载脚本

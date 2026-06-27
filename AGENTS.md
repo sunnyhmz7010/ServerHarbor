@@ -44,7 +44,7 @@ These rules are written as the shared baseline for this project family.
 - Any function that edits `/etc`, firewall rules, SSH settings, swap, or cron state must either require explicit user choice from the interactive menu or clearly document the side effect.
 - Prefer no-side-effect inspections before enforcement changes when checking security posture.
 - For peer synchronization, commit only operational state and non-sensitive reports. Do not commit private keys, host inventories with credentials, or confidential logs.
-- When passing user-controlled input to `jq`, always use `--arg` parameterization (e.g., `jq --arg name "$name" '.servers[] | select(.name == $name)'`). Never interpolate variables directly into jq filter strings.
+- When passing user-controlled input to shell commands, always use proper quoting and parameterization. Never interpolate variables directly into command strings.
 - Password input must use `read -rs` (silent mode) to prevent terminal echo.
 
 ### Dependency And Upgrade Rules
@@ -98,7 +98,7 @@ CLI modes: `--cron-probe`, `--cron-security`, `--cron-alerts`
 - Default config: `serverharbor.conf` (root)
 - Runtime data root: `${NG_DATA_ROOT}/` (flat, no config/ subdirectory)
 - Runtime config: `${NG_DATA_ROOT}/serverharbor.conf`
-- Runtime node config: `${NG_DATA_ROOT}/servers.json`
+- Runtime node config: embedded in `serverharbor.conf` (TSV between `__NODES__` markers)
 - Generated state: `${NG_DATA_ROOT}/state/`
 - Generated reports: `${NG_DATA_ROOT}/reports/`
 - Runtime logs: `${NG_DATA_ROOT}/logs/`
@@ -118,7 +118,8 @@ CLI modes: `--cron-probe`, `--cron-security`, `--cron-alerts`
 - This project is a Shell toolkit, not a full orchestration platform.
 - Do not introduce centralized service discovery, consensus, or automatic failover without explicit user request.
 - Keep the design lightweight and script-first.
-- Prefer configuration through plain text files. Default config is `serverharbor.conf` at repo root, runtime config is at `${NG_DATA_ROOT}/serverharbor.conf`.
+- Prefer configuration through a single `serverharbor.conf` file (KEY=VALUE settings + TSV node block).
+- Zero external dependencies beyond bash and standard Linux tools (grep, awk, sed, ssh, curl, tar).
 - Do not define config variables in `common.sh` or `serverharbor.conf` unless they are actively read by at least one function. Orphaned config variables (defined but never read) must be removed.
 
 ## Runtime Model
@@ -126,7 +127,7 @@ CLI modes: `--cron-probe`, `--cron-security`, `--cron-alerts`
 - `menu.sh` is the interactive user entry point.
 - Supported CLI entry points are `menu.sh --cron-probe`, `menu.sh --cron-security`, and `menu.sh --cron-alerts`.
 - Bootstrap and hardening functions may require root privileges.
-- Peer monitoring is file-driven through `${NG_DATA_ROOT}/servers.json`.
+- Peer monitoring is file-driven through the `__NODES__` TSV block in `${NG_DATA_ROOT}/serverharbor.conf`.
 - Integrity scanning is path-driven through `NG_WATCH_PATHS` in `${NG_DATA_ROOT}/serverharbor.conf`.
 - Managed code and mutable user data must stay decoupled. Installer updates may replace `/opt/serverharbor/app`, but must preserve user config and runtime data under `/opt/serverharbor/data`.
 - Before any installer package operation or filesystem write, the script must print the intended actions and require explicit user confirmation.
@@ -142,7 +143,7 @@ CLI modes: `--cron-probe`, `--cron-security`, `--cron-alerts`
 - The bootstrap menu `[6]` (data migration) is only visible in installed mode. It migrates data from the online directory to the installed directory.
 - After migration, the source directory is renamed to `~/.config/serverharbor.migrated` to prevent duplicate migration and signal that the data has been transferred.
 - If `.migrated` directory already exists, the migration function reports this and skips.
-- Both migration paths detect: `servers.json`, `serverharbor.conf`, `state/`, `reports/`, `logs/`.
+- Both migration paths detect: `serverharbor.conf`, `state/`, `reports/`, `logs/`.
 
 ## Development Commands
 
@@ -201,8 +202,8 @@ CLI modes: `--cron-probe`, `--cron-security`, `--cron-alerts`
 ### Subshell variable scoping with pipes
 
 - Pipes create subshells in Bash. Variables modified inside `while read` loops on the right side of a pipe are lost when the subshell exits.
-- Wrong: `jq ... | while read -r node; do ((count++)); done` — `count` is always 0 after the loop.
-- Right: `while read -r node; do ((count++)); done < <(jq ...)` — process substitution keeps the loop in the current shell.
+- Wrong: `cat file | while read -r line; do ((count++)); done` — `count` is always 0 after the loop.
+- Right: `while read -r line; do ((count++)); done < file` — input redirection keeps the loop in the current shell.
 - This applies to: success/failure counters, accumulated results, and any variable that must survive the loop.
 
 ### Echo vs printf for variable output
@@ -229,11 +230,12 @@ CLI modes: `--cron-probe`, `--cron-security`, `--cron-alerts`
 - Initial release
 - System bootstrap (base packages, Docker, network tuning)
 - Security audit (login stats, web attacks, firewall, integrity baseline, security score)
-- Node management (JSON config, SSH, batch commands, config sync, join command)
+- Node management (TSV config, SSH, batch commands, config sync, mutual trust, remote execute)
 - Interactive bilingual menu (Chinese/English)
 - CLI modes: --cron-probe, --cron-security, --cron-alerts
 - Install/uninstall scripts, online run mode
 - System alert threshold detection (CPU/Memory/Disk)
-- jq auto-installation in nodes.sh
 - Node selection for batch operations
 - Detailed beautified reports with sections and summaries
+- Single config file (serverharbor.conf) with TSV node block
+- Zero jq dependency (pure bash + grep/awk/sed)

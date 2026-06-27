@@ -25,7 +25,6 @@ NG_LOG_DIR="${NG_DATA_ROOT}/logs"
 NG_REPORT_DIR="${NG_DATA_ROOT}/reports"
 NG_STATE_DIR="${NG_DATA_ROOT}/state"
 NG_CONFIG_FILE="${NG_DATA_ROOT}/serverharbor.conf"
-NG_NODES_FILE="${NG_DATA_ROOT}/servers.json"
 NG_DEFAULT_CONFIG_DIR="${NG_PROJECT_ROOT}"
 NG_WATCH_PATHS="/etc /var/www /root"
 NG_COLOR_ENABLED=0
@@ -42,7 +41,6 @@ NG_C_PANEL_2=""
 
 ng_has_meaningful_data() {
   local dir="$1"
-  [[ -f "${dir}/servers.json" ]] && return 0
   [[ -f "${dir}/serverharbor.conf" ]] && return 0
   [[ -d "${dir}/state" ]] && [[ -n "$(ls -A "${dir}/state" 2>/dev/null)" ]] && return 0
   [[ -d "${dir}/reports" ]] && [[ -n "$(ls -A "${dir}/reports" 2>/dev/null)" ]] && return 0
@@ -59,7 +57,7 @@ ng_do_migration() {
 
   local copied=0
 
-  for conf_name in servers.json serverharbor.conf; do
+  for conf_name in serverharbor.conf; do
     if [[ -f "${source_dir}/${conf_name}" ]]; then
       if [[ -f "${target_dir}/${conf_name}" ]]; then
         if [[ "${NG_LANG}" == "en" ]]; then
@@ -509,6 +507,99 @@ ng_seed_default_configs() {
   fi
 }
 
+ng_get_nodes() {
+  if [[ ! -f "${NG_CONFIG_FILE}" ]]; then
+    return 0
+  fi
+  sed -n '/^__NODES__$/,/^__NODES__$/{ /^__NODES__$/d; p; }' "${NG_CONFIG_FILE}" 2>/dev/null || true
+}
+
+ng_add_node_to_file() {
+  local new_line="$1"
+  local tmp="${NG_CONFIG_FILE}.tmp"
+  if [[ ! -f "${NG_CONFIG_FILE}" ]]; then
+    printf '# ServerHarbor Configuration\n\n__NODES__\n%s\n__NODES__\n' "${new_line}" > "${NG_CONFIG_FILE}"
+    return 0
+  fi
+  local existing
+  existing=$(ng_get_nodes)
+  sed '/^__NODES__$/,$d' "${NG_CONFIG_FILE}" > "${tmp}"
+  {
+    cat "${tmp}"
+    printf '%s\n' "__NODES__"
+    if [[ -n "${existing}" ]]; then
+      printf '%s\n' "${existing}"
+    fi
+    printf '%s\n' "${new_line}"
+    printf '%s\n' "__NODES__"
+  } > "${NG_CONFIG_FILE}"
+  rm -f "${tmp}"
+}
+
+ng_remove_node_from_file() {
+  local name="$1"
+  if [[ ! -f "${NG_CONFIG_FILE}" ]]; then
+    return 0
+  fi
+  local tmp="${NG_CONFIG_FILE}.tmp"
+  local existing
+  existing=$(ng_get_nodes)
+  local filtered
+  filtered=$(printf '%s\n' "${existing}" | grep -v "^${name}	" || true)
+  sed '/^__NODES__$/,$d' "${NG_CONFIG_FILE}" > "${tmp}"
+  {
+    cat "${tmp}"
+    printf '%s\n' "__NODES__"
+    if [[ -n "${filtered}" ]]; then
+      printf '%s\n' "${filtered}"
+    fi
+    printf '%s\n' "__NODES__"
+  } > "${NG_CONFIG_FILE}"
+  rm -f "${tmp}"
+}
+
+ng_rename_node_in_file() {
+  local old_name="$1"
+  local new_name="$2"
+  if [[ ! -f "${NG_CONFIG_FILE}" ]]; then
+    return 0
+  fi
+  local tmp="${NG_CONFIG_FILE}.tmp"
+  local existing
+  existing=$(ng_get_nodes)
+  local updated
+  updated=$(printf '%s\n' "${existing}" | sed "s#^${old_name}	#${new_name}	#")
+  sed '/^__NODES__$/,$d' "${NG_CONFIG_FILE}" > "${tmp}"
+  {
+    cat "${tmp}"
+    printf '%s\n' "__NODES__"
+    if [[ -n "${updated}" ]]; then
+      printf '%s\n' "${updated}"
+    fi
+    printf '%s\n' "__NODES__"
+  } > "${NG_CONFIG_FILE}"
+  rm -f "${tmp}"
+}
+
+ng_read_peers() {
+  ng_get_nodes | while IFS=$'\t' read -r name host _rest; do
+    [[ -n "${name}" && "${name}" != "#"* ]] || continue
+    printf '%s,%s\n' "${name}" "${host}"
+  done
+}
+
+ng_peer_count() {
+  local count
+  count=$(ng_get_nodes | grep -c "	" 2>/dev/null || echo 0)
+  printf '%s' "${count}"
+}
+
+ng_total_node_count() {
+  local node_count
+  node_count="$(ng_peer_count)"
+  printf '%s\n' "$((node_count + 1))"
+}
+
 ng_press_enter() {
   ng_t press_enter
   ng_read_line _ || return 130
@@ -859,20 +950,6 @@ ng_install_base_packages() {
         ;;
     esac
   done
-}
-
-ng_peer_count() {
-  if [[ -f "${NG_NODES_FILE}" ]] && command -v jq >/dev/null 2>&1; then
-    jq '[.servers[] | select(.enabled != false)] | length' "${NG_NODES_FILE}" 2>/dev/null || echo 0
-  else
-    echo 0
-  fi
-}
-
-ng_total_node_count() {
-  local node_count
-  node_count="$(ng_peer_count)"
-  printf '%s\n' "$((node_count + 1))"
 }
 
 ng_timestamp() {

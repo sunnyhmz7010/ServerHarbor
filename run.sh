@@ -9,7 +9,7 @@ WORK_DIR="$(mktemp -d "${TMP_ROOT%/}/serverharbor-run-XXXXXX")"
 ARCHIVE_PATH="${WORK_DIR}/serverharbor-run.tar.gz"
 EXTRACT_DIR="${WORK_DIR}/extract"
 DATA_ROOT="${SERVERHARBOR_HOME:-${XDG_CONFIG_HOME:-${HOME}/.config}/serverharbor}"
-LANG_CONFIG_FILE="${DATA_ROOT}/lang.conf"
+CONFIG_FILE="${DATA_ROOT}/serverharbor.conf"
 LANGUAGE="${SERVERHARBOR_LANG:-}"
 REFRESH_EXIT_CODE=42
 
@@ -18,17 +18,24 @@ handle_preflight_interrupt() {
 }
 
 persist_language() {
-  mkdir -p "$(dirname "${LANG_CONFIG_FILE}")"
-  printf 'LANGUAGE="%s"\n' "${LANGUAGE}" > "${LANG_CONFIG_FILE}"
+  mkdir -p "${DATA_ROOT}"
+  if [[ -f "${CONFIG_FILE}" ]] && grep -q '^NG_LANG=' "${CONFIG_FILE}" 2>/dev/null; then
+    sed -i "s/^NG_LANG=.*/NG_LANG=\"${LANGUAGE}\"/" "${CONFIG_FILE}"
+  elif [[ -f "${CONFIG_FILE}" ]]; then
+    printf 'NG_LANG="%s"\n' "${LANGUAGE}" >> "${CONFIG_FILE}"
+  else
+    printf '# ServerHarbor Configuration\nNG_LANG="%s"\n' "${LANGUAGE}" > "${CONFIG_FILE}"
+  fi
 }
 
 select_language() {
   local choice
 
-  if [[ -z "${LANGUAGE}" && -f "${LANG_CONFIG_FILE}" ]]; then
-    if grep -qE '^LANGUAGE="(en|zh)"$' "${LANG_CONFIG_FILE}" 2>/dev/null; then
-      # shellcheck disable=SC1090
-      source "${LANG_CONFIG_FILE}"
+  if [[ -z "${LANGUAGE}" && -f "${CONFIG_FILE}" ]]; then
+    local conf_lang
+    conf_lang=$(grep '^NG_LANG=' "${CONFIG_FILE}" 2>/dev/null | head -1 | cut -d'"' -f2)
+    if [[ "${conf_lang}" == "en" || "${conf_lang}" == "zh" ]]; then
+      LANGUAGE="${conf_lang}"
     fi
   fi
 
