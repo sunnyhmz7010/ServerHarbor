@@ -2,9 +2,11 @@
 
 set -euo pipefail
 
+# 扫描认证日志中的失败登录记录，统计来源 IP TOP10
 ng_scan_auth_failures() {
   local auth_log=""
 
+  # 自动识别认证日志路径（Debian/Ubuntu vs CentOS/RHEL）
   if [[ -f /var/log/auth.log ]]; then
     auth_log="/var/log/auth.log"
   elif [[ -f /var/log/secure ]]; then
@@ -14,6 +16,7 @@ ng_scan_auth_failures() {
   local summary=""
   local total=0
   if [[ -n "${auth_log}" ]]; then
+    # 提取失败登录的来源 IP 并按次数排序
     summary="$(grep -Ei 'Failed password|authentication failure' "${auth_log}" 2>/dev/null \
       | grep -Eo '([0-9]{1,3}\.){3}[0-9]{1,3}' \
       | sort | uniq -c | sort -nr | head -10 || true)"
@@ -21,6 +24,7 @@ ng_scan_auth_failures() {
     total=$(echo "${total}" | tr -d '[:space:]')
   fi
 
+  # 输出报告
   if [[ "${NG_LANG}" == "en" ]]; then
     ng_report_header "🔍 Failed Login Statistics"
     ng_report_meta "Generated At" "$(ng_timestamp)"
@@ -52,6 +56,7 @@ ng_scan_auth_failures() {
     fi
   fi
 
+  # 输出摘要与建议
   ng_report_summary_start "$( [[ "${NG_LANG}" == "en" ]] && echo "Summary" || echo "摘要" )"
   ng_report_summary_kv "$([[ "${NG_LANG}" == "en" ]] && echo "Total failures:" || echo "失败总数:")" "${total}"
   if [[ "${total}" -gt 0 ]]; then
@@ -65,6 +70,7 @@ ng_scan_auth_failures() {
   ng_report_footer
 }
 
+# 扫描 nginx 访问日志中的可疑 Web 请求（扫描器、SQL注入、路径遍历等）
 ng_scan_web_attacks() {
   local access_log="/var/log/nginx/access.log"
   local summary=""
@@ -89,6 +95,7 @@ ng_scan_web_attacks() {
     ng_report_detail "$([[ "${NG_LANG}" == "en" ]] && echo "Patterns" || echo "检测模式")" "wp-admin, phpmyadmin, .env, SQL injection, path traversal"
     ng_report_separator
 
+    # 匹配常见攻击特征：wp-admin、phpmyadmin、.env、SQL注入、路径遍历
     summary="$(grep -Ei 'wp-admin|phpmyadmin|\.env|select.+from|union.+select|/etc/passwd|\.\./' "${access_log}" 2>/dev/null \
       | awk '{print $1}' | sort | uniq -c | sort -nr | head -10 || true)"
     total="$(grep -ciE 'wp-admin|phpmyadmin|\.env|select.+from|union.+select|/etc/passwd|\.\./' "${access_log}" 2>/dev/null || echo 0)"
@@ -108,6 +115,7 @@ ng_scan_web_attacks() {
     fi
   fi
 
+  # 输出摘要与建议
   ng_report_summary_start "$( [[ "${NG_LANG}" == "en" ]] && echo "Summary" || echo "摘要" )"
   ng_report_summary_kv "$([[ "${NG_LANG}" == "en" ]] && echo "Suspicious requests:" || echo "可疑请求:")" "${total}"
   if [[ "${total}" -gt 0 ]]; then
@@ -121,6 +129,7 @@ ng_scan_web_attacks() {
   ng_report_footer
 }
 
+# 显示防火墙状态摘要：自动检测 ufw / firewalld / iptables
 ng_firewall_summary() {
   if [[ "${NG_LANG}" == "en" ]]; then
     ng_report_header "🔥 Firewall Status"
@@ -138,6 +147,7 @@ ng_firewall_summary() {
   local status="inactive"
   local rule_count=0
 
+  # 依次检测 ufw、firewalld、iptables
   if command -v ufw >/dev/null 2>&1; then
     backend="ufw"
     local ufw_output
@@ -194,6 +204,7 @@ ng_firewall_summary() {
   ng_report_footer
 }
 
+# 基线选择器：列出已有基线，返回用户选中的基线文件路径
 ng_select_baseline() {
   local mode="${1:-single}"
   local baseline_count=0
@@ -224,6 +235,7 @@ ng_select_baseline() {
     printf '\n已有基线：\n' >&2
   fi
 
+  # 列出所有基线及其文件数和修改时间
   local idx=1
   for f in "${NG_STATE_DIR}"/integrity-*.sha256; do
     [[ -f "${f}" ]] || continue
@@ -270,6 +282,7 @@ ng_select_baseline() {
   return 1
 }
 
+# 创建文件完整性基线：对监控路径下所有文件计算 SHA256 哈希
 ng_integrity_create_baseline() {
   if [[ -z "${NG_WATCH_PATHS:-}" ]]; then
     if [[ "${NG_LANG}" == "en" ]]; then
@@ -294,6 +307,7 @@ ng_integrity_create_baseline() {
     ng_report_section_start "已有基线"
   fi
 
+  # 显示已有基线列表
   local has_existing=0
   for f in "${NG_STATE_DIR}"/integrity-*.sha256; do
     [[ -f "${f}" ]] || continue
@@ -314,6 +328,7 @@ ng_integrity_create_baseline() {
   ng_report_separator
   ng_report_detail "$([[ "${NG_LANG}" == "en" ]] && echo "Watch paths" || echo "监控路径")" "${NG_WATCH_PATHS}"
 
+  # 输入基线名称
   if [[ "${NG_LANG}" == "en" ]]; then
     printf '\n  Enter baseline name (Enter to overwrite "default"): '
   else
@@ -325,6 +340,7 @@ ng_integrity_create_baseline() {
   local baseline_file
   baseline_file="$(ng_get_baseline_file "${baseline_name}")"
 
+  # 若基线已存在，确认是否覆盖
   if [[ -f "${baseline_file}" ]]; then
     if [[ "${NG_LANG}" == "en" ]]; then
       printf '  Baseline "%s" already exists. Overwrite? [y/N]: ' "${baseline_name}"
@@ -345,6 +361,7 @@ ng_integrity_create_baseline() {
 
   ng_report_separator
 
+  # 遍历监控路径，计算文件哈希
   local tmp_baseline="${baseline_file}.tmp"
   : > "${tmp_baseline}"
   local total_files=0
@@ -383,6 +400,7 @@ ng_integrity_create_baseline() {
     fi
   done
 
+  # 原子性地替换基线文件
   mv -f "${tmp_baseline}" "${baseline_file}" 2>/dev/null || true
 
   ng_report_summary_start "$( [[ "${NG_LANG}" == "en" ]] && echo "Summary" || echo "摘要" )"
@@ -395,10 +413,12 @@ ng_integrity_create_baseline() {
   ng_log "INFO" "Integrity baseline '${baseline_name}' created: ${total_files} files indexed"
 }
 
+# 校验完整性：支持单个基线或全部基线校验
 ng_integrity_verify() {
   local baseline_file
   baseline_file="$(ng_select_baseline all)" || return 1
 
+  # 选择 "all" 时遍历所有基线逐个校验
   if [[ "${baseline_file}" == "all" ]]; then
     for f in "${NG_STATE_DIR}"/integrity-*.sha256; do
       [[ -f "${f}" ]] || continue
@@ -415,6 +435,7 @@ ng_integrity_verify() {
   ng_integrity_verify_single "${baseline_file}" "${bname}"
 }
 
+# 对单个基线执行完整性校验：逐文件比对 SHA256 哈希值
 ng_integrity_verify_single() {
   local baseline_file="$1"
   local baseline_name="$2"
@@ -440,6 +461,7 @@ ng_integrity_verify_single() {
   ng_report_detail "$([[ "${NG_LANG}" == "en" ]] && echo "File" || echo "文件")" "${baseline_file}"
   ng_report_separator
 
+  # 使用 sha256sum -c 校验每个文件
   while IFS= read -r line; do
     if [[ "${line}" == *"FAILED"* ]]; then
       printf '%s   %s %s\n' "$(ng_color "${NG_C_PANEL}" "║")" "$(ng_color "${NG_C_ERR}" "✗")" "${line}"
@@ -457,6 +479,7 @@ ng_integrity_verify_single() {
     fi
   done < <(cd / && sha256sum -c "${baseline_file}" 2>&1 || true)
 
+  # 输出校验结果摘要
   ng_report_summary_start "$( [[ "${NG_LANG}" == "en" ]] && echo "Summary" || echo "摘要" )"
   ng_report_summary_kv "$([[ "${NG_LANG}" == "en" ]] && echo "Baseline:" || echo "基线:")" "${baseline_name}"
   ng_report_summary_kv "$([[ "${NG_LANG}" == "en" ]] && echo "Checked files:" || echo "检查文件:")" "${total}"
@@ -476,6 +499,7 @@ ng_integrity_verify_single() {
   ng_report_footer
 }
 
+# 管理完整性监控路径：支持添加、删除、恢复默认
 ng_manage_watch_paths() {
   local choice
 
@@ -489,6 +513,7 @@ ng_manage_watch_paths() {
       printf '\n当前监控路径：\n'
     fi
 
+    # 显示当前监控路径列表
     local -a paths_array=()
     if [[ -n "${NG_WATCH_PATHS:-}" ]]; then
       local line_num=1
@@ -524,6 +549,7 @@ ng_manage_watch_paths() {
 
     case "${choice}" in
       1)
+        # 添加监控路径
         if [[ "${NG_LANG}" == "en" ]]; then
           printf 'Enter path(s) to monitor (space-separated, e.g. /etc /opt /var/www): '
         else
@@ -559,6 +585,7 @@ ng_manage_watch_paths() {
             fi
           done
 
+          # 持久化到配置文件
           NG_WATCH_PATHS=$(echo "${NG_WATCH_PATHS}" | sed 's/^ *//')
           if grep -q '^NG_WATCH_PATHS=' "${NG_CONFIG_FILE}" 2>/dev/null; then
             awk -v val="NG_WATCH_PATHS=\"${NG_WATCH_PATHS}\"" '/^NG_WATCH_PATHS=/{print val;next}{print}' "${NG_CONFIG_FILE}" > "${NG_CONFIG_FILE}.tmp" && mv -f "${NG_CONFIG_FILE}.tmp" "${NG_CONFIG_FILE}"
@@ -574,6 +601,7 @@ ng_manage_watch_paths() {
         fi
         ;;
       2)
+        # 删除监控路径
         if [[ "${#paths_array[@]}" -eq 0 ]]; then
           if [[ "${NG_LANG}" == "en" ]]; then
             printf 'No paths to remove.\n'
@@ -592,6 +620,7 @@ ng_manage_watch_paths() {
           if [[ -n "${remove_input}" ]]; then
             local -a to_remove=()
 
+            # 支持 "a" 全部删除或按编号删除
             if [[ "${remove_input}" == "a" ]] || [[ "${remove_input}" == "A" ]]; then
               for ((i=0; i<${#paths_array[@]}; i++)); do
                 to_remove+=("${paths_array[$i]}")
@@ -612,6 +641,7 @@ ng_manage_watch_paths() {
                 printf '  ✓ %s\n' "${rp}"
               done
 
+              # 更新配置文件
               if grep -q '^NG_WATCH_PATHS=' "${NG_CONFIG_FILE}" 2>/dev/null; then
                 awk -v val="NG_WATCH_PATHS=\"${NG_WATCH_PATHS}\"" '/^NG_WATCH_PATHS=/{print val;next}{print}' "${NG_CONFIG_FILE}" > "${NG_CONFIG_FILE}.tmp" && mv -f "${NG_CONFIG_FILE}.tmp" "${NG_CONFIG_FILE}"
               fi
@@ -626,6 +656,7 @@ ng_manage_watch_paths() {
         fi
         ;;
       3)
+        # 恢复默认监控路径
         NG_WATCH_PATHS="/etc /var/www /root"
         if grep -q '^NG_WATCH_PATHS=' "${NG_CONFIG_FILE}" 2>/dev/null; then
           awk -v val="NG_WATCH_PATHS=\"${NG_WATCH_PATHS}\"" '/^NG_WATCH_PATHS=/{print val;next}{print}' "${NG_CONFIG_FILE}" > "${NG_CONFIG_FILE}.tmp" && mv -f "${NG_CONFIG_FILE}.tmp" "${NG_CONFIG_FILE}"
@@ -646,6 +677,7 @@ ng_manage_watch_paths() {
   done
 }
 
+# 计算系统安全评分：检查 SSH 配置、防火墙、认证日志等
 ng_security_score() {
   local score=100
   local issues=()
@@ -666,6 +698,7 @@ ng_security_score() {
   printf '%s   ✓ %s\n' "$(ng_color "${NG_C_PANEL}" "║")" "$( [[ "${NG_LANG}" == "en" ]] && echo "Firewall status" || echo "防火墙状态" )"
   printf '%s   ✓ %s\n' "$(ng_color "${NG_C_PANEL}" "║")" "$( [[ "${NG_LANG}" == "en" ]] && echo "Auth log analysis" || echo "认证日志分析" )"
 
+  # 检查项 1：是否以 root 身份运行
   if [[ "${EUID}" -eq 0 ]]; then
     score=$((score - 10))
     if [[ "${NG_LANG}" == "en" ]]; then
@@ -675,6 +708,7 @@ ng_security_score() {
     fi
   fi
 
+  # 检查项 2：SSH 是否禁用密码认证
   if ! grep -qE '^[^#]*PasswordAuthentication no' /etc/ssh/sshd_config 2>/dev/null; then
     score=$((score - 15))
     if [[ "${NG_LANG}" == "en" ]]; then
@@ -684,6 +718,7 @@ ng_security_score() {
     fi
   fi
 
+  # 检查项 3：是否允许 root 直接登录
   if grep -qE '^[^#]*PermitRootLogin yes' /etc/ssh/sshd_config 2>/dev/null; then
     score=$((score - 20))
     if [[ "${NG_LANG}" == "en" ]]; then
@@ -693,6 +728,7 @@ ng_security_score() {
     fi
   fi
 
+  # 检查项 4：是否安装了防火墙
   if ! command -v ufw >/dev/null 2>&1 && ! command -v firewall-cmd >/dev/null 2>&1 && ! command -v iptables >/dev/null 2>&1; then
     score=$((score - 25))
     if [[ "${NG_LANG}" == "en" ]]; then
@@ -702,6 +738,7 @@ ng_security_score() {
     fi
   fi
 
+  # 检查项 5：是否有大量失败登录尝试
   local auth_log=""
   [[ -f /var/log/auth.log ]] && auth_log="/var/log/auth.log"
   [[ -f /var/log/secure ]] && auth_log="/var/log/secure"
@@ -721,10 +758,12 @@ ng_security_score() {
     fi
   fi
 
+  # 确保评分不低于 0
   if [[ "${score}" -lt 0 ]]; then
     score=0
   fi
 
+  # 根据评分确定风险等级
   local risk_level risk_color
   if [[ "${score}" -ge 90 ]]; then
     risk_level="$( [[ "${NG_LANG}" == "en" ]] && echo "Low" || echo "低" )"
@@ -740,10 +779,12 @@ ng_security_score() {
     risk_color="${NG_C_ERR}"
   fi
 
+  # 输出评分结果
   ng_report_summary_start "$( [[ "${NG_LANG}" == "en" ]] && echo "Score" || echo "评分" )"
   ng_report_summary_kv "$([[ "${NG_LANG}" == "en" ]] && echo "Score:" || echo "评分:")" "${score}/100"
   ng_report_summary_kv "$([[ "${NG_LANG}" == "en" ]] && echo "Risk level:" || echo "风险等级:")" "$(ng_color "${risk_color}" "${risk_level}")"
 
+  # 输出发现的问题和改进建议
   if [[ "${#issues[@]}" -gt 0 ]]; then
     ng_report_separator
     printf '%s %s\n' "$(ng_color "${NG_C_PANEL}" "║")" "$(ng_color "${NG_C_WARN}" "  $( [[ "${NG_LANG}" == "en" ]] && echo "Issues found:" || echo "发现问题：" )")"
@@ -777,6 +818,7 @@ ng_security_score() {
   ng_report_footer
 }
 
+# 安全卫士主菜单
 ng_security_menu() {
   local choice
 
@@ -814,6 +856,7 @@ ng_security_menu() {
 
     case "${choice}" in
       1)
+        # 生成完整安全报告（依次执行四项检测）
         ng_scan_auth_failures
         ng_press_enter || return 130
         ng_scan_web_attacks
@@ -837,6 +880,7 @@ ng_security_menu() {
   done
 }
 
+# 安全报告入口（供 CLI --cron-security 调用）
 ng_security_report() {
   ng_scan_auth_failures
   ng_scan_web_attacks
