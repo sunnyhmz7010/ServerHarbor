@@ -219,7 +219,7 @@ ng_node_manage() {
       n=$(printf '%s' "${line}" | cut -f1)
       h=$(printf '%s' "${line}" | cut -f2)
       p=$(printf '%s' "${line}" | cut -f3)
-      e=$(printf '%s' "${line}" | cut -f6)
+      e=$(printf '%s' "${line}" | cut -f7)
       [[ -z "${n}" || "${n}" == "#"* ]] && continue
       [[ "${e}" == "true" ]] || continue
       local node_status
