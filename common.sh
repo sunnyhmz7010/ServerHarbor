@@ -29,7 +29,7 @@ NG_REPORT_DIR="${NG_DATA_ROOT}/reports"            # 报告目录
 NG_STATE_DIR="${NG_DATA_ROOT}/state"               # 状态/基线目录
 NG_CONFIG_FILE="${NG_DATA_ROOT}/serverharbor.conf" # 配置文件路径
 NG_DEFAULT_CONFIG_DIR="${NG_PROJECT_ROOT}"         # 默认配置模板所在目录
-NG_WATCH_PATHS="/etc /var/www /root"               # 完整性监控默认路径
+NG_WATCH_PATHS=""               # 完整性监控默认路径
 
 # --- 终端颜色变量（默认为空，由 ng_init_theme 填充） ---
 NG_COLOR_ENABLED=0
