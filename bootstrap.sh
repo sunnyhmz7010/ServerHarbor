@@ -2,6 +2,7 @@
 
 set -euo pipefail
 
+# 第三方脚本执行前的安全确认提示
 ng_external_script_prompt() {
   local title="$1"
   local project_url="$2"
@@ -24,6 +25,7 @@ ng_external_script_prompt() {
   fi
 }
 
+# 执行第三方脚本快捷入口：显示确认提示，用户同意后下载并执行
 ng_run_external_script_shortcut() {
   local title="$1"
   local project_url="$2"
@@ -47,10 +49,12 @@ ng_run_external_script_shortcut() {
   bash <(curl -q -fsSL "${script_url}?$(date +%s)")
 }
 
+# 生成系统开荒报告：采集 CPU、内存、磁盘、网络等信息并格式化输出
 ng_bootstrap_report() {
   local cpu_arch cpu_model cpu_cores cpu_freq cpu_usage load mem_info swap_info disk_info
   local ipv4_addr isp_info dns_info tcp_algo queue_algo tz_info uptime_info
 
+  # 采集各项系统信息
   cpu_arch=$(uname -m 2>/dev/null || echo "unknown")
   cpu_model=$(awk -F': +' '/model name/ {print $2; exit}' /proc/cpuinfo 2>/dev/null || lscpu 2>/dev/null | awk -F': +' '/Model name:/ {print $2; exit}' || echo "unknown")
   cpu_cores=$(nproc 2>/dev/null || echo "?")
@@ -68,6 +72,7 @@ ng_bootstrap_report() {
   tz_info=$(timedatectl 2>/dev/null | awk -F': ' '/Time zone:/ {print $2}' || date +%Z 2>/dev/null || echo "unknown")
   uptime_info=$(awk -F. '{d=int($1/86400);h=int(($1%86400)/3600);m=int(($1%3600)/60);if(d>0)printf "%dd ";if(h>0)printf "%dh ";printf "%dm\n", m}' /proc/uptime 2>/dev/null || uptime -p 2>/dev/null || echo "unknown")
 
+  # 根据语言输出报告
   if [[ "${NG_LANG}" == "en" ]]; then
     ng_report_header "🚀 ServerHarbor Bootstrap Report"
     ng_report_meta "Generated At" "$(ng_timestamp)"
@@ -134,6 +139,7 @@ ng_bootstrap_report() {
     ng_report_detail "当前时间" "$(date '+%Y-%m-%d %H:%M:%S')"
   fi
 
+  # 计算综合状态：CPU < 80%、内存 < 80%、磁盘 < 90% 为正常
   local status_text status_color
   local cpu_num mem_num disk_num
   cpu_num=$(echo "${cpu_usage}" | cut -d'.' -f1)
@@ -157,6 +163,7 @@ ng_bootstrap_report() {
   ng_report_footer
 }
 
+# 系统开荒菜单：提供基础软件安装、Docker 安装、BBR 调优、报告生成等功能
 ng_bootstrap_menu() {
   local choice
 
@@ -195,6 +202,7 @@ ng_bootstrap_menu() {
     case "${choice}" in
       1) ng_require_root && ng_install_base_packages ;;
       2)
+        # 安装 Docker：根据服务器所在地区自动选择镜像源
         if ng_prompt_yes_no "$( [[ "${NG_LANG}" == "en" ]] && printf 'Install Docker?' || printf '是否安装 Docker？' )"; then
           local country
           country=$(curl -s ipinfo.io/country 2>/dev/null || echo "unknown")
@@ -206,19 +214,21 @@ ng_bootstrap_menu() {
         fi
         ;;
       3)
+        # bbrv3-lite：轻量级 BBR v3 / XanMod 内核 TCP 调优
         ng_run_external_script_shortcut \
           "bbrv3-lite" \
           "https://github.com/ike-sh/bbrv3-lite" \
           "https://raw.githubusercontent.com/ike-sh/bbrv3-lite/main/net-tcp-tune.sh"
         ;;
       4)
+        # vps-tcp-tune：BBR3+FQ 一键 VPS 网络优化
         ng_run_external_script_shortcut \
           "vps-tcp-tune" \
           "https://github.com/Eric86777/vps-tcp-tune" \
           "https://raw.githubusercontent.com/Eric86777/vps-tcp-tune/refs/heads/main/net-tcp-tune.sh"
         ;;
       5) ng_bootstrap_report ;;
-      6) ng_trigger_migration ;;
+      6) ng_trigger_migration ;;  # 数据迁移（仅安装模式可用）
       0) return 0 ;;
       *) ng_t invalid_option ;;
     esac
