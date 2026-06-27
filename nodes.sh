@@ -124,13 +124,11 @@ ng_setup_mutual_nodes() {
   local my_alias="${NG_HOSTNAME}"
 
   local remote_conf
-  remote_conf=$("${run_ssh[@]}" 'bash -c '\''
-    if [ -f /opt/serverharbor/.serverharbor-install ]; then
-      echo /opt/serverharbor/data/serverharbor.conf
-    else
-      echo "${XDG_CONFIG_HOME:-$HOME/.config}/serverharbor/serverharbor.conf"
-    fi
-  '\'' 2>/dev/null || echo "")
+  remote_conf=$(printf '%s\n' 'if [ -f /opt/serverharbor/.serverharbor-install ]; then
+echo /opt/serverharbor/data/serverharbor.conf
+else
+echo "${XDG_CONFIG_HOME:-$HOME/.config}/serverharbor/serverharbor.conf"
+fi' | "${run_ssh[@]}" bash -s 2>/dev/null || echo "")
   remote_conf=$(echo "${remote_conf}" | tr -d '\r\n')
   if [[ -z "${remote_conf}" ]]; then
     remote_conf="~/.config/serverharbor/serverharbor.conf"
@@ -138,15 +136,11 @@ ng_setup_mutual_nodes() {
 
   local remote_line="${my_alias}	${my_ip}	${ssh_port}	${ssh_user}	${auth_method}	${key}	true"
 
-  local remote_script
-  remote_script=$(cat <<'REMOTE_EOF'
-read -r remote_conf
-read -r my_alias
-read -r my_ip
-read -r ssh_port
-read -r ssh_user
-read -r auth_method
-read -r ssh_key
+  local remote_output
+  remote_output=$({
+    printf '%s\n' "${remote_conf}" "${my_alias}" "${my_ip}" "${ssh_port}" \
+      "${ssh_user}" "${auth_method}" "${key}"
+    cat <<'REMOTE_EOF'
 mkdir -p "$(dirname "${remote_conf}")"
 [[ -f "${remote_conf}" ]] || printf '# ServerHarbor Configuration\n\n__NODES__\n__NODES__\n' > "${remote_conf}"
 if grep -qF "${my_alias}	" "${remote_conf}" 2>/dev/null; then echo EXISTS; else
@@ -162,13 +156,7 @@ if grep -qF "${my_alias}	" "${remote_conf}" 2>/dev/null; then echo EXISTS; else
   echo OK
 fi
 REMOTE_EOF
-)
-
-  local remote_output
-  remote_output=$(printf '%s\n%s\n%s\n%s\n%s\n%s\n%s\n' \
-    "${remote_conf}" "${my_alias}" "${my_ip}" "${ssh_port}" \
-    "${ssh_user}" "${auth_method}" "${key}" \
-    | "${run_ssh[@]}" "bash -c '$(printf '%s' "${remote_script}")'" 2>&1) || true
+  } | "${run_ssh[@]}" bash -s 2>&1) || true
 
   if echo "${remote_output}" | grep -q "^OK"; then
     if [[ "${NG_LANG}" == "en" ]]; then printf '  ✓ Self registered on remote\n'; else printf '  ✓ 本机已注册到对方服务器\n'; fi
