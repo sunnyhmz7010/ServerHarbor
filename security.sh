@@ -657,7 +657,7 @@ ng_manage_watch_paths() {
         ;;
       3)
         # 恢复默认监控路径
-        NG_WATCH_PATHS="/etc /var/www /root"
+        NG_WATCH_PATHS=""
         if grep -q '^NG_WATCH_PATHS=' "${NG_CONFIG_FILE}" 2>/dev/null; then
           awk -v val="NG_WATCH_PATHS=\"${NG_WATCH_PATHS}\"" '/^NG_WATCH_PATHS=/{print val;next}{print}' "${NG_CONFIG_FILE}" > "${NG_CONFIG_FILE}.tmp" && mv -f "${NG_CONFIG_FILE}.tmp" "${NG_CONFIG_FILE}"
         else
