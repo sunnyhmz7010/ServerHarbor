@@ -572,7 +572,7 @@ ng_rename_node_in_file() {
   local existing
   existing=$(ng_get_nodes)
   local updated
-  updated=$(printf '%s\n' "${existing}" | sed "s#^${old_name}	#${new_name}	#")
+  updated=$(printf '%s\n' "${existing}" | awk -F'\t' -v old="${old_name}" -v new="${new_name}" 'BEGIN{OFS="\t"} $1==old{$1=new} {print}')
   sed '/^__NODES__$/,$d' "${NG_CONFIG_FILE}" > "${tmp}"
   {
     cat "${tmp}"

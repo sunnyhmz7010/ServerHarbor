@@ -173,7 +173,7 @@ REMOTE_EOF
   fi
 
   local ok_a=0 ok_b=0
-  if "${run_ssh[@]}" "ping -c 1 -W 2 ${my_ip}" >/dev/null 2>&1; then
+  if "${run_ssh[@]}" "ping -c 1 -W 2 '${my_ip}'" >/dev/null 2>&1; then
     if [[ "${NG_LANG}" == "en" ]]; then printf '  ✓ Remote → Local: Connected\n'; else printf '  ✓ 对方 → 本机：连通\n'; fi
     ok_a=1
   else
@@ -392,7 +392,7 @@ ng_node_manage() {
 
         if [[ -n "${alias}" && -n "${host}" ]]; then
           local existing
-          existing=$(ng_get_nodes | grep "^${alias}	" || true)
+          existing=$(ng_get_nodes | awk -F'\t' -v name="${alias}" '$1==name' || true)
           if [[ -n "${existing}" ]]; then
             if [[ "${NG_LANG}" == "en" ]]; then
               printf 'Node "%s" already exists.\n' "${alias}"

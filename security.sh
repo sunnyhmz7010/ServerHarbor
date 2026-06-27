@@ -608,7 +608,7 @@ ng_manage_watch_paths() {
 
             if [[ "${#to_remove[@]}" -gt 0 ]]; then
               for rp in "${to_remove[@]}"; do
-                NG_WATCH_PATHS=$(echo " ${NG_WATCH_PATHS} " | sed "s| ${rp} | |g" | sed 's/^ *//;s/ *$//')
+                NG_WATCH_PATHS=$(printf '%s\n' ${NG_WATCH_PATHS} | awk -v remove="${rp}" '$0 != remove' | paste -sd' ' | sed 's/^ *//;s/ *$//')
                 printf '  ✓ %s\n' "${rp}"
               done
 
