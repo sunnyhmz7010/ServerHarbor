@@ -15,10 +15,12 @@ ARCHIVE_PATH="${TMP_ROOT%/}/serverharbor-install.tar.gz"
 EXTRACT_DIR="${TMP_ROOT%/}/serverharbor-install-extract"
 LANGUAGE="${SERVERHARBOR_LANG:-}"
 
+# 中断信号处理（语言选择前）
 handle_preflight_interrupt() {
   exit 130
 }
 
+# 语言选择：交互式让用户选择中文或英文
 select_language() {
   local choice
 
@@ -41,6 +43,7 @@ select_language() {
   esac
 }
 
+# 多语言文本翻译函数
 t() {
   local key="$1"
   case "${LANGUAGE}" in
@@ -123,10 +126,12 @@ t() {
   esac
 }
 
+# 中断信号处理
 handle_interrupt() {
   exit 130
 }
 
+# 检查 root 权限
 require_root() {
   if [[ "${EUID}" -ne 0 ]]; then
     t need_root >&2
@@ -134,6 +139,7 @@ require_root() {
   fi
 }
 
+# 检查必要命令
 require_cmd() {
   local cmd
   for cmd in "$@"; do
@@ -144,6 +150,7 @@ require_cmd() {
   done
 }
 
+# 确认提示
 confirm() {
   local answer
   t continue
@@ -153,6 +160,7 @@ confirm() {
   [[ -z "${answer}" || "${answer}" =~ ^[Yy]([Ee][Ss])?$ ]]
 }
 
+# 检测系统包管理器
 detect_pkg_manager() {
   if command -v apt-get >/dev/null 2>&1; then
     echo "apt"
@@ -165,6 +173,7 @@ detect_pkg_manager() {
   fi
 }
 
+# 打印安装操作计划
 print_install_plan() {
   local pkg_manager dep_note
 
@@ -183,6 +192,7 @@ print_install_plan() {
   t plan_dep "${dep_note}"
 }
 
+# 确保 curl 和 tar 已安装
 ensure_fetch_tools_installed() {
   local manager
 
@@ -217,10 +227,12 @@ ensure_fetch_tools_installed() {
   fi
 }
 
+# 检测是否为 ServerHarbor 管理的安装
 is_managed_install() {
   [[ -f "${MANIFEST_PATH}" ]]
 }
 
+# 校验现有安装根目录的合法性
 validate_existing_install_root() {
   if [[ -e "${INSTALL_ROOT}" && ! -d "${INSTALL_ROOT}" ]]; then
     t refuse_not_dir >&2
@@ -234,6 +246,7 @@ validate_existing_install_root() {
   fi
 }
 
+# 校验现有启动器命令的合法性（防止覆盖非 ServerHarbor 管理的命令）
 validate_existing_launcher() {
   if [[ -e "${BIN_PATH}" ]]; then
     if [[ -L "${BIN_PATH}" ]]; then
@@ -250,6 +263,7 @@ validate_existing_launcher() {
   fi
 }
 
+# 写入安装清单文件（记录安装信息，用于后续更新和卸载）
 write_manifest() {
   cat > "${MANIFEST_PATH}" <<EOF
 PROJECT_NAME=${PROJECT_NAME}
@@ -264,6 +278,7 @@ EOF
   chmod 600 "${MANIFEST_PATH}"
 }
 
+# 下载并解压源码压缩包
 download_and_extract() {
   local extracted_root
 
@@ -274,6 +289,7 @@ download_and_extract() {
   curl -fsSL "${ARCHIVE_URL}" -o "${ARCHIVE_PATH}"
   tar -xzf "${ARCHIVE_PATH}" -C "${EXTRACT_DIR}"
 
+  # 验证解压结果
   extracted_root="$(find "${EXTRACT_DIR}" -mindepth 1 -maxdepth 1 -type d | head -n 1)"
   if [[ -z "${extracted_root}" || ! -f "${extracted_root}/menu.sh" ]]; then
     t bad_archive >&2
@@ -283,6 +299,7 @@ download_and_extract() {
   printf '%s\n' "${extracted_root}"
 }
 
+# 计算目录树哈希值（用于判断源码是否有更新）
 calc_tree_hash() {
   local target_dir="$1"
 
@@ -293,6 +310,7 @@ calc_tree_hash() {
     | awk '{print $1}'
 }
 
+# 比较两个目录的源码树是否一致
 is_same_source_tree() {
   local extracted_root="$1"
   local current_hash
@@ -305,6 +323,7 @@ is_same_source_tree() {
   [[ -n "${current_hash}" && "${current_hash}" == "${extracted_hash}" ]]
 }
 
+# 写入启动器脚本（/usr/local/bin/shr）
 install_launcher() {
   cat > "${BIN_PATH}" <<EOF
 #!/usr/bin/env bash
@@ -315,6 +334,7 @@ EOF
   chmod 755 "${BIN_PATH}"
 }
 
+# 初始化数据目录结构和默认配置
 seed_data_root() {
   mkdir -p "${DATA_ROOT}/logs" "${DATA_ROOT}/reports" "${DATA_ROOT}/state"
   if [[ ! -f "${DATA_ROOT}/serverharbor.conf" ]]; then
@@ -322,6 +342,7 @@ seed_data_root() {
   fi
 }
 
+# 检测并迁移在线版数据到安装版
 migrate_online_data() {
   local online_dir="${XDG_CONFIG_HOME:-${HOME}/.config}/serverharbor"
 
@@ -329,6 +350,7 @@ migrate_online_data() {
     return 0
   fi
 
+  # 检测在线版目录是否有有效数据
   local has_data=0
   [[ -f "${online_dir}/serverharbor.conf" ]] && has_data=1
   [[ -d "${online_dir}/state" ]] && [[ -n "$(ls -A "${online_dir}/state" 2>/dev/null)" ]] && has_data=1
@@ -339,6 +361,7 @@ migrate_online_data() {
     return 0
   fi
 
+  # 询问用户是否迁移
   printf '\n'
   if [[ "${LANGUAGE}" == "en" ]]; then
     printf 'Online version data detected at:\n'
@@ -368,6 +391,7 @@ migrate_online_data() {
     return 0
   fi
 
+  # 执行数据迁移
   if [[ "${LANGUAGE}" == "en" ]]; then
     printf '\nMigrating data...\n'
   else
@@ -401,10 +425,11 @@ migrate_online_data() {
   fi
 }
 
+# --- 文件锁机制，防止并发安装/卸载 ---
 LOCK_FILE="/var/lock/serverharbor.lock"
 
 acquire_lock() {
-  # Create lock file atomically to avoid symlink attacks
+  # 原子性创建锁文件，防止符号链接攻击
   install -m 600 /dev/null "${LOCK_FILE}" 2>/dev/null || true
   exec {lock_fd}>"${LOCK_FILE}"
   if ! flock -n "${lock_fd}" 2>/dev/null; then
@@ -417,18 +442,20 @@ acquire_lock() {
   fi
 }
 
+# 退出时清理临时文件
 cleanup() {
   rm -f "${ARCHIVE_PATH}"
   rm -rf "${EXTRACT_DIR}"
   rm -f "${LOCK_FILE}"
 }
 
+# 安装主流程
 main() {
   local already_installed=0
   local extracted_root=""
   local update_mode=0
 
-  # Set up EXIT trap for cleanup
+  # 设置退出清理钩子
   trap cleanup EXIT
 
   if [[ "${1:-}" == "--update" ]]; then
@@ -445,6 +472,7 @@ main() {
   validate_existing_install_root
   validate_existing_launcher
 
+  # 已安装且非更新模式时，直接启动菜单
   if is_managed_install && [[ "${update_mode}" -eq 0 ]]; then
     exec bash "${APP_ROOT}/menu.sh" < /dev/tty
   fi
@@ -453,6 +481,7 @@ main() {
     already_installed=1
   fi
 
+  # 显示安装计划并确认
   print_install_plan
   if ! confirm; then
     exit 130
@@ -460,8 +489,10 @@ main() {
 
   ensure_fetch_tools_installed
 
+  # 下载并解压源码
   extracted_root="$(download_and_extract)"
 
+  # 检测源码是否有变化（更新模式下跳过无变化的更新）
   if [[ "${already_installed}" -eq 1 ]] && is_same_source_tree "${extracted_root}"; then
     rm -f "${ARCHIVE_PATH}"
     rm -rf "${EXTRACT_DIR}"
@@ -469,8 +500,8 @@ main() {
     exit 0
   fi
 
+  # 安装源码到目标目录
   mkdir -p "$(dirname "${BIN_PATH}")"
-  # Defensive check before rm -rf
   if [[ -n "${APP_ROOT}" && -d "${APP_ROOT}" ]]; then
     rm -rf "${APP_ROOT}"
   fi
@@ -478,6 +509,7 @@ main() {
   cp -R "${extracted_root}" "${APP_ROOT}"
   chmod +x "${APP_ROOT}/menu.sh" "${APP_ROOT}/run.sh" "${APP_ROOT}/install.sh" "${APP_ROOT}/uninstall.sh"
   seed_data_root
+  # 首次安装时尝试迁移在线版数据
   if [[ "${already_installed}" -eq 0 ]]; then
     migrate_online_data
   fi
