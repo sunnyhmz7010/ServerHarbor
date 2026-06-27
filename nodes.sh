@@ -2,6 +2,7 @@
 
 set -euo pipefail
 
+# 检测节点连通状态：先 ping 再检测 SSH 端口
 ng_check_node_status() {
   local host="$1"
   local port="${2:-22}"
@@ -17,12 +18,14 @@ ng_check_node_status() {
   fi
 }
 
+# 建立双向互信：选择一个节点，在对方服务器上注册本机信息，并验证双向连通性
 ng_setup_mutual_nodes() {
   if ! [[ -f "${NG_CONFIG_FILE}" ]]; then
     if [[ "${NG_LANG}" == "en" ]]; then printf 'No config found. Add a node first.\n'; else printf '未找到配置，请先添加节点。\n'; fi
     return 0
   fi
 
+  # 读取已启用的节点列表
   local -a node_lines=()
   while IFS= read -r line; do
     line=$(printf '%s' "${line}" | tr -d '\r')
@@ -34,6 +37,7 @@ ng_setup_mutual_nodes() {
     return 0
   fi
 
+  # 列出可用节点供用户选择
   if [[ "${NG_LANG}" == "en" ]]; then printf '\nSelect a node for mutual trust:\n'; else printf '\n选择要建立互信的节点：\n'; fi
   local ni=1
   local -a existing_names=()
@@ -74,11 +78,13 @@ ng_setup_mutual_nodes() {
 
   [[ "${node_sel}" == "0" ]] && return 0
 
+  # 校验用户选择
   if [[ -z "${node_sel}" ]] || ! [[ "${node_sel}" =~ ^[0-9]+$ ]] || [[ "${node_sel}" -lt 1 ]] || [[ "${node_sel}" -ge "${ni}" ]]; then
     if [[ "${NG_LANG}" == "en" ]]; then printf 'Invalid selection.\n'; else printf '无效选择。\n'; fi
     return 0
   fi
 
+  # 获取选中节点的连接信息
   local sel_name="${existing_names[$((node_sel-1))]}"
   local remote_ip="${existing_hosts[$((node_sel-1))]}"
   local ssh_port="${existing_ports[$((node_sel-1))]}"
@@ -86,6 +92,7 @@ ng_setup_mutual_nodes() {
   local auth_method="${existing_auths[$((node_sel-1))]}"
   local key="${existing_keys[$((node_sel-1))]}"
 
+  # 构建 SSH 连接参数
   local -a ssh_opts=(-o ConnectTimeout=5 -o StrictHostKeyChecking=accept-new -p "${ssh_port}")
   local use_sshpass=0
 
@@ -103,6 +110,7 @@ ng_setup_mutual_nodes() {
     run_ssh=(ssh "${ssh_opts[@]}" "${ssh_user}@${remote_ip}")
   fi
 
+  # 步骤 1/3：测试 SSH 连接
   if [[ "${NG_LANG}" == "en" ]]; then
     printf '\n[1/3] Testing SSH to %s ...\n' "${remote_ip}"
   else
@@ -114,6 +122,7 @@ ng_setup_mutual_nodes() {
   fi
   if [[ "${NG_LANG}" == "en" ]]; then printf '  ✓ SSH connected\n'; else printf '  ✓ SSH 连接成功\n'; fi
 
+  # 步骤 2/3：在对方服务器上注册本机信息
   if [[ "${NG_LANG}" == "en" ]]; then
     printf '[2/3] Registering self on remote server ...\n'
   else
@@ -123,6 +132,7 @@ ng_setup_mutual_nodes() {
   my_ip=$(hostname -I 2>/dev/null | awk '{print $1}' || hostname)
   local my_alias="${NG_HOSTNAME}"
 
+  # 获取对方服务器的配置文件路径
   local remote_conf
   remote_conf=$(printf '%s\n' 'if [ -f /opt/serverharbor/.serverharbor-install ]; then
 echo /opt/serverharbor/data/serverharbor.conf
@@ -136,6 +146,7 @@ fi' | "${run_ssh[@]}" bash -s 2>/dev/null || echo "")
 
   local remote_line="${my_alias}	${my_ip}	${ssh_port}	${ssh_user}	${auth_method}	${key}	true"
 
+  # 在对方服务器上执行注册脚本
   local remote_output
   remote_output=$({
     printf '%s\n' "${remote_conf}" "${my_alias}" "${my_ip}" "${ssh_port}" \
@@ -166,6 +177,7 @@ REMOTE_EOF
     if [[ "${NG_LANG}" == "en" ]]; then printf '  ✗ Failed to register on remote\n'; else printf '  ✗ 在对方服务器注册失败\n'; fi
   fi
 
+  # 步骤 3/3：验证双向连通性
   if [[ "${NG_LANG}" == "en" ]]; then
     printf '[3/3] Verifying bidirectional connectivity ...\n'
   else
@@ -187,6 +199,7 @@ REMOTE_EOF
     if [[ "${NG_LANG}" == "en" ]]; then printf '  ✗ Local → Remote: Unreachable\n'; else printf '  ✗ 本机 → 对方：不可达\n'; fi
   fi
 
+  # 输出互信建立结果
   if [[ "${ok_a}" -eq 1 ]] && [[ "${ok_b}" -eq 1 ]]; then
     if [[ "${NG_LANG}" == "en" ]]; then
       printf '\n✓ Mutual trust established!\n'
@@ -204,6 +217,7 @@ REMOTE_EOF
   fi
 }
 
+# 节点管理界面：列出所有节点，支持添加、编辑名称、删除
 ng_node_manage() {
   local choice
 
@@ -221,6 +235,7 @@ ng_node_manage() {
     local -a node_ports=()
     local idx=1
 
+    # 列出已启用的节点及其状态
     local -a node_lines=()
     while IFS= read -r line; do
       line=$(printf '%s' "${line}" | tr -d '\r')
@@ -275,6 +290,7 @@ ng_node_manage() {
       0) return 0 ;;
 
       a|A)
+        # 添加新节点
         if [[ "${NG_LANG}" == "en" ]]; then
           printf '\n⚠️  Registration only records node info locally.\n'
           printf '   No software is installed or modified on the remote server.\n\n'
@@ -314,6 +330,7 @@ ng_node_manage() {
         ng_read_line port || return 130
         port="${port:-22}"
 
+        # 选择认证方式
         if [[ "${NG_LANG}" == "en" ]]; then
           printf 'Authentication method:\n'
           printf '  [1] SSH key (default)\n'
@@ -330,6 +347,7 @@ ng_node_manage() {
 
         case "${auth_choice}" in
           2)
+            # 密码认证
             auth="password"
             if [[ "${NG_LANG}" == "en" ]]; then
               printf 'Enter password: '
@@ -340,6 +358,7 @@ ng_node_manage() {
             printf '\n'
             ;;
           *)
+            # SSH 密钥认证：自动扫描可用密钥
             auth="key"
             local -a available_keys=()
             for kf in ~/.ssh/id_ed25519 ~/.ssh/id_rsa ~/.ssh/id_ecdsa ~/.ssh/id_dsa; do
@@ -363,6 +382,7 @@ ng_node_manage() {
                 printf '使用 SSH 密钥：%s\n' "${key}"
               fi
             else
+              # 多个密钥时让用户选择
               if [[ "${NG_LANG}" == "en" ]]; then
                 printf 'Available SSH keys:\n'
               else
@@ -391,6 +411,7 @@ ng_node_manage() {
         esac
 
         if [[ -n "${alias}" && -n "${host}" ]]; then
+          # 检查节点是否已存在
           local existing
           existing=$(ng_get_nodes | awk -F'\t' -v name="${alias}" '$1==name' || true)
           if [[ -n "${existing}" ]]; then
@@ -400,6 +421,7 @@ ng_node_manage() {
               printf '节点 "%s" 已存在。\n' "${alias}"
             fi
           else
+            # 测试 SSH 连接
             if [[ "${NG_LANG}" == "en" ]]; then
               printf '\nTesting SSH %s@%s:%s ...\n' "${user}" "${host}" "${port}"
             else
@@ -443,6 +465,7 @@ ng_node_manage() {
         ;;
 
       *)
+        # 编辑或删除已有节点
         if [[ "${choice}" =~ ^[0-9]+$ ]] && [[ "${choice}" -ge 1 ]] && [[ "${choice}" -lt "${idx}" ]]; then
           local target_name="${node_names[$((choice-1))]}"
           local target_host="${node_hosts[$((choice-1))]}"
@@ -467,6 +490,7 @@ ng_node_manage() {
 
           case "${action}" in
             e|E)
+              # 重命名节点
               if [[ "${NG_LANG}" == "en" ]]; then
                 printf 'New name (current: %s): ' "${target_name}"
               else
@@ -484,6 +508,7 @@ ng_node_manage() {
               fi
               ;;
             d|D)
+              # 删除节点（需确认）
               if [[ "${NG_LANG}" == "en" ]]; then
                 printf 'Remove node "%s"? [y/N]: ' "${target_name}"
               else
@@ -512,6 +537,7 @@ ng_node_manage() {
   done
 }
 
+# 远程执行：在选定节点上执行命令或预设操作（运行/安装 ServerHarbor）
 ng_remote_execute() {
   local -a node_lines=()
   while IFS= read -r line; do
@@ -527,6 +553,7 @@ ng_remote_execute() {
   export TERM=xterm
 
   while true; do
+    # 列出可用节点
     if [[ "${NG_LANG}" == "en" ]]; then printf '\nSelect target node:\n'; else printf '\n选择目标节点：\n'; fi
     local idx=1
     local -a node_names=()
@@ -572,6 +599,7 @@ ng_remote_execute() {
       continue
     fi
 
+    # 获取选中节点的连接信息
     local node_name="${node_names[$((sel-1))]}"
     local node_host="${node_hosts[$((sel-1))]}"
     local node_port="${node_ports[$((sel-1))]}"
@@ -579,6 +607,7 @@ ng_remote_execute() {
     local node_auth="${node_auths[$((sel-1))]}"
     local node_key="${node_keys[$((sel-1))]}"
 
+    # 构建 SSH 连接参数
     local -a ssh_opts=(-o ConnectTimeout=10 -o StrictHostKeyChecking=accept-new -p "${node_port}")
     local -a ssh_opts_interactive=(-t -o ConnectTimeout=10 -o StrictHostKeyChecking=accept-new -p "${node_port}")
     local use_sshpass=0
@@ -591,6 +620,7 @@ ng_remote_execute() {
       ssh_opts_interactive+=(-i "${node_key}")
     fi
 
+    # 操作选择循环
     while true; do
       if [[ "${NG_LANG}" == "en" ]]; then
         printf '\nRemote execute on %s (%s):\n\n' "${node_name}" "${node_host}"
@@ -617,17 +647,22 @@ ng_remote_execute() {
 
       local cmd=""
 
+      # 根据选择构建远程命令
       case "${op_choice}" in
         1)
+          # 运行在线版：通过 curl 下载 run.sh 并执行
           cmd="bash <(curl -q -fsSL 'https://raw.githubusercontent.com/sunnyhmz7010/ServerHarbor/main/run.sh?$(date +%s)')"
           ;;
         2)
+          # 安装 ServerHarbor
           cmd="curl -q -fsSL 'https://raw.githubusercontent.com/sunnyhmz7010/ServerHarbor/main/install.sh?$(date +%s)' | sudo bash"
           ;;
         3)
+          # 运行已安装的版本
           cmd="shr"
           ;;
         4)
+          # 自定义命令
           if [[ "${NG_LANG}" == "en" ]]; then printf 'Enter command: '; else printf '输入命令：'; fi
           ng_read_line cmd || return 130
           ;;
@@ -645,8 +680,10 @@ ng_remote_execute() {
         printf '\n正在 %s 上执行 ...\n\n' "${node_name}"
       fi
 
+      # 构建 SSH 执行命令
       local -a exec_ssh=()
       if [[ "${op_choice}" =~ ^[1-3]$ ]]; then
+        # 交互式命令使用 -t 分配伪终端
         if [[ "${use_sshpass}" -eq 1 ]]; then
           exec_ssh=(sshpass -e ssh "${ssh_opts_interactive[@]}" "${node_user}@${node_host}")
         else
@@ -660,6 +697,7 @@ ng_remote_execute() {
         fi
       fi
 
+      # 执行远程命令
       if [[ "${op_choice}" =~ ^[1-3]$ ]]; then
         "${exec_ssh[@]}" "bash -c '${cmd}'"
       else
@@ -687,6 +725,7 @@ ng_remote_execute() {
   done
 }
 
+# 节点管理主菜单
 ng_node_menu() {
   local choice
 
@@ -722,6 +761,7 @@ ng_node_menu() {
   done
 }
 
+# 探测所有已配置节点的连通状态，生成探测报告
 ng_probe_all_peers() {
   local -a node_lines=()
   while IFS= read -r line; do
@@ -734,6 +774,7 @@ ng_probe_all_peers() {
     return 0
   fi
 
+  # 输出报告头
   if [[ "${NG_LANG}" == "en" ]]; then
     ng_report_header "🛰 Node Probe Report"
     ng_report_meta "Generated At" "$(ng_timestamp)"
@@ -750,6 +791,7 @@ ng_probe_all_peers() {
   local reachable=0
   local unreachable=0
 
+  # 逐个检测节点状态
   for line in "${node_lines[@]}"; do
     local n h p e
     n=$(printf '%s' "${line}" | cut -f1)
@@ -770,6 +812,7 @@ ng_probe_all_peers() {
     fi
   done
 
+  # 输出摘要统计
   ng_report_summary_start "$( [[ "${NG_LANG}" == "en" ]] && echo "Summary" || echo "摘要" )"
   ng_report_summary_kv "$([[ "${NG_LANG}" == "en" ]] && echo "Total:" || echo "总计:")" "${total}"
   ng_report_summary_kv "$([[ "${NG_LANG}" == "en" ]] && echo "Reachable:" || echo "可达:")" "${reachable}"
