@@ -224,7 +224,7 @@ shr
 ```text
 ServerHarbor/
 ├─ menu.sh                      # 交互式菜单入口与 CLI 模式
-├─ common.sh                    # 共享变量、日志、配置加载、通用函数
+├─ common.sh                    # 共享变量、日志函数、配置加载、UI渲染、数据迁移等通用函数
 ├─ bootstrap.sh                 # 系统开荒（基础软件、Docker、网络调优）
 ├─ nodes.sh                     # 节点管理（配置、SSH、探测、批量操作）
 ├─ security.sh                  # 安全巡检（登录、Web 攻击、防火墙、完整性）
