@@ -511,7 +511,9 @@ ng_get_nodes() {
   if [[ ! -f "${NG_CONFIG_FILE}" ]]; then
     return 0
   fi
-  sed -n '/^__NODES__$/,/^__NODES__$/{ /^__NODES__$/d; p; }' "${NG_CONFIG_FILE}" 2>/dev/null || true
+  if grep -q '^__NODES__$' "${NG_CONFIG_FILE}" 2>/dev/null; then
+    sed -n '/^__NODES__$/,/^__NODES__$/{ /^__NODES__$/d; p; }' "${NG_CONFIG_FILE}" 2>/dev/null || true
+  fi
 }
 
 ng_add_node_to_file() {
@@ -521,6 +523,12 @@ ng_add_node_to_file() {
     printf '# ServerHarbor Configuration\n\n__NODES__\n%s\n__NODES__\n' "${new_line}" > "${NG_CONFIG_FILE}"
     return 0
   fi
+
+  if ! grep -q '^__NODES__$' "${NG_CONFIG_FILE}" 2>/dev/null; then
+    printf '\n__NODES__\n%s\n__NODES__\n' "${new_line}" >> "${NG_CONFIG_FILE}"
+    return 0
+  fi
+
   local existing
   existing=$(ng_get_nodes)
   sed '/^__NODES__$/,$d' "${NG_CONFIG_FILE}" > "${tmp}"
@@ -589,8 +597,12 @@ ng_read_peers() {
 }
 
 ng_peer_count() {
-  local count
-  count=$(ng_get_nodes | grep -c "	" 2>/dev/null || true)
+  local count=0
+  local nodes_output
+  nodes_output=$(ng_get_nodes)
+  if [[ -n "${nodes_output}" ]]; then
+    count=$(printf '%s\n' "${nodes_output}" | grep -c "	" 2>/dev/null || echo 0)
+  fi
   count=$(echo "${count}" | tr -d '[:space:]')
   : "${count:=0}"
   printf '%s' "${count}"
