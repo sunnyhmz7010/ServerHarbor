@@ -11,12 +11,14 @@ EXTRACT_DIR="${WORK_DIR}/extract"
 DATA_ROOT="${SERVERHARBOR_HOME:-${XDG_CONFIG_HOME:-${HOME}/.config}/serverharbor}"
 CONFIG_FILE="${DATA_ROOT}/serverharbor.conf"
 LANGUAGE="${SERVERHARBOR_LANG:-}"
-REFRESH_EXIT_CODE=42
+REFRESH_EXIT_CODE=42  # 特殊退出码，用于触发刷新
 
+# 中断信号处理
 handle_preflight_interrupt() {
   exit 130
 }
 
+# 将语言设置持久化到配置文件
 persist_language() {
   mkdir -p "${DATA_ROOT}"
   if [[ -f "${CONFIG_FILE}" ]] && grep -q '^NG_LANG=' "${CONFIG_FILE}" 2>/dev/null; then
@@ -28,9 +30,11 @@ persist_language() {
   fi
 }
 
+# 语言选择：优先读取环境变量，其次读取配置文件，最后交互式选择
 select_language() {
   local choice
 
+  # 尝试从配置文件读取已保存的语言设置
   if [[ -z "${LANGUAGE}" && -f "${CONFIG_FILE}" ]]; then
     local conf_lang
     conf_lang=$(grep '^NG_LANG=' "${CONFIG_FILE}" 2>/dev/null | head -1 | cut -d'"' -f2)
@@ -43,6 +47,7 @@ select_language() {
     return 0
   fi
 
+  # 交互式语言选择
   printf 'Choose language / 选择语言:\n'
   printf '  1. 中文\n'
   printf '  2. English\n'
@@ -60,6 +65,7 @@ select_language() {
   persist_language
 }
 
+# 多语言文本翻译函数
 t() {
   local key="$1"
   case "${LANGUAGE}" in
@@ -110,16 +116,19 @@ t() {
   esac
 }
 
+# 中断信号处理
 handle_interrupt() {
   exit 130
 }
 
+# 退出时清理临时目录
 cleanup() {
   rm -rf "${WORK_DIR}"
 }
 
 trap cleanup EXIT INT TERM
 
+# 检查必要命令是否存在
 require_cmd() {
   local cmd
   for cmd in "$@"; do
@@ -130,6 +139,7 @@ require_cmd() {
   done
 }
 
+# 确认提示
 confirm() {
   local answer
   t continue
@@ -139,6 +149,7 @@ confirm() {
   [[ -z "${answer}" || "${answer}" =~ ^[Yy]([Ee][Ss])?$ ]]
 }
 
+# 检测系统包管理器
 detect_pkg_manager() {
   if command -v apt-get >/dev/null 2>&1; then
     echo "apt"
@@ -151,6 +162,7 @@ detect_pkg_manager() {
   fi
 }
 
+# 打印在线运行的操作计划
 print_run_plan() {
   local pkg_manager dep_note
 
@@ -166,12 +178,14 @@ print_run_plan() {
   t plan_download
   t plan_data
   t plan_cleanup
+  # 以 root 身份运行时可以自动安装依赖
   if [[ "${EUID}" -eq 0 ]] && { ! command -v curl >/dev/null 2>&1 || ! command -v tar >/dev/null 2>&1; }; then
     t plan_dep_install "${pkg_manager}"
   else
     t plan_dep_status "${dep_note}"
   fi
 
+  # 提示安装版与在线版数据独立
   if [[ -f "/opt/serverharbor/.serverharbor-install" ]]; then
     if [[ "${LANGUAGE}" == "en" ]]; then
       printf '\n  ⚠ ServerHarbor is installed. Installed data: /opt/serverharbor/data\n'
@@ -183,6 +197,7 @@ print_run_plan() {
   fi
 }
 
+# 确保 curl 和 tar 已安装（需要 root 权限时自动安装）
 ensure_fetch_tools_installed() {
   local manager
 
@@ -217,6 +232,7 @@ ensure_fetch_tools_installed() {
   esac
 }
 
+# 下载并解压源码压缩包，返回解压后的根目录路径
 extract_repo() {
   local extracted_root
 
@@ -231,6 +247,7 @@ extract_repo() {
   printf '%s\n' "${extracted_root}"
 }
 
+# 主流程
 main() {
   local extracted_root
   local menu_exit_code=0
@@ -238,7 +255,7 @@ main() {
 
   trap handle_preflight_interrupt INT
   
-  # Skip language selection and confirmation if this is a refresh
+  # 刷新模式下跳过语言选择和确认步骤
   if [[ "${SERVERHARBOR_REFRESHING:-}" != "1" ]]; then
     select_language || exit $?
     persist_language
@@ -255,23 +272,29 @@ main() {
   
   ensure_fetch_tools_installed
 
+  # 下载最新源码
   t fetching
   extracted_root="$(extract_repo)"
   chmod +x "${extracted_root}/menu.sh"
+
+  # 运行菜单程序，传入所有参数
   menu_exit_code=0
   set +e
   SERVERHARBOR_HOME="${DATA_ROOT}" SERVERHARBOR_LANG="${LANGUAGE}" SERVERHARBOR_RUNTIME="online" SERVERHARBOR_REFRESH_EXIT_CODE="${REFRESH_EXIT_CODE}" bash "${extracted_root}/menu.sh" "$@"
   menu_exit_code=$?
   set -e
 
+  # 检测是否需要刷新（退出码为 42）
   if [[ "${menu_exit_code}" -eq "${REFRESH_EXIT_CODE}" ]]; then
     refresh_requested=1
   fi
 
+  # 刷新重试机制：重新下载最新源码并运行
   if [[ "${refresh_requested}" -eq 1 ]]; then
     local max_retries="${SERVERHARBOR_MAX_REFRESH_RETRIES:-3}"
     local current_retry="${SERVERHARBOR_REFRESH_RETRY:-0}"
 
+    # 防止无限刷新循环
     if [[ "${current_retry}" -ge "${max_retries}" ]]; then
       if [[ "${LANGUAGE}" == "en" ]]; then
         printf 'Maximum refresh retries (%d) reached. Aborting.\n' "${max_retries}" >&2
@@ -281,6 +304,7 @@ main() {
       exit 1
     fi
 
+    # 重新下载 run.sh 并用 exec 替换当前进程
     export SERVERHARBOR_REFRESHING=1
     export SERVERHARBOR_REFRESH_RETRY=$((current_retry + 1))
     local refresh_script="${TMP_ROOT%/}/serverharbor-refresh-$$.sh"
@@ -289,6 +313,7 @@ main() {
     exec bash "${refresh_script}" "$@"
   fi
 
+  # 退出后询问是否删除持久化数据目录
   if [[ -d "${DATA_ROOT}" ]]; then
     local answer
     if [[ "${LANGUAGE}" == "en" ]]; then
