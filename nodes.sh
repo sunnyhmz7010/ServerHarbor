@@ -305,10 +305,12 @@ ng_node_manage() {
           printf 'Authentication method:\n'
           printf '  [1] SSH key (default)\n'
           printf '  [2] Password\n'
+          printf 'Select: '
         else
           printf '认证方式：\n'
           printf '  [1] SSH 密钥（默认）\n'
           printf '  [2] 密码\n'
+          printf '选择：'
         fi
         local auth_choice
         ng_read_line auth_choice || return 130
