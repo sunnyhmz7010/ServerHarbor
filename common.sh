@@ -590,7 +590,9 @@ ng_read_peers() {
 
 ng_peer_count() {
   local count
-  count=$(ng_get_nodes | grep -c "	" 2>/dev/null || echo 0)
+  count=$(ng_get_nodes | grep -c "	" 2>/dev/null || true)
+  count=$(echo "${count}" | tr -d '[:space:]')
+  : "${count:=0}"
   printf '%s' "${count}"
 }
 
