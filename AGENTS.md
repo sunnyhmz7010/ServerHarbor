@@ -1,182 +1,159 @@
 # AGENTS.md
 
-## Repository-Specific Rules
+## 项目概况
 
-This repository is `ServerHarbor`, a Bash-based Linux multi-server operations toolkit.
+ServerHarbor 是一个基于 Bash 的 Linux 多服务器运维工具箱，面向运维学习者和管理员，提供轻量级的服务器初始化、分布式健康检查和安全巡检能力。
 
-### Menu Structure (as of v1.0.0)
+- 语言：`Bash`
+- 平台：`Linux`
+- 传输：`ssh`、`curl`、`tar`
+- 仓库：`https://github.com/sunnyhmz7010/ServerHarbor`
 
-Main menu:
-- `[1]` System bootstrap — base packages, Docker, network tuning, system status, report, data migration
-- `[2]` Security — security report, failed logins, web requests, firewall, integrity baseline/verify, watch paths, security score
-- `[3]` Node management — node list, mutual trust setup, remote execution
-- `[4]` Update
-- `[5]` Uninstall (installed mode only)
-- `[0]` Exit
+### 入口文件
 
-CLI modes: `--cron-probe`, `--cron-security`, `--cron-alerts`
+| 文件 | 用途 |
+|------|------|
+| `menu.sh` | 交互式主入口 |
+| `run.sh` | 一键在线运行 |
+| `install.sh` / `uninstall.sh` | 全局安装与卸载 |
+| `common.sh` | 共享函数库 |
+| `bootstrap.sh` | 系统初始化 |
+| `security.sh` | 安全巡检 |
+| `nodes.sh` | 节点管理 |
+| `serverharbor.conf` | 默认配置（根目录） |
 
-## Project Summary
+### 运行时路径
 
-- Product goal: provide a lightweight Shell toolkit for new-server bootstrap, decentralized peer health checks, and security inspection with integrity verification.
-- Main audience: Linux operations learners and administrators who want a practical Shell automation project.
-- Runtime target: Linux servers with Bash, common networking tools, and optional systemd.
+| 路径 | 说明 |
+|------|------|
+| `${NG_DATA_ROOT}/` | 运行时数据根目录（扁平结构） |
+| `${NG_DATA_ROOT}/serverharbor.conf` | 运行时配置 |
+| `${NG_DATA_ROOT}/state/` | 生成的状态文件 |
+| `${NG_DATA_ROOT}/reports/` | 生成的报告 |
+| `${NG_DATA_ROOT}/logs/` | 运行日志 |
+| `/opt/serverharbor/app` | 安装模式代码目录 |
+| `/opt/serverharbor/data` | 安装模式数据目录 |
 
-## Tech Stack
+## 菜单结构
 
-- Language: `Bash`
-- Target platform: `Linux`
-- VCS host: `GitHub`
-- Transport: `ssh`, `curl`, `tar`
+主菜单（v1.0.0）：
 
-## Important Paths
+- `[1]` 系统初始化 — 基础包、Docker、网络调优、系统状态、报告、数据迁移
+- `[2]` 安全审计 — 安全报告、失败登录、Web 请求、防火墙、完整性基线/校验、监控路径、安全评分
+- `[3]` 节点管理 — 节点列表、互信配置、远程执行
+- `[4]` 更新
+- `[5]` 卸载（仅安装模式）
+- `[0]` 退出
 
-- Interactive entry point: `menu.sh`
-- One-command runner: `run.sh`
-- Installer and remover: `install.sh`, `uninstall.sh`
-- Shared helpers: `common.sh`
-- Functional scripts: `bootstrap.sh`, `nodes.sh`, `security.sh`
-- Default config: `serverharbor.conf` (root)
-- Runtime data root: `${NG_DATA_ROOT}/` (flat, no config/ subdirectory)
-- Runtime config: `${NG_DATA_ROOT}/serverharbor.conf`
-- Runtime node config: embedded in `serverharbor.conf` (TSV between `__NODES__` markers)
-- Generated state: `${NG_DATA_ROOT}/state/`
-- Generated reports: `${NG_DATA_ROOT}/reports/`
-- Runtime logs: `${NG_DATA_ROOT}/logs/`
-- Installed code root: `/opt/serverharbor/app`
-- Installed mutable data root: `/opt/serverharbor/data`
+CLI 模式：`--cron-probe`、`--cron-security`、`--cron-alerts`
 
-## README Rules
+## 架构约束
 
-- Keep the README concise and user-facing.
-- Document the Linux target clearly; do not imply Windows-native execution support beyond editing or Git management.
-- Keep examples copyable and based on plain `bash` commands.
-- If bootstrap, security, probe, or peer config behavior changes, update the README in the same task.
-- README emoji convention: `✨` for motivation, `🚀` for core capabilities, `⚡` for quick start, `📖` for usage, `🧠` for details, `🧱` for tech stack, `🗂️` for project structure, `👨‍💻` for local development, `🔐` for security, `📄` for license, `⭐` for star history. Sub-headers under each section also use emoji prefixes.
+- 定位是 Shell 工具箱，不是完整编排平台；不引入集中式服务发现、共识或自动故障转移
+- 零外部依赖，仅依赖 bash 和标准 Linux 工具（grep、awk、sed、ssh、curl、tar）
+- 配置统一通过 `serverharbor.conf` 管理（KEY=VALUE + TSV 节点块）
+- 禁止定义未被任何函数读取的配置变量，孤立变量必须删除
+- 代码与用户数据解耦：安装更新可替换 `/opt/serverharbor/app`，但必须保留 `/opt/serverharbor/data`
 
-## Product Constraints
+### 在线模式与安装模式的数据隔离
 
-- This project is a Shell toolkit, not a full orchestration platform.
-- Do not introduce centralized service discovery, consensus, or automatic failover without explicit user request.
-- Keep the design lightweight and script-first.
-- Prefer configuration through a single `serverharbor.conf` file (KEY=VALUE settings + TSV node block).
-- Zero external dependencies beyond bash and standard Linux tools (grep, awk, sed, ssh, curl, tar).
-- Do not define config variables in `common.sh` or `serverharbor.conf` unless they are actively read by at least one function. Orphaned config variables (defined but never read) must be removed.
+- 在线模式（`curl | bash`）始终使用 `~/.config/serverharbor`，即使已安装
+- 安装模式（`shr`）始终使用 `/opt/serverharbor/data`
+- 两个数据目录完全独立，互不影响
+- 安装器自动检测并提供在线数据迁移；迁移后源目录重命名为 `~/.config/serverharbor.migrated`
+- 菜单 `[6]`（数据迁移）仅在安装模式下可见
 
-## Runtime Model
+### 运行时模型
 
-- `menu.sh` is the interactive user entry point.
-- Supported CLI entry points are `menu.sh --cron-probe`, `menu.sh --cron-security`, and `menu.sh --cron-alerts`.
-- Bootstrap and hardening functions may require root privileges.
-- Peer monitoring is file-driven through the `__NODES__` TSV block in `${NG_DATA_ROOT}/serverharbor.conf`.
-- Integrity scanning is path-driven through `NG_WATCH_PATHS` in `${NG_DATA_ROOT}/serverharbor.conf`.
-- Managed code and mutable user data must stay decoupled. Installer updates may replace `/opt/serverharbor/app`, but must preserve user config and runtime data under `/opt/serverharbor/data`.
-- Before any installer package operation or filesystem write, the script must print the intended actions and require explicit user confirmation.
-- Generated reports and state files may be retained locally for inspection, but logs should stay ignored unless requested otherwise.
+- Bootstrap 和加固函数可能需要 root 权限
+- 节点监控通过 `__NODES__` TSV 块驱动
+- 完整性扫描通过 `NG_WATCH_PATHS` 驱动
+- 安装器执行任何文件系统操作前必须打印意图并要求用户确认
 
-### Data Isolation Between Online and Installed Modes
+## 开发规范
 
-- Online mode (`curl | bash`) always uses `~/.config/serverharbor` as its data directory, even if ServerHarbor is installed. This is enforced by checking `SERVERHARBOR_RUNTIME=online` before checking the install manifest.
-- Installed mode (`shr`) always uses `/opt/serverharbor/data` as its data directory.
-- The two data directories are completely independent. Changes in one mode do not affect the other.
-- When running online mode and an install is detected, the user is warned that the data stores are separate.
-- The installer (`install.sh`) automatically detects and offers to migrate online data during fresh install.
-- The bootstrap menu `[6]` (data migration) is only visible in installed mode. It migrates data from the online directory to the installed directory.
-- After migration, the source directory is renamed to `~/.config/serverharbor.migrated` to prevent duplicate migration and signal that the data has been transferred.
-- If `.migrated` directory already exists, the migration function reports this and skips.
-- Both migration paths detect: `serverharbor.conf`, `state/`, `reports/`, `logs/`.
+### 命令速查
 
-## Development Commands
+```bash
+# 语法检查
+bash -n menu.sh common.sh bootstrap.sh security.sh nodes.sh install.sh run.sh uninstall.sh
 
-- Syntax check:
-  - `bash -n menu.sh common.sh bootstrap.sh security.sh nodes.sh install.sh run.sh uninstall.sh`
-- One-command online run:
-  - `bash <(curl -q -fsSL "https://raw.githubusercontent.com/sunnyhmz7010/ServerHarbor/main/run.sh?$(date +%s)")`
-- Install globally:
-  - `curl -q -fsSL "https://raw.githubusercontent.com/sunnyhmz7010/ServerHarbor/main/install.sh?$(date +%s)" | sudo bash`
-- Installed shortcut command:
-  - `shr`
-- Search:
-  - `rg "pattern" .`
-- Interactive run:
-  - `./menu.sh`
-- GitHub remote:
-  - `https://github.com/sunnyhmz7010/ServerHarbor`
+# 一键在线运行
+bash <(curl -q -fsSL "https://raw.githubusercontent.com/sunnyhmz7010/ServerHarbor/main/run.sh?$(date +%s)")
 
-## Codebase Notes
+# 全局安装
+curl -q -fsSL "https://raw.githubusercontent.com/sunnyhmz7010/ServerHarbor/main/install.sh?$(date +%s)" | sudo bash
 
-- Keep module boundaries simple: one operational area per file in root directory.
-- Shared defaults and helper functions belong in `common.sh`.
-- Node management functions belong in `nodes.sh`.
-- Prefer a flat directory structure. Avoid second-level subdirectories unless the volume of files genuinely requires grouping. Merge related shell functions into the same file rather than splitting across many small files.
-- Every function must have a corresponding menu entry or CLI entry point. If a function is not reachable from any menu option or CLI flag, it is dead code and must be deleted. Do not keep "potential" or "future" functions without a wired entry point.
-- Do not add features that are not reflected in the menu UI. If a feature is removed from the menu, its implementation function must also be removed.
-- README and menu descriptions must exactly match the actual available features. Never advertise a feature in docs or UI text that does not exist in the code.
-- `ng_security_report()` must not duplicate logic from individual scan functions. Keep report generation DRY by reusing existing helpers.
-- `install.sh` and `run.sh` are standalone entry-point scripts (not sourced from `menu.sh`). Some code duplication across them is architecturally unavoidable (e.g., `detect_pkg_manager`, `require_cmd`, `acquire_lock`). Do not try to consolidate these into `common.sh`.
-- Favor readable shell over dense one-liners when a function has side effects.
-- Keep comments sparse and only where the logic is not obvious.
-- Use ASCII in scripts unless a file already needs non-ASCII content.
+# 交互运行
+./menu.sh
 
-## Shell Portability Lessons
+# 搜索
+rg "pattern" .
+```
 
-### Piped stdin (`curl | bash`)
+### 代码组织
 
-- When a script runs via `curl ... | bash`, stdin is the pipe, not the terminal.
-- All `read` calls must use `read ... < /dev/tty` to read user input.
-- Apply this to: language selection, confirmations, and any interactive prompt.
-- If stdin is not a terminal and `/dev/tty` is unavailable, fall back to sensible defaults.
+- 一个业务领域一个文件，保持扁平目录结构
+- 共享函数和默认值放 `common.sh`，节点管理放 `nodes.sh`
+- 每个函数必须有对应的菜单或 CLI 入口；无入口即死代码，必须删除
+- 不添加菜单 UI 未体现的功能；菜单移除功能时同步删除实现
+- `install.sh` 和 `run.sh` 是独立入口脚本，与 `menu.sh` 的代码重复是架构允许的，不要试图合并到 `common.sh`
+- `ng_security_report()` 不得重复各扫描函数的逻辑，复用现有助手函数保持 DRY
 
-### `set -e` and exit code capture
+### 编码风格
 
-- `set -e` causes the parent script to exit when a child script returns non-zero.
-- To capture a child's exit code, use: `child; code=$?` with `set +e` around it, or `child || code=$?`.
-- Do not rely on `if ! child; then code=$?` inside `set -e` — it may still exit.
+- 有副作用的函数优先可读性，避免密集单行写法
+- 注释仅在逻辑不明显处添加
+- 脚本默认使用 ASCII，除非文件已需要非 ASCII 内容
+- README 和菜单描述必须与实际功能完全一致
 
-### `exec` and process substitution
+## Shell 移植性经验
 
-- When a script runs via `bash <(curl ...)`, `$0` is a temporary fd like `/dev/fd/63`.
-- `exec bash "$0"` will fail after the fd closes.
-- To restart, download the script to a temp file first, then `exec bash "${tmpfile}"`.
-- The run.sh refresh mechanism uses this pattern: download to temp file, then `exec bash`.
+### 管道 stdin（`curl | bash`）
 
-### Subshell variable scoping with pipes
+- 管道执行时 stdin 是管道而非终端，所有 `read` 必须用 `read ... < /dev/tty`
+- `/dev/tty` 不可用时回退到合理默认值
 
-- Pipes create subshells in Bash. Variables modified inside `while read` loops on the right side of a pipe are lost when the subshell exits.
-- Wrong: `cat file | while read -r line; do ((count++)); done` — `count` is always 0 after the loop.
-- Right: `while read -r line; do ((count++)); done < file` — input redirection keeps the loop in the current shell.
-- This applies to: success/failure counters, accumulated results, and any variable that must survive the loop.
+### `set -e` 与退出码捕获
 
-### Echo vs printf for variable output
+- 捕获子进程退出码用 `child; code=$?` 配合 `set +e`，或 `child || code=$?`
+- `set -e` 下 `if ! child; then code=$?` 仍可能触发退出
 
-- Do not use `echo "${variable}" | grep ...` when the variable might contain escape sequences like `-n`, `-e`, or `\t`.
-- Prefer `[[ "${variable}" == *"pattern"* ]]` for simple substring checks (no pipe needed).
-- If a pipe is required, use `printf '%s\n' "${variable}" | grep ...` instead of `echo`.
+### `exec` 与进程替换
 
-### PCRE and grep portability
+- `bash <(curl ...)` 执行时 `$0` 是临时 fd，`exec bash "$0"` 会在 fd 关闭后失败
+- 正确做法：先下载到临时文件，再 `exec bash "${tmpfile}"`
 
-- Do not use `grep -P` (Perl-compatible regex). It is not available on all Linux distributions (e.g., Alpine, minimal installs).
-- Use `grep -E` (extended regex) or `grep -F` (fixed string) instead.
-- When parsing CPU or memory from system tools, prefer reading `/proc/stat` or `/proc/meminfo` over `top` or `vmstat`, which have inconsistent output formats across distributions.
+### 管道子 shell 变量作用域
 
-## Repository Release Conventions
+- 管道右侧 `while read` 循环中的变量修改会在子 shell 结束后丢失
+- 错误：`cat file | while read -r line; do ((count++)); done`
+- 正确：`while read -r line; do ((count++)); done < file`
 
-- Tags should use `vX.Y.Z`.
-- Keep release notes focused on user-visible Shell capabilities and operational changes.
-- If adding CI/CD later, document workflow behavior here and in README only when relevant to users.
+### echo vs printf
 
-## Version History
+- 变量可能含 `-n`、`-e`、`\t` 等转义时，用 `printf '%s\n'` 替代 `echo`
+- 简单子串检查优先用 `[[ "${var}" == *"pattern"* ]]`，避免管道
+
+### grep 兼容性
+
+- 禁用 `grep -P`（PCRE），并非所有发行版支持
+- 使用 `grep -E`（扩展正则）或 `grep -F`（固定字符串）
+- 解析 CPU/内存优先读 `/proc/stat`、`/proc/meminfo`，避免 `top`/`vmstat` 输出格式不一致
+
+## 版本历史
 
 ### v1.0.0 (2026-06-26)
-- Initial release
-- System bootstrap (base packages, Docker, network tuning)
-- Security audit (login stats, web attacks, firewall, integrity baseline, security score)
-- Node management (TSV config, SSH, batch commands, config sync, mutual trust, remote execute)
-- Interactive bilingual menu (Chinese/English)
-- CLI modes: --cron-probe, --cron-security, --cron-alerts
-- Install/uninstall scripts, online run mode
-- System alert threshold detection (CPU/Memory/Disk)
-- Node selection for batch operations
-- Detailed beautified reports with sections and summaries
-- Single config file (serverharbor.conf) with TSV node block
-- Zero jq dependency (pure bash + grep/awk/sed)
+
+- 初始发布
+- 系统初始化（基础包、Docker、网络调优）
+- 安全审计（登录统计、Web 攻击、防火墙、完整性基线、安全评分）
+- 节点管理（TSV 配置、SSH、批量命令、配置同步、互信、远程执行）
+- 交互式双语菜单（中文/英文）
+- CLI 模式：`--cron-probe`、`--cron-security`、`--cron-alerts`
+- 安装/卸载脚本，在线运行模式
+- 系统告警阈值检测（CPU/内存/磁盘）
+- 批量操作节点选择
+- 分节美化报告
+- 单配置文件（`serverharbor.conf`）+ TSV 节点块
+- 零 jq 依赖（纯 bash + grep/awk/sed）
